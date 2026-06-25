@@ -185,11 +185,14 @@ export interface GateOrder {
   lines: { id: string }[];
 }
 
+// v0.1 enforces ONLY the age gate at the tool layer, so the policy exposes only
+// what gated() actually enforces. A policy key that looks enforced but is a silent
+// no-op would be a foot-gun for a consent library. membership/payment arrive in a
+// later version (enforced today on the device-authorization paths, not via gated()).
+// See ROADMAP.
 export interface EasyGatePolicy {
-  /** Require age verification. `true` defaults the threshold to the cart's strictest item. */
+  /** Require age verification. `true` uses the cart's strictest item threshold. */
   age?: boolean;
-  membership?: { discount: number };
-  payment?: { amount: number };
 }
 
 export interface GateDeps<A, O extends GateOrder> {
@@ -210,8 +213,8 @@ export interface GateDeps<A, O extends GateOrder> {
  * Wrap an MCP tool handler so it returns a `verification_required` envelope when
  * a required credential isn't met, instead of completing. v0.1 enforces the
  * **age** gate at the tool layer (closing the gap where an MCP `checkout` tool
- * could mint a completable link with no proof); membership/payment are declared
- * in the policy and enforced on the device-authorization paths (see roadmap).
+ * could mint a completable link with no proof). membership/payment are enforced
+ * today on the device-authorization paths, NOT via this policy (see roadmap).
  *
  * The handler receives the resolved order so it never re-creates it (a fresh id
  * each call would desync the approve link from the verified order).
@@ -235,6 +238,7 @@ export function gated<A, O extends GateOrder>(
         resumeTool: deps.resumeTool,
       });
       return {
+        // VerificationRequired is a plain JSON object; widen to the tool-result shape.
         structuredContent: env as unknown as Record<string, unknown>,
         content: [{ type: "text", text: envelopeInstruction(env) }],
       };
