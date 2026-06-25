@@ -1,0 +1,73 @@
+import { describe, it, expect } from "vitest";
+import {
+  priceCart,
+  createOrder,
+  requiredAgeForLines,
+  SAMPLE_CATALOG,
+  LOYALTY_DISCOUNT_PCT,
+  type Product,
+} from "./index.js";
+
+const catalog: Product[] = SAMPLE_CATALOG;
+
+describe("priceCart", () => {
+  it("prices known items and collects unknown ids (does not throw)", () => {
+    const c = priceCart(
+      [{ productId: "aurora-headphones", quantity: 2 }, { productId: "ghost", quantity: 1 }],
+      catalog,
+    );
+    expect(c.itemCount).toBe(2);
+    expect(c.subtotal).toBe(398);
+    expect(c.total).toBe(398);
+    expect(c.unknownIds).toEqual(["ghost"]);
+    expect(c.hasAgeRestricted).toBe(false);
+  });
+
+  it("flags age-restricted carts", () => {
+    const c = priceCart([{ productId: "oak-whiskey", quantity: 1 }], catalog);
+    expect(c.hasAgeRestricted).toBe(true);
+  });
+
+  it("applies the loyalty discount and keeps line sum, subtotal and total in agreement", () => {
+    const c = priceCart([{ productId: "oak-whiskey", quantity: 1 }], catalog, { loyaltyApplied: true });
+    expect(c.subtotal).toBe(124);
+    expect(c.discount).toBe(round2(124 * (LOYALTY_DISCOUNT_PCT / 100)));
+    expect(c.total).toBe(round2(c.subtotal - c.discount));
+    // the line sum still reconciles with subtotal (amount-binding invariant)
+    expect(c.lines.reduce((s, l) => s + l.lineTotal, 0)).toBe(c.subtotal);
+  });
+
+  it("honors a per-call discount percent override", () => {
+    const c = priceCart([{ productId: "aurora-headphones", quantity: 1 }], catalog, {
+      loyaltyApplied: true,
+      loyaltyDiscountPct: 25,
+    });
+    expect(c.discount).toBe(round2(199 * 0.25));
+  });
+
+  it("ignores non-positive quantities", () => {
+    const c = priceCart([{ productId: "aurora-headphones", quantity: 0 }], catalog);
+    expect(c.lines).toHaveLength(0);
+  });
+});
+
+describe("requiredAgeForLines", () => {
+  it("returns the strictest age, or null", () => {
+    expect(requiredAgeForLines([{ id: "oak-whiskey" }], catalog)).toBe(21);
+    expect(requiredAgeForLines([{ id: "aurora-headphones" }], catalog)).toBeNull();
+  });
+});
+
+describe("createOrder", () => {
+  it("snapshots a priced cart into an order", () => {
+    const o = createOrder([{ productId: "oak-whiskey", quantity: 1 }], "ORD-1", catalog);
+    expect(o.id).toBe("ORD-1");
+    expect(o.total).toBe(124);
+    expect(o.lines[0].id).toBe("oak-whiskey");
+    expect(typeof o.createdAt).toBe("string");
+  });
+});
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
