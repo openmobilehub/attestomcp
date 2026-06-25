@@ -1,0 +1,114 @@
+import { describe, it, expect, vi } from "vitest";
+import {
+  ageDcql,
+  buildVerificationRequired,
+  envelopeInstruction,
+  gated,
+  isVerificationRequired,
+  requireCredential,
+  optionalCredential,
+  ENVELOPE_SENTINEL,
+  ENVELOPE_VERSION,
+  type GateOrder,
+} from "./index.js";
+
+const ageOrder: GateOrder = { id: "ORD-1", total: 124, currency: "USD", lines: [{ id: "oak-whiskey" }] };
+const plainOrder: GateOrder = { id: "ORD-2", total: 69, currency: "USD", lines: [{ id: "drift-mouse" }] };
+
+const deps = {
+  resolveOrder: (o: GateOrder) => o,
+  approveUrl: (o: GateOrder) => `https://shop.example/credential-gate/age?order=${o.id}`,
+  minAge: () => 21 as number | undefined,
+};
+
+describe("ageDcql", () => {
+  it("requests the real mDL age claims (matches the reference verifier)", () => {
+    const q = ageDcql();
+    const mdl = q.credentials.find((c) => c.meta.doctype_value === "org.iso.18013.5.1.mDL");
+    expect(mdl).toBeTruthy();
+    const claimIds = mdl!.claims.map((c) => c.path[c.path.length - 1]);
+    expect(claimIds).toContain("age_over_21");
+    // selective disclosure: never retain
+    expect(mdl!.claims.every((c) => c.intent_to_retain === false)).toBe(true);
+  });
+});
+
+describe("buildVerificationRequired", () => {
+  it("produces the versioned, sentinel-tagged envelope", () => {
+    const env = buildVerificationRequired({
+      order: ageOrder,
+      credential: "age",
+      request: ageDcql(),
+      approveUrl: "https://shop.example/credential-gate/age?order=ORD-1",
+      detail: "needs age",
+      minAge: 21,
+    });
+    expect(env._attesto).toBe(ENVELOPE_SENTINEL);
+    expect(env.version).toBe(ENVELOPE_VERSION);
+    expect(env.reason.pass).toBe(false);
+    expect(env.present.min_age).toBe(21);
+    expect(env.present.approve_url).toContain("ORD-1");
+    expect(env.resume.tool).toBe("get-order-status");
+    // honest by default: not a safety control yet
+    expect(env.trust_level).toBe("presence-only-demo");
+    expect(isVerificationRequired(env)).toBe(true);
+  });
+});
+
+describe("gated", () => {
+  it("REFUSES an age-restricted, unverified order — the handler never runs", async () => {
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ORDER PLACED" }] }));
+    const wrapped = gated(handler, { age: true }, { ...deps, isAgeUnverified: async () => true });
+    const res = await wrapped(ageOrder);
+    // The bypass is closed: no completion, a drivable envelope instead.
+    expect(handler).not.toHaveBeenCalled();
+    expect(isVerificationRequired(res.structuredContent)).toBe(true);
+    expect(res.content[0].text).toContain("phone");
+  });
+
+  it("allows the handler once age is verified", async () => {
+    const handler = vi.fn(async (_a: GateOrder, ctx: { order: GateOrder }) => ({
+      content: [{ type: "text" as const, text: `link for ${ctx.order.id}` }],
+    }));
+    const wrapped = gated(handler, { age: true }, { ...deps, isAgeUnverified: async () => false });
+    const res = await wrapped(ageOrder);
+    expect(handler).toHaveBeenCalledOnce();
+    expect(isVerificationRequired(res.structuredContent)).toBe(false);
+    expect(res.content[0].text).toContain("ORD-1");
+  });
+
+  it("does not gate when the policy doesn't require age", async () => {
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ok" }] }));
+    // even if the store says unverified, no age policy => no gate
+    const wrapped = gated(handler, {}, { ...deps, isAgeUnverified: async () => true });
+    await wrapped(plainOrder);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("resolves the order exactly once (stable id between gate check and handler)", async () => {
+    const resolveOrder = vi.fn((o: GateOrder) => o);
+    const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ok" }] }));
+    const wrapped = gated(handler, { age: true }, { ...deps, resolveOrder, isAgeUnverified: async () => false });
+    await wrapped(ageOrder);
+    expect(resolveOrder).toHaveBeenCalledOnce();
+  });
+});
+
+describe("step builders", () => {
+  it("require/optional carry the required flag", () => {
+    expect(requireCredential("age")).toEqual({ credential: "age", required: true });
+    expect(optionalCredential("membership")).toEqual({ credential: "membership", required: false });
+  });
+});
+
+describe("envelopeInstruction", () => {
+  it("tells the agent not to claim placement and to poll", () => {
+    const env = buildVerificationRequired({
+      order: ageOrder, credential: "age", request: ageDcql(),
+      approveUrl: "https://x/age?order=ORD-1", detail: "d", minAge: 21,
+    });
+    const text = envelopeInstruction(env);
+    expect(text).toContain("get-order-status");
+    expect(text.toLowerCase()).toContain("do not tell");
+  });
+});

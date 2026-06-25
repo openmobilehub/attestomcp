@@ -1,0 +1,35 @@
+{
+  "name": "@openmobilehub/attesto-gate",
+  "version": "0.1.0",
+  "description": "The consent layer for AI agents — require a verifiable credential from the user's wallet before a consequential MCP tool completes. Identity leads; payments is one application.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "mcp",
+    "agent",
+    "verifiable-credentials",
+    "openid4vp",
+    "mdoc",
+    "consent",
+    "agentic-commerce"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
