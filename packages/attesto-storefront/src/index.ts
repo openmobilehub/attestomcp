@@ -155,6 +155,16 @@ export function createOrder(items: CartItemInput[], id: string, catalog: Product
   return { id, lines, itemCount, subtotal, discount, total, currency, createdAt: new Date().toISOString() };
 }
 
+/** Look up a product by id in the injected catalog. */
+export function getProduct(catalog: Product[], productId: string): Product | undefined {
+  return catalog.find((p) => p.id === productId);
+}
+
+/** Reviews for a product, from the injected reviews map (empty if none). */
+export function getReviews(reviews: Record<string, Review[]> | undefined, productId: string): Review[] {
+  return reviews?.[productId] ?? [];
+}
+
 /** A tiny runnable catalog (incl. one age-restricted item) so the package demos itself. */
 export const SAMPLE_CATALOG: Product[] = [
   {

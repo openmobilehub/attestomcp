@@ -42,7 +42,7 @@ stays OUT (feature 003); preserve the six security invariants; HTTP transport; `
 
 ## Phase 2: Foundational (blocking — primitives every story needs)
 
-- [ ] T003 Move cart/order state into `packages/attesto-storefront/src/state.ts` (`cartStore` + `orderStore`,
+- [X] T003 Move cart/order state into `packages/attesto-storefront/src/state.ts` (`cartStore` + `orderStore`,
       in-memory default, keyed per session/order — never process-global); export them.
 - [ ] T004 [P] Extend the catalog model in `packages/attesto-storefront/src/index.ts`: add `Review` +
       `StorefrontOptions.reviews`; keep `Product` (`minimumAge`/`category`), `SAMPLE_CATALOG`, and the
