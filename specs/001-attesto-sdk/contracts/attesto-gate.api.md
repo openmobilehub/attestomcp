@@ -1,0 +1,88 @@
+# Contract: `@openmobilehub/attesto-gate` public API (v0.1)
+
+The surface the implementation MUST satisfy and tests MUST exercise. TypeScript signatures are the contract.
+
+## Client
+
+```ts
+export interface AttestoOptions {
+  walletOrigin: string;              // absolute origin; refuse localhost in production
+  store?: VerificationStore;         // default: in-memory, keyed by order id
+}
+
+export class Attesto {
+  constructor(opts: AttestoOptions);
+  mount(app: ExpressApp): void;                                   // Context 2: ceremony routes + store
+  requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[];   // Context 1: code→data
+}
+```
+
+## Policy builders
+
+```ts
+export const age:        { over(minAge: number): Credential };
+export const membership: { discount(percent: number): Credential };
+export const payment:    { in(currency: string): Credential };
+
+export function required(c: Credential): Step;
+export function optional(c: Credential): Step;
+
+// every Credential exposes a call-site conditional:
+interface Credential { when(predicate: (order: GateOrder) => boolean): Credential; /* …fields per data-model */ }
+```
+
+## Extensibility
+
+```ts
+export function defineCredential(c: {
+  id: string;
+  request: DcqlQuery;
+  verify: (claims: Record<string, unknown>) => boolean;
+  effect: Effect;
+  appliesTo?: (order: GateOrder) => boolean;
+  ui: { label: string; action: string };
+}): Credential;
+
+export function dcql(q: DcqlQuery): DcqlQuery;
+export function gate(): Effect;
+export function discount(opts: { percent?: number; amount?: number }): Effect;
+export function authorize(): Effect;
+```
+
+## Output (serializable manifest)
+
+```ts
+export interface VerificationManifestEntry {
+  credential: string;
+  required: boolean;
+  effect: "gate" | "discount" | "authorize";
+  label: string;
+  minAge?: number;
+  discountPct?: number;
+  approveUrl?: string;
+}
+```
+
+## Retained (Mode-B / roadmap primitive — additive, do NOT break)
+
+```ts
+export function buildVerificationRequired(args: …): VerificationRequired;   // tested wire shape
+export function isVerificationRequired(v: unknown): v is VerificationRequired;
+export function ageDcql(): DcqlQuery;
+export type TrustLevel = "presence-only-demo" | "issuer-verified";
+// gated(handler, policy): kept as a deprecated shim for one minor version
+```
+
+## Contract tests (MUST exist)
+
+1. **Serialization (Principle VI):** `JSON.stringify(requirements(order, policy))` round-trips; the result
+   contains **no functions** and re-parses deeply equal.
+2. **Conditional drop:** a non-alcohol cart ⇒ manifest has no `age` entry; add an `alcohol` line ⇒ `age`
+   appears with `minAge: 21` and an `approveUrl` bound to that order id.
+3. **Ordering:** payment-bearing entry resolves **last** even if declared earlier in the policy.
+4. **Required vs optional:** `optional(membership)` never blocks; `required(age)` is present when applicable.
+5. **Custom credential:** a `prescription` (`appliesTo` Rx) appears only for an Rx line; absent otherwise.
+6. **MCP-layer bypass (Security inv. 1):** calling the `checkout` tool (in-memory transport) for an
+   age-restricted, unverified cart returns the manifest (age `gate`) and **no completable link**; the test
+   fails if the gate is removed.
+7. **Type safety:** `age.over(21).in("usd")` is a compile error (builders are credential-specific).
