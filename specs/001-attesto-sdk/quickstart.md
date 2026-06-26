@@ -5,16 +5,45 @@ storefront (a catalog + a `checkout` MCP tool + a checkout page) with the gate w
 API source of truth: [`contracts/attesto-gate.api.md`](./contracts/attesto-gate.api.md); shapes in
 [`data-model.md`](./data-model.md).
 
-## 1 · Start from a storefront
+## 1 · Run a minimal storefront and see the gate fire (Goose, ~2 min)
 
-The gate wraps an MCP `checkout` tool, so you need a storefront first — two ways:
+The fastest way to *see* the gate: stand up a minimal storefront over HTTP and add it to Goose. The
+storefront is a one-line black box (`createStorefront()` ships a catalog + `browse` / `checkout` /
+`get-order-status` tools); **Attesto mounts onto it** ([`examples/storefront.mjs`](../../examples/storefront.mjs)):
 
-- **Fastest — the reference demo** (storefront + gate already composed): clone this repo, then
-  `npm install && npm run build && PORT=3001 node dist/main.js`; add `http://localhost:3001/mcp` to Claude
-  or Goose. You immediately have an agentic storefront with credential-gated checkout.
+```ts
+import { createStorefront } from "@openmobilehub/attesto-storefront/server";
+import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
+
+const store = createStorefront();                 // the whole storefront — nothing to configure
+const attesto = new Attesto();
+attesto.mount(store.app);                          // Attesto mounts onto it
+store.gate((order) => attesto.requirements(order, [
+  required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
+  optional(membership.discount(10)),
+  required(payment.in("usd")),
+]));
+const { url } = await store.listen(3005);          // → http://localhost:3005/mcp
+```
+
+```bash
+npm install && npm run build:packages
+node examples/storefront.mjs          # → http://localhost:3005/mcp
+```
+
+In Goose: `goose configure` → **Add Extension → Remote Extension (Streamable HTTP)** → `http://localhost:3005/mcp`.
+Then *"add the whiskey and check out"* → the agent surfaces **age 21+** (the gate fired); *"add the
+headphones and check out"* → no age entry. See [`examples/README.md`](../../examples/README.md).
+
+> The storefront's priced `Order` feeds `requirements()` **with zero glue** — the line carries `minimumAge`
+> (re-derived from the catalog), so the two packages compose directly.
+
+**Other ways to start:**
+- **The full reference demo** (9 tools + widget, already composed): clone this repo, `npm run build`, then
+  `PORT=3001 DEMO_MODE=1 node dist/main.js`; add `http://localhost:3001/mcp` to Claude or Goose.
 - **Your own MCP server:** bring a `checkout` tool; `@openmobilehub/attesto-storefront` supplies the
-  catalog/pricing model (`priceCart` / `createOrder`). *(The full own-the-code storefront — the 9 MCP
-  shopping tools + the widget — is its own component, `specs/002`, on the roadmap.)*
+  catalog/pricing model (`priceCart` / `createOrder`). *(The full own-the-code storefront — 9 tools + widget
+  — is its own component, `specs/002`, on the roadmap.)*
 
 ## 2 · Add the gate to its checkout tool
 

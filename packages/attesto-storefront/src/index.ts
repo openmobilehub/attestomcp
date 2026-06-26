@@ -32,6 +32,14 @@ export interface PricedCartLine {
   currency: string;
   quantity: number;
   lineTotal: number;
+  /**
+   * Per-product age threshold (e.g. 21), re-derived from the catalog onto the
+   * line. Lets a priced `Order` feed `@openmobilehub/attesto-gate`'s
+   * `requirements()` directly — no `toGateOrder` mapping needed.
+   */
+  minimumAge?: number;
+  /** Product category, carried through for custom `.when()` / `appliesTo` predicates. */
+  category?: string;
 }
 
 export interface PricedCart {
@@ -93,6 +101,9 @@ export function priceCart(items: CartItemInput[], catalog: Product[], opts: Pric
       currency: product.currency,
       quantity,
       lineTotal: round2(product.price * quantity),
+      // Re-derived onto the line so a priced Order is gate-ready (inv #2).
+      ...(product.minimumAge != null ? { minimumAge: product.minimumAge } : {}),
+      category: product.category,
     });
   }
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
