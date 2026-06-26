@@ -1,10 +1,22 @@
 # Quickstart — Attesto SDK v0.1
 
-**How you use it**, then how to validate it works end to end. API source of truth:
-[`contracts/attesto-gate.api.md`](./contracts/attesto-gate.api.md); shapes in
+The gate is only useful gating a real **storefront**, so this shows the two components **together**: a
+storefront (a catalog + a `checkout` MCP tool + a checkout page) with the gate wrapped around its checkout.
+API source of truth: [`contracts/attesto-gate.api.md`](./contracts/attesto-gate.api.md); shapes in
 [`data-model.md`](./data-model.md).
 
-## Use it — gate a checkout tool
+## 1 · Start from a storefront
+
+The gate wraps an MCP `checkout` tool, so you need a storefront first — two ways:
+
+- **Fastest — the reference demo** (storefront + gate already composed): clone this repo, then
+  `npm install && npm run build && PORT=3001 node dist/main.js`; add `http://localhost:3001/mcp` to Claude
+  or Goose. You immediately have an agentic storefront with credential-gated checkout.
+- **Your own MCP server:** bring a `checkout` tool; `@openmobilehub/attesto-storefront` supplies the
+  catalog/pricing model (`priceCart` / `createOrder`). *(The full own-the-code storefront — the 9 MCP
+  shopping tools + the widget — is its own component, `specs/002`, on the roadmap.)*
+
+## 2 · Add the gate to its checkout tool
 
 ```ts
 import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
