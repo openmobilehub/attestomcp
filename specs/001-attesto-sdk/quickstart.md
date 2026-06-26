@@ -1,8 +1,62 @@
-# Quickstart — Validate Attesto SDK v0.1
+# Quickstart — Attesto SDK v0.1
 
-Runnable checks that prove the feature works end to end. Implementation details live in `tasks.md`; this is
-the validation/run guide. See [`contracts/attesto-gate.api.md`](./contracts/attesto-gate.api.md) and
-[`data-model.md`](./data-model.md) for the shapes referenced below.
+**How you use it**, then how to validate it works end to end. API source of truth:
+[`contracts/attesto-gate.api.md`](./contracts/attesto-gate.api.md); shapes in
+[`data-model.md`](./data-model.md).
+
+## Use it — gate a checkout tool
+
+```ts
+import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
+import { z } from "zod";
+
+const attesto = new Attesto({ walletOrigin: "https://shop.example" });
+attesto.mount(app);   // serves the wallet ceremony on your origin + owns the per-order verification store
+
+// You decide what "alcohol" means in your catalog — the SDK never guesses:
+const hasAlcohol = (order) => order.lines.some((l) => l.category === "alcohol");
+
+server.registerTool(
+  "checkout",
+  {
+    description: "Check out the cart",
+    inputSchema: { items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive() })) },
+  },
+  async ({ items }) => {
+    const order = priceCart(items);                         // your catalog → order (stable id)
+    const requires = attesto.requirements(order, [          // resolved, serializable manifest
+      required(age.over(21).when(hasAlcohol)),               // 21+ — only when the cart has alcohol
+      optional(membership.discount(10)),                     // 10% off if a loyalty credential is presented
+      required(payment.in("usd")),                           // amount derived from the order; settles last
+    ]);
+    return {
+      structuredContent: { orderId: order.id, checkoutUrl: yourCheckoutPage(order), requires },
+      content: [{ type: "text", text: `Checkout ready: ${yourCheckoutPage(order)}` }],
+    };
+  },
+);
+```
+
+**What happens** (the three contexts, spec §0): the handler mints the link + a `requires` manifest
+(Context 1); the buyer opens it once and does age → membership discount → pay on one page (Context 2); the
+agent polls `get-order-status` and confirms (Context 3). A non-alcohol cart ⇒ `requires` has no `age`
+entry, so no age card.
+
+**Add your own gate** — any credential, same policy:
+
+```ts
+import { defineCredential, dcql, gate } from "@openmobilehub/attesto-gate";
+
+const prescription = defineCredential({
+  id: "prescription",
+  request: dcql({ docType: "org.hl7.prescription.1", claims: ["rx_valid"] }),
+  verify: (c) => c.rx_valid === true,
+  effect: gate(),
+  appliesTo: (order) => order.lines.some((l) => l.requiresRx),   // only for Rx items
+  ui: { label: "Prescription", action: "Verify prescription" },
+});
+// …then drop `required(prescription)` into the same policy array.
+```
 
 ## Prerequisites
 
