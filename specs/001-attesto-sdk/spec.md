@@ -137,14 +137,14 @@ call. Nothing is injected off-screen.
   `payment.in("usd")`. An age gate that sets a currency is a compile error. Payment amount is **derived**
   from the order, never a field you pass (keeps amount-binding in agreement — invariant #3).
 
-## §5 · Two modes [NEEDS DECISION — default = consolidated]
+## §5 · Modes — v0.1 ships Consolidated only
 
-- **Mode A — Consolidated checkout (default).** Context 1 returns the link + `requires`; Context 2 runs
-  every gate in one session. Used when the tool hands off to a page (checkout). `attesto.requirements()`.
-- **Mode B — Blocking tool.** Context 1 returns a typed `verification_required` envelope and the tool does
-  not succeed until the credential clears. For consequential tools with **no** page to hand off to (e.g.
-  `transfer_funds`). `attesto.check(order, policy) → { ok, envelope }` (discriminated; the agent branches
-  on `!ok` and is type-forced to handle it).
+- **Mode A — Consolidated checkout (v0.1, the only flow).** Context 1 returns the link + `requires`;
+  Context 2 runs every gate in one session (one handoff). `attesto.requirements(order, policy)`.
+- **Mode B — Blocking tool (roadmap, not built).** Context 1 returns a typed `verification_required`
+  envelope and the tool doesn't succeed until the credential clears — for consequential tools with **no**
+  page to hand off to (e.g. `transfer_funds`). Deferred to keep v0.1 simple; ships later as
+  `attesto.check(order, policy) → { ok, envelope }`.
 
 ## §6 · Honesty (in the types, not prose)
 
@@ -152,8 +152,10 @@ Two orthogonal typed axes, surfaced (never silent):
 - `enforcedAt: "tool" | "checkout"` — *where* a credential runs. v0.1: age = effectively "checkout" via
   the mounted ceremony + completion; membership/payment = "checkout". At GA they flip with no call-site change.
 - `trust_level: "presence-only-demo" | "issuer-verified"` — *how much* the mdoc is trusted. v0.1 is
-  presence-only (disclosure + nonce binding, **not** issuer/device signatures — `verify.ts`). Fenced as a
-  demo, never sold as a safety control, until Multipaz / `@auth0/mdl` integration lands.
+  presence-only (disclosure + nonce binding, **not** issuer/device signatures — `verify.ts`). The
+  credential itself is real (a digital credential carrying test DL data); validating it against a real
+  verifier is possible but **deliberately deferred to keep v0.1 simple**. Fenced as a demo, never sold as
+  a safety control.
 
 ## §7 · Security invariants the SDK must preserve (from CLAUDE.md)
 
@@ -164,11 +166,15 @@ Two orthogonal typed axes, surfaced (never silent):
 5. Require explicit positive claims (`age_over_21 === true`, not token-presence; 18+ ≠ 21+).
 6. Bind OpenID4VP to this origin with nonce/replay protection.
 
-## §8 · Open decisions (for `/speckit.clarify`)
+## §8 · Decisions (resolved)
 
-- [ ] **Method names:** `requirements()` (Mode A) / `check()` (Mode B); credential builders `age.over(21)`.
-- [ ] **Package name:** `@openmobilehub/attesto-gate` (keep) vs `@openmobilehub/attesto` (one noun).
-- [ ] **Single wallet interaction:** can age + payment be one OpenID4VP request (one phone tap), or stay
-      sequential on the page as the demo does today?
-- [ ] **Default mode confirmed** = consolidated (Mode A) for checkout.
-- [ ] `required` / `optional` replace `requireCredential` / `optionalCredential` (keep old as aliases?).
+- **Default flow:** ✅ **Consolidated (Mode A).** v0.1 ships Mode A only; Mode B (blocking) is roadmap (§5).
+- **v0.1 method:** `attesto.requirements(order, policy)` — Mode A reports what the page will require (it
+  doesn't block). The `check()` → `{ ok, envelope }` form arrives with Mode B on the roadmap.
+- **Credential builders:** `age.over(21)`, `membership.discount(10)`, `payment.in("usd")`.
+- **Package name:** `@openmobilehub/attesto-gate`.
+- **Wallet interaction:** **sequential / progressive disclosure** (age, then payment, on the page) — may
+  use multiple wallets. Not combined into a single OpenID4VP request.
+- **Builders naming:** `required` / `optional` (keep `requireCredential` / `optionalCredential` as
+  deprecated aliases).
+- **mdoc trust:** real-verifier integration **deliberately deferred** to keep v0.1 simple (see §6).
