@@ -101,7 +101,7 @@ the `ui://` widget; the product-picker **renders AND works** in a widget-capable
       (cross-instance sync) reading globals from `openai:set_globals`; resilient host detection (re-detect/
       subscribe, not a single module-load read); an `openExternal` fallback; and surface (not swallow)
       poll/connect failures. Centralize the checkout origin so `connect_domains` and the poll URL share one config.
-- [ ] T018 [US1] Verify (CT8 build): `npm run build:packages` green (the widget bundle is produced) +
+- [X] T018 [US1] Verify (CT8 build): `npm run build:packages` green (the widget bundle is produced) +
       `server.test.ts` green; commit (DCO).
 
 **Checkpoint**: US1 is a shippable MVP — `createStorefront()` is the real storefront over HTTP; manual check:
