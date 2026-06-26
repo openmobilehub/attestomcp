@@ -87,7 +87,7 @@ the `ui://` widget; the product-picker **renders AND works** in a widget-capable
 - [ ] T014 [P] [US1] Contract test (CT9, FR-014): every UI-linked tool's `_meta` carries `openai/outputTemplate`
       (== the `ui://` resource URI) **and `openai/widgetAccessible: true`** + the `openai/toolInvocation`
       status; in `packages/attesto-storefront/src/server.test.ts` (assert via `tools/list`).
-- [ ] T015 [US1] Implement a single canonical tool-meta builder in
+- [X] T015 [US1] Implement a single canonical tool-meta builder in
       `packages/attesto-storefront/src/tool-meta.ts` that emits **both** surfaces — the MCP-Apps `ui.*` form
       **and** the `openai/*` set (`outputTemplate`, **`widgetAccessible: true`**, `toolInvocation` invoking/
       invoked) — and use it for the six UI-linked tools. (Root cause of "renders but dead in ChatGPT": the

@@ -8,6 +8,17 @@
 /** Default loyalty discount, in percent. Override per-call via PriceOpts. */
 export const LOYALTY_DISCOUNT_PCT = 10;
 
+/** `_meta` keys the storefront tools use to embed the catalog / cart for the widget to read. */
+export const CATALOG_META_KEY = "product-picker/catalog";
+export const CART_META_KEY = "product-picker/cart";
+
+/** A product review, surfaced by `get-product-reviews`. */
+export interface Review {
+  author: string;
+  rating: number;
+  text: string;
+}
+
 export interface Product {
   id: string;
   name: string;
