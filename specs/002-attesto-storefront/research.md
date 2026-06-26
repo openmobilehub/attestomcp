@@ -101,3 +101,22 @@ must be self-contained (ship the bundle) for that to work.
 
 **Alternatives rejected**: hand-commit the widget bundle (drifts from source); require a clone to adopt
 (defeats "install from npm").
+
+## 8. One canonical tool-meta builder emits both host surfaces (FR-014)
+
+**Decision**: The package exports a single `appToolMeta()` (in `tool-meta.ts`) used by all nine UI-linked
+tools, emitting **both** the MCP-Apps `ui.resourceUri` form (Claude) **and** the ChatGPT `openai/*` set:
+`openai/outputTemplate` (== the `ui://` URI), **`openai/widgetAccessible: true`**, and the
+`openai/toolInvocation` status. Widget-rendering tool results carry **cart-bearing `structuredContent`**,
+and the widget CSP allows `data:`.
+
+**Rationale**: Diagnosis of the current demo found the widget *renders* in ChatGPT but is **interactively
+dead** — `UI_META` set only `outputTemplate`, so `window.openai.callTool` was rejected and the steppers /
+Checkout button silently no-op; and `checkout`'s `structuredContent` lacked the cart, so the ChatGPT render
+showed an empty cart. Centralizing the meta in the package is the single fix that makes every UI-linked tool
+ChatGPT-interactive, and prevents the demo's omission from recurring.
+
+**Alternatives rejected**: per-tool inline `_meta` (the demo's pattern — easy to forget a key, which is
+exactly what broke ChatGPT); relying on the `ext-apps` helper alone (it emits only the MCP-Apps `ui.*` form,
+no `openai/*` keys). **Still requires live ChatGPT verification** (tasks T031): `openExternal` method name,
+`detectHost` injection timing, `connect_domains`/alias divergence, the `set_globals` event-name dependency.

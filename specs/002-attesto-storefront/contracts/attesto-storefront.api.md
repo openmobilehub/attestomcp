@@ -48,10 +48,23 @@ Nine UI-linked tools (`registerAppTool` + `UI_META` → the `ui://` widget). Nam
 `checkout` is consolidated **Mode A** (001): it always returns `checkoutUrl`; it includes `requires` only
 when a gate is injected and the gate returns a non-empty manifest.
 
-## UI resource
+## UI resource + ChatGPT widget contract (FR-014)
 
-`mcpServer()` MUST register the single-file widget as a `ui://` resource, and the UI-linked tools MUST carry
-`UI_META` (`ui.resourceUri` + the ChatGPT `outputTemplate`). Runtime host detection (`chatgpt`/`mcp`/
+`mcpServer()` MUST register the single-file widget as a `ui://` resource (mime `text/html+skybridge`), and
+every UI-linked tool MUST carry a `_meta` from one **canonical tool-meta builder** that emits **both**
+surfaces:
+
+```ts
+// MCP-Apps (Claude):        ui: { resourceUri }
+// ChatGPT (skybridge):      "openai/outputTemplate": <ui:// uri>,   // == the resource URI
+//                           "openai/widgetAccessible": true,        // authorizes window.openai.callTool
+//                           "openai/toolInvocation": { invoking, invoked }
+```
+
+Without `openai/widgetAccessible: true` the widget renders but in-widget callbacks (steppers, Checkout)
+silently no-op in ChatGPT. Widget-rendering tool results MUST carry **cart-bearing `structuredContent`**
+(e.g. `checkout` includes `products`/`cart`) so a fresh ChatGPT widget instance doesn't render an empty
+cart. The widget CSP MUST allow `data:` (the image placeholder). Runtime host detection (`chatgpt`/`mcp`/
 `standalone`) preserved.
 
 ## Contract tests (MUST exist)
@@ -70,6 +83,10 @@ when a gate is injected and the gate returns a non-empty manifest.
    (currently 242 / 1 skip) — the nine tools behave identically (regression gate).
 8. **Build:** `npm run build` produces the package's TS output **and** the single-file widget bundle, in
    workspace order, and stays Vercel-safe (green = deploy-safe).
+9. **ChatGPT widget meta (FR-014):** every UI-linked tool's `_meta` (via `tools/list`) carries
+   `openai/outputTemplate` (== the `ui://` resource URI) **and** `openai/widgetAccessible: true` (+ the
+   `openai/toolInvocation` status); the `checkout` result's `structuredContent` carries `products`/`cart`.
+   (Live ChatGPT interactivity — steppers/Checkout actually invoke — is manual: tasks T031.)
 
 ## Publish-readiness (FR-013)
 

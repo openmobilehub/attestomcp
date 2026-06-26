@@ -44,6 +44,9 @@ and confirm the product grid renders (not plain text) and browse → cart → ch
    or `checkout`, **Then** the host renders the native widget (the product grid / checkout card), not text.
 3. **Given** a no-GUI host (Goose, terminal), **When** the same tools are called, **Then** the tool results
    surface as text — a documented host limitation, not a failure.
+4. **Given** the storefront is connected to **ChatGPT**, **When** the buyer uses the widget, **Then** the
+   in-widget actions work (quantity steppers and the **Checkout** button invoke their tools — not silently
+   no-op) and the checkout render shows the **actual cart** (not an empty one). (FR-014.)
 
 ---
 
@@ -150,6 +153,19 @@ in-memory transport.
   project (not a clone). The **final quickstart MUST present the npm-install path as the primary adopter
   flow**; the clone + workspace `npm install` path is for running this demo / contributing only. (The actual
   `npm publish` + `@openmobilehub` scope reservation is a release action, OUT of code scope.)
+- **FR-014**: The widget MUST render **and be interactive in ChatGPT**, not only the Claude native app.
+  Concretely (diagnosed against the current demo, which renders but is interactively dead):
+  - The package MUST emit the full ChatGPT widget contract on UI-linked tools — `openai/outputTemplate`
+    **and `openai/widgetAccessible: true`** (which authorizes `window.openai.callTool`) plus the
+    `openai/toolInvocation` status — via a single canonical tool-meta builder (the demo's `UI_META` sets
+    only `outputTemplate`, so in-widget steppers and the **Checkout button silently no-op**).
+  - Widget-rendering tool results MUST carry **cart-bearing `structuredContent`** — the `checkout` result
+    must include `products`/`cart`, not only `{ orderId, checkoutUrl, requires }`, so a fresh ChatGPT widget
+    instance does not render an **empty cart**.
+  - The widget CSP MUST allow the `data:` image placeholder; the ChatGPT bridge MUST persist/restore cart
+    via `setWidgetState` (cross-instance) and read globals via `openai:set_globals`.
+  - SUSPECTED, verify live in ChatGPT: `openExternal` method name, `detectHost` injection timing,
+    `connect_domains` vs the order-status poll origin, the `set_globals` event-name dependency.
 
 ### Key Entities *(include if feature involves data)*
 
