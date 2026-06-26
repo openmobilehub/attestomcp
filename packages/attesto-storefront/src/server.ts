@@ -38,6 +38,12 @@ export interface Storefront {
   gate(resolve: GateResolver): void;
   /** Start the HTTP server. Returns the `/mcp` URL to add as a connector. */
   listen(port?: number): Promise<{ url: string; port: number }>;
+  /**
+   * Build a fresh MCP server bound to this storefront (catalog, gate, order
+   * store). The HTTP `/mcp` route uses this per request; tests connect it to an
+   * `InMemoryTransport` to drive the tools deterministically.
+   */
+  mcpServer(): McpServer;
 }
 
 interface StoredOrder extends Order {
@@ -156,6 +162,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   return {
     app,
     catalog,
+    mcpServer: buildServer,
     gate(resolve: GateResolver) { resolveGate = resolve; },
     async listen(port = 3005): Promise<{ url: string; port: number }> {
       if (!baseUrl) baseUrl = `http://localhost:${port}`;
