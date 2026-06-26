@@ -57,7 +57,7 @@ consolidated (Mode A) only; DCO sign-off; presence-only trust (real verifier def
 | V. Extensible to any credential | ✅ PASS | `defineCredential` + `gate()/discount()/authorize()`; built-ins are pre-defined credentials; by-object use. |
 | VI. structuredContent is data, not policy | ✅ PASS | `requirements()` resolves functions server-side and emits a flat manifest; a contract test asserts `JSON.stringify` round-trips with no functions. |
 | VII. Honesty in types; prefer simplicity | ✅ PASS | `enforcedAt` / `trust_level` are fields on `VerificationManifestEntry` (data-model + contract CT8), not prose; presence-only fenced; real verifier deferred. |
-| Security Requirements (6 invariants) | ✅ PASS | Enforcement stays on every completion path (unchanged web routes + the tool envelope); amounts re-derived; per-order store; explicit positive claims (`verify.ts` unchanged); origin/nonce binding unchanged. Bypass tests required. |
+| Security Requirements (6 invariants) | ✅ PASS | Enforcement stays on every completion path (`place-order` 403 + passkey/dc-payment `/verify`, unchanged); the `checkout` tool *surfaces* the requirement (Mode A, not a completion path — no MCP place/settle tool exists); amounts re-derived; per-order store; explicit positive claims (`verify.ts` unchanged); origin/nonce binding unchanged. Bypass tests required. |
 | Workflow (spec-grounded, tested, DCO) | ✅ PASS | Artifacts cite real code; bypass + build verification per task; `git commit -s`. |
 
 **Result: PASS — no violations.** Complexity Tracking below is empty.
@@ -97,7 +97,7 @@ checkout.ts catalog.ts          # order/pricing (GateOrder source: lines carry c
 app.ts main.ts                  # express app; attesto.mount(app) wires /credential-gate/*
 payment-gate/credential-gate/   # the real ceremony the package's mount() will own/wrap
 verificationStore.ts            # becomes the default store's backing
-checkout-gate.test.ts           # MCP-layer bypass test (age-restricted cart → manifest, not a link)
+checkout-gate.test.ts           # MCP-layer test (age-restricted cart → checkoutUrl + age-gate manifest, Mode A)
 ```
 
 **Structure Decision**: Library-in-workspace (`packages/attesto-gate`) consumed by the in-repo demo

@@ -140,8 +140,8 @@ call. Nothing is injected off-screen.
 `window.openai.toolOutput`), so it must be plain JSON. The policy you pass holds **functions** (`hasAlcohol`,
 each credential's `verify`) — those never serialize. `attesto.requirements(order, policy)` **resolves** the
 policy server-side in Context 1: it runs your `.when()` predicates, picks the applicable gates, and emits a
-flat descriptor array — `[{ credential, required, effect, label, minAge? }]`, no functions — so a non-alcohol
-cart simply omits the `age` entry. `requirements()` is the **code → data boundary**; an optional tool
+flat descriptor array — `[{ credential, required, effect, label, minAge?, enforcedAt, trust_level }]` (the
+honesty axes per §6), no functions — so a non-alcohol cart simply omits the `age` entry. `requirements()` is the **code → data boundary**; an optional tool
 `outputSchema` can validate the emitted shape.
 
 **The policy** (one ordered array — the single source of truth):

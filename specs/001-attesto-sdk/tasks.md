@@ -20,8 +20,10 @@ without the control is useless). The 7 contract tests in `contracts/attesto-gate
 ## User stories (derived from the spec)
 
 - **US1 (P1 — MVP)**: A developer gates a checkout tool with a **conditional age** requirement — an
-  age-restricted cart returns a serializable `verification_required` manifest (no completable link); a
-  non-alcohol cart passes through. *Independently testable via `checkout-gate.test.ts` + `manifest.test.ts`.*
+  age-restricted cart returns a `checkoutUrl` **and** a serializable `requires` manifest carrying the `age`
+  `gate` (+ `approveUrl`); a non-alcohol cart returns a link with no `age` entry. The tool *surfaces* the
+  requirement (Mode A); enforcement is on the completion path (`place-order` 403). *Independently testable
+  via `checkout-gate.test.ts` + `manifest.test.ts`.*
 - **US2 (P2)**: The **full ordered policy** — `optional` membership discount + `required` payment that
   settles **last**, resolved into one manifest. *Testable via the required/optional + ordering contract tests.*
 - **US3 (P3)**: **Extensibility** — add a custom credential (a `prescription` gate, conditional via
@@ -63,20 +65,25 @@ per task; DCO sign-off (`git commit -s`).
 - [ ] T009 Keep `envelope.ts` (`buildVerificationRequired`/`isVerificationRequired`/`ageDcql`) as the
       Mode-B/roadmap primitive and `gated()` as a deprecated shim; re-export from `index.ts`. Keep the
       envelope **wire-shape** assertions in `packages/attesto-gate/src/envelope.test.ts` (the
-      `_attesto`/`present.min_age`/`trust_level` checks moved out of `checkout-gate.test.ts` per T001).
+      `_attesto`/`present.min_age`/`trust_level` checks moved out of `index.test.ts` per T001 — distinct from
+      the consolidated-tool manifest asserts in `checkout-gate.test.ts`, which T011 owns).
 
 **Checkpoint**: package builds + foundational contract tests green.
 
 ## Phase 3: User Story 1 — conditional age gate (P1, MVP)
 
-**Goal**: an age-restricted, unverified cart → `requires` with an `age` `gate` (+ per-order `approveUrl`)
-and no completable link; a non-alcohol cart → a normal link. **Independent test**: `checkout-gate.test.ts`.
+**Goal**: an age-restricted, unverified cart → a `checkoutUrl` **and** `requires` with an `age` `gate`
+(+ per-order `approveUrl`); a non-alcohol cart → a link with no `age` entry. The `checkout` tool mints +
+surfaces (Mode A); the `place-order` completion path enforces (403). **Independent test**: `checkout-gate.test.ts`.
 
 - [ ] T010 [US1] Contract test (conditional drop): non-alcohol cart ⇒ no `age` entry; add an alcohol line
       ⇒ `age` at `minAge:21` with an `approveUrl` bound to that order id, in `packages/attesto-gate/src/manifest.test.ts`.
-- [ ] T011 [US1] Contract/bypass test (MCP layer, in-memory transport): `checkout` for an age-restricted
-      unverified cart returns the manifest (age `gate`) and **no checkout link**; approveUrl decodes to the
-      same `order.id`; fails-closed if the gate is removed — in `checkout-gate.test.ts`.
+- [ ] T011 [US1] Contract test (MCP layer, in-memory transport) — consolidated Mode A: `checkout` for an
+      age-restricted unverified cart returns **both** a `checkoutUrl` **and** the manifest (age `gate`,
+      `minAge:21`, `approveUrl` decoding to the same `order.id`); a non-alcohol cart → link, no `age` entry.
+      **Replace** the old `verification_required`/no-link assertions in `checkout-gate.test.ts` with these
+      manifest assertions. The *enforcement* bypass (unverified `place-order` → 403, fails-closed if the gate
+      is removed) is the completion-path test re-run in **T026**, not the tool — the tool only mints/surfaces.
 - [ ] T012 [US1] Implement `age.over(n).when()` resolution + the age manifest entry + `approveUrl`
       derivation (`walletOrigin + order.id`) in `packages/attesto-gate/src/manifest.ts` / `credentials.ts`.
 - [ ] T013 [US1] Implement `attesto.mount(app)` to mount the **existing** `/credential-gate` ceremony +
@@ -85,7 +92,8 @@ and no completable link; a non-alcohol cart → a normal link. **Independent tes
 - [ ] T014 [US1] Wire `server.ts` checkout tool to `attesto.requirements(order, [required(age.over(21).when(hasAlcohol))])`.
       Enrich the `GateOrder` lines with `minimumAge` **re-derived from the catalog** server-side (inv #2 — the
       real `PricedCartLine` doesn't carry it); the grounded predicate is `hasAlcohol = (o) => o.lines.some(l => l.minimumAge != null)`
-      (alcohol items have `minimumAge: 21`). Return the manifest in `structuredContent.requires`.
+      (alcohol items have `minimumAge: 21`). Return `structuredContent: { orderId, checkoutUrl, requires }` —
+      the link is always minted (Mode A); the manifest surfaces what the page will require.
 - [ ] T015 [US1] Verify: `npm run build` green (deploy-safe) + `checkout-gate.test.ts` green; commit (DCO).
 
 **Checkpoint**: US1 is a shippable MVP — the gate works end to end in the demo.

@@ -43,7 +43,7 @@ export function defineCredential(c: {
   ui: { label: string; action: string };
 }): Credential;
 
-export function dcql(q: DcqlQuery): DcqlQuery;
+export function dcql(spec: { docType: string; claims: string[] }): DcqlQuery; // concise sugar → full DCQL
 export function gate(): Effect;
 export function discount(opts: { percent?: number; amount?: number }): Effect;
 export function authorize(): Effect;
@@ -84,9 +84,14 @@ export type TrustLevel = "presence-only-demo" | "issuer-verified";
 3. **Ordering:** payment-bearing entry resolves **last** even if declared earlier in the policy.
 4. **Required vs optional:** `optional(membership)` never blocks; `required(age)` is present when applicable.
 5. **Custom credential:** a `prescription` (`appliesTo` Rx) appears only for an Rx line; absent otherwise.
-6. **MCP-layer bypass (Security inv. 1):** calling the `checkout` tool (in-memory transport) for an
-   age-restricted, unverified cart returns the manifest (age `gate`) and **no completable link**; the test
-   fails if the gate is removed.
+6. **MCP-layer surfacing + completion-path enforcement (Security inv. 1):** calling the `checkout` tool
+   (in-memory transport) for an age-restricted, unverified cart returns **both** a `checkoutUrl` **and** a
+   `requires` manifest whose `age` entry is `effect: "gate"`, `minAge: 21`, with an `approveUrl` bound to
+   that order id. This is consolidated **Mode A**: Context 1 *surfaces* the requirement (awareness) — the
+   `checkout` tool mints the link, it is not a completion path (there is no MCP place/settle tool; the only
+   completion path is HTTP `place-order`). Enforcement is asserted **on that completion path**: a
+   `place-order` for the still-unverified order is refused (403, `app.ts:81`) and stays refused if the gate
+   is removed (a test that passes without the control is useless). A non-alcohol cart ⇒ no `age` entry.
 7. **Type safety:** `age.over(21).in("usd")` is a compile error (builders are credential-specific).
 8. **Honesty axes (Principle VII):** every manifest entry carries `enforcedAt` (`"tool" | "checkout"`) and
    `trust_level` (`"presence-only-demo"` in v0.1); the serialized manifest preserves both — no regression

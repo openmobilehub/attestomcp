@@ -115,15 +115,18 @@ prescription `appliesTo` example.
 npx vitest run checkout-gate.test.ts --exclude '**/.worktrees/**'
 ```
 
-**Expected** (in-memory MCP transport, deterministic):
-- **Age-restricted cart** (`oak-whiskey`) → `checkout` returns `structuredContent` whose `requires`
-  includes `{ credential: "age", effect: "gate", minAge: 21, approveUrl: …<this order id> }` and **no
-  completable checkout link**.
-- **Non-alcohol cart** (`drift-mouse`) → `requires` has **no** `age` entry; a normal `checkoutUrl` is
-  returned.
-- The age entry's `approveUrl` decodes to the **same order id** in `structuredContent.order`.
+**Expected** (in-memory MCP transport, deterministic) — consolidated Mode A: the `checkout` tool *mints the
+link and surfaces the requirement*; it never completes the order (there is no MCP place/settle tool):
+- **Age-restricted cart** (`oak-whiskey`) → `checkout` returns `structuredContent` with **both** a
+  `checkoutUrl` **and** a `requires` that includes `{ credential: "age", effect: "gate", minAge: 21,
+  approveUrl: …<this order id> }`. The `approveUrl` decodes to the **same order id**.
+- **Non-alcohol cart** (`drift-mouse`) → `requires` has **no** `age` entry; a normal `checkoutUrl` is returned.
+- **Enforcement is on the completion path, not the tool:** a `place-order` for the still-unverified
+  age-restricted order is refused (`403`, `app.ts:81`) — and a passkey/dc-payment `/verify` likewise.
 
-This test MUST fail if the gate is removed (Constitution: a test that passes without the control is useless).
+The completion-path refusal MUST still fail if the gate is removed (Constitution: a test that passes without
+the control is useless). The tool returning the link is *not* a bypass — the link is inert until the buyer
+verifies on the page.
 
 ## 4. Full suite (no regressions)
 
