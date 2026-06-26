@@ -17,7 +17,8 @@ Configure once, then resolve a credential **policy** to a serializable `requires
 ```ts
 import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
 
-const attesto = new Attesto({ walletOrigin: "https://shop.example" });
+const attesto = new Attesto();   // zero-config (defaults to http://localhost:3000)
+// for a deployment, pass your public origin: new Attesto({ walletOrigin: "https://shop.example" })
 attesto.mount(app);   // wallet-ceremony seam + per-order verification store
 
 // In your checkout tool handler — resolve the policy against the server-priced order:

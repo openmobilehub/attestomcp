@@ -9,14 +9,16 @@ The configure-once client.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `walletOrigin` | `string` | Origin the wallet ceremony binds to; per-order approve link = `walletOrigin + /credential-gate/age?order=<id>`. |
+| `walletOrigin` | `string?` | Origin the wallet ceremony binds to; per-order approve link = `walletOrigin + /credential-gate/age?order=<id>`. **Optional** — defaults to `http://localhost:<PORT\|3000>`. |
 | `store` | `VerificationStore` | Per-order verification state; default in-memory, pluggable (Redis). |
 
 **Methods**
 - `mount(app): void` — mounts `/credential-gate/*` ceremony routes on the Express app; wires `store`.
 - `requirements(order, policy): VerificationManifestEntry[]` — resolves policy → serializable manifest.
 
-**Validation**: `walletOrigin` MUST be an absolute origin (refuse `localhost` in production builds).
+**Validation**: when given, `walletOrigin` SHOULD be an absolute origin. The client **warns (never throws)**
+— a non-absolute value falls back to the localhost default, and a localhost origin in production warns that
+buyers can't reach the approve links. (DX: `new Attesto()` works zero-config; you fix the warning for deploy.)
 
 ## GateOrder (input to `requirements`)
 

@@ -1,7 +1,7 @@
 // The Attesto client — construction guards (origin binding is security-relevant)
 // and the mount() store seam (per-order, never process-global).
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Attesto } from "./client.js";
 import { age, required } from "./credentials.js";
 import type { GateOrder } from "./types.js";
@@ -14,9 +14,33 @@ const order: GateOrder = {
 };
 
 describe("Attesto constructor", () => {
-  it("refuses a non-absolute walletOrigin (origin binding is load-bearing)", () => {
-    expect(() => new Attesto({ walletOrigin: "shop.example" })).toThrow();
-    expect(() => new Attesto({ walletOrigin: "" })).toThrow();
+  it("works with no config — defaults walletOrigin to localhost", () => {
+    const a = new Attesto();
+    expect(a.walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
+    // empty string is treated as unset → same default
+    expect(new Attesto({ walletOrigin: "" }).walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
+  });
+
+  it("warns (does NOT throw) on a non-absolute walletOrigin and falls back to the default", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const a = new Attesto({ walletOrigin: "shop.example" }); // missing scheme
+    expect(warn).toHaveBeenCalled();
+    expect(a.walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
+    warn.mockRestore();
+  });
+
+  it("warns (does NOT throw) on a localhost origin in production, but still uses it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const a = new Attesto({ walletOrigin: "http://localhost:3001" });
+      expect(a.walletOrigin).toBe("http://localhost:3001");
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = prev;
+      warn.mockRestore();
+    }
   });
 
   it("accepts an absolute origin and trims a trailing slash", () => {

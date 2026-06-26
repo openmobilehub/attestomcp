@@ -6,7 +6,7 @@ The surface the implementation MUST satisfy and tests MUST exercise. TypeScript 
 
 ```ts
 export interface AttestoOptions {
-  walletOrigin: string;              // absolute origin; refuse localhost in production
+  walletOrigin?: string;             // optional; defaults to http://localhost:<PORT|3000>. Warns (never throws)
   store?: VerificationStore;         // default: in-memory, keyed by order id
 }
 

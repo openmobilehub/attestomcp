@@ -22,7 +22,8 @@ The gate wraps an MCP `checkout` tool, so you need a storefront first — two wa
 import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
 import { z } from "zod";
 
-const attesto = new Attesto({ walletOrigin: "https://shop.example" });
+const attesto = new Attesto();   // zero-config (defaults to http://localhost:3000)
+// for a deployment, pass your public origin: new Attesto({ walletOrigin: "https://shop.example" })
 attesto.mount(app);   // serves the wallet ceremony on your origin + owns the per-order verification store
 
 // You decide what counts as age-restricted in your catalog — the SDK never guesses. Here the alcohol

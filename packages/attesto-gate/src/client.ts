@@ -14,19 +14,34 @@ export interface ExpressApp {
   locals: Record<string, unknown>;
 }
 
+/** Zero-config default so `new Attesto()` works for local dev. */
+const DEFAULT_WALLET_ORIGIN = `http://localhost:${process.env.PORT ?? 3000}`;
+
 export class Attesto {
   readonly walletOrigin: string;
   readonly store: VerificationStore;
 
-  constructor(opts: AttestoOptions) {
-    const origin = opts.walletOrigin?.trim();
-    if (!origin || !/^https?:\/\//.test(origin)) {
-      throw new Error(`Attesto: walletOrigin must be an absolute http(s) origin, got: ${opts.walletOrigin}`);
+  constructor(opts: AttestoOptions = {}) {
+    let origin = opts.walletOrigin?.trim();
+    if (!origin) {
+      // Zero-config: default to localhost so the getting-started example just runs.
+      origin = DEFAULT_WALLET_ORIGIN;
+    } else if (!/^https?:\/\//.test(origin)) {
+      // Wallet ceremonies are origin-bound, so a scheme-less value can't work.
+      // Warn and fall back rather than hard-failing (DX over a thrown error).
+      console.warn(
+        `[attesto] walletOrigin "${origin}" is not an absolute http(s) origin; using ${DEFAULT_WALLET_ORIGIN}. ` +
+          `Pass an absolute origin (e.g. https://shop.example) for any deployed environment.`,
+      );
+      origin = DEFAULT_WALLET_ORIGIN;
     }
-    // Refuse localhost in production — the wallet ceremony must bind to a real
-    // origin (Security: OpenID4VP/WebAuthn are origin-bound).
+    // OpenID4VP / WebAuthn are origin-bound, so a localhost origin in production
+    // mints approve links a buyer's phone can't reach. Warn loudly — not fatal.
     if (process.env.NODE_ENV === "production" && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(origin)) {
-      throw new Error(`Attesto: refusing localhost walletOrigin in production: ${origin}`);
+      console.warn(
+        `[attesto] walletOrigin is ${origin} in production — buyers can't open localhost approve links. ` +
+          `Set { walletOrigin } to your public origin.`,
+      );
     }
     this.walletOrigin = origin.replace(/\/$/, "");
     this.store = opts.store ?? new MemoryVerificationStore();

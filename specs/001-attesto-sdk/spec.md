@@ -101,7 +101,7 @@ session: **verify age** (required) · **membership discount** (optional) · **pa
 import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
 import { z } from "zod";
 
-const attesto = new Attesto({ walletOrigin: "https://shop.example" });
+const attesto = new Attesto();   // zero-config (defaults to http://localhost:3000); pass { walletOrigin } to deploy
 attesto.mount(app);   // Context 2: mounts /credential-gate/* + owns the per-order verification store
 
 // How YOU decide an item is age-restricted, in YOUR catalog (the SDK doesn't guess). In this catalog

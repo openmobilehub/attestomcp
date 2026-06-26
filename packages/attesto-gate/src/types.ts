@@ -152,8 +152,13 @@ export interface VerificationStore {
 }
 
 export interface AttestoOptions {
-  /** Absolute origin the wallet ceremony binds to; refuse `localhost` in production. */
-  walletOrigin: string;
+  /**
+   * Absolute origin the wallet ceremony binds to (e.g. `https://shop.example`).
+   * Optional — defaults to `http://localhost:<PORT|3000>` so zero-config local
+   * dev works. Warns (never throws) if it's not absolute, or if it resolves to
+   * localhost in production. Set it to your public origin for any deployment.
+   */
+  walletOrigin?: string;
   /** Per-order verification state; default in-memory, pluggable (Redis). */
   store?: VerificationStore;
 }
