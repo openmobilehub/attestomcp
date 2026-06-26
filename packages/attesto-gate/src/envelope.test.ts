@@ -1,19 +1,32 @@
+// Wire-shape contract for the retained Mode-B primitive (envelope + gated()).
+// The `verification_required` shape is a tested contract — agents key on it — so
+// these assertions guard against regressions even though v0.1 checkout uses the
+// consolidated manifest (see manifest.test.ts) instead.
+
 import { describe, it, expect, vi } from "vitest";
 import {
   ageDcql,
   buildVerificationRequired,
   envelopeInstruction,
-  gated,
   isVerificationRequired,
-  requireCredential,
-  optionalCredential,
   ENVELOPE_SENTINEL,
   ENVELOPE_VERSION,
-  type GateOrder,
-} from "./index.js";
+} from "./envelope.js";
+import { gated } from "./gated.js";
+import type { GateOrder } from "./types.js";
 
-const ageOrder: GateOrder = { id: "ORD-1", total: 124, currency: "USD", lines: [{ id: "oak-whiskey" }] };
-const plainOrder: GateOrder = { id: "ORD-2", total: 69, currency: "USD", lines: [{ id: "drift-mouse" }] };
+const ageOrder: GateOrder = {
+  id: "ORD-1",
+  total: 124,
+  currency: "USD",
+  lines: [{ id: "oak-whiskey", quantity: 1, unitPrice: 12400, minimumAge: 21 }],
+};
+const plainOrder: GateOrder = {
+  id: "ORD-2",
+  total: 69,
+  currency: "USD",
+  lines: [{ id: "drift-mouse", quantity: 1, unitPrice: 6900 }],
+};
 
 const deps = {
   resolveOrder: (o: GateOrder) => o,
@@ -55,7 +68,7 @@ describe("buildVerificationRequired", () => {
   });
 });
 
-describe("gated", () => {
+describe("gated (deprecated Mode-B shim)", () => {
   it("REFUSES an age-restricted, unverified order — the handler never runs", async () => {
     const handler = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ORDER PLACED" }] }));
     const wrapped = gated(handler, { age: true }, { ...deps, isAgeUnverified: async () => true });
@@ -91,13 +104,6 @@ describe("gated", () => {
     const wrapped = gated(handler, { age: true }, { ...deps, resolveOrder, isAgeUnverified: async () => false });
     await wrapped(ageOrder);
     expect(resolveOrder).toHaveBeenCalledOnce();
-  });
-});
-
-describe("step builders", () => {
-  it("require/optional carry the required flag", () => {
-    expect(requireCredential("age")).toEqual({ credential: "age", required: true });
-    expect(optionalCredential("membership")).toEqual({ credential: "membership", required: false });
   });
 });
 

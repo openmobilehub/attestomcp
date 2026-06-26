@@ -38,31 +38,31 @@ per task; DCO sign-off (`git commit -s`).
 
 ## Phase 1: Setup
 
-- [ ] T001 Refactor `packages/attesto-gate/src/` into the module layout from `plan.md` — `client.ts`,
+- [X] T001 Refactor `packages/attesto-gate/src/` into the module layout from `plan.md` — `client.ts`,
       `credentials.ts`, `manifest.ts`, keep `envelope.ts`; rebuild `index.ts` exports. Split the existing
       `index.test.ts`: move the envelope wire-shape asserts to `packages/attesto-gate/src/envelope.test.ts`,
       drop the old string-builder asserts (replaced in T006). Build stays green.
-- [ ] T002 [P] Add the public types from `data-model.md` to `packages/attesto-gate/src/types.ts`
+- [X] T002 [P] Add the public types from `data-model.md` to `packages/attesto-gate/src/types.ts`
       (`AttestoOptions`, `GateOrder`/`OrderLine`, `Credential`, `Step`, `Effect`, `VerificationManifestEntry`, `DcqlQuery`).
 
 ## Phase 2: Foundational (blocking — the primitives every story needs)
 
-- [ ] T003 [P] Contract test (serialization + honesty): `JSON.stringify(requirements(...))` round-trips
+- [X] T003 [P] Contract test (serialization + honesty): `JSON.stringify(requirements(...))` round-trips
       with **no functions**, AND every entry carries `enforcedAt` + `trust_level` (CT8) — in
       `packages/attesto-gate/src/manifest.test.ts`.
-- [ ] T004 [P] Contract test (ordering): a payment-bearing step resolves **last** even when declared
+- [X] T004 [P] Contract test (ordering): a payment-bearing step resolves **last** even when declared
       earlier, in `packages/attesto-gate/src/manifest.test.ts`.
-- [ ] T005 [P] Contract test (type-safety): `age.over(21).in("usd")` is a **compile error** (expect-error
+- [X] T005 [P] Contract test (type-safety): `age.over(21).in("usd")` is a **compile error** (expect-error
       test) in `packages/attesto-gate/src/types.test-d.ts`.
-- [ ] T006 Implement builders + `.when()`/`appliesTo` + `defineCredential` + `dcql` + effects
+- [X] T006 Implement builders + `.when()`/`appliesTo` + `defineCredential` + `dcql` + effects
       (`gate()`/`discount()`/`authorize()` as tagged data) + the `required(c)`/`optional(c)` wrappers in
       `packages/attesto-gate/src/credentials.ts`. **Remove** the string-based `requireCredential` /
       `optionalCredential` and the legacy string `Step` (clean break — type-incompatible, 0.x package).
-- [ ] T007 Implement `requirements()` resolver (run predicates, drop inapplicable, payment-last, emit the
+- [X] T007 Implement `requirements()` resolver (run predicates, drop inapplicable, payment-last, emit the
       flat manifest) in `packages/attesto-gate/src/manifest.ts` → T003/T004 green.
-- [ ] T008 Implement the `Attesto` client constructor + `requirements()` delegation in
+- [X] T008 Implement the `Attesto` client constructor + `requirements()` delegation in
       `packages/attesto-gate/src/client.ts`.
-- [ ] T009 Keep `envelope.ts` (`buildVerificationRequired`/`isVerificationRequired`/`ageDcql`) as the
+- [X] T009 Keep `envelope.ts` (`buildVerificationRequired`/`isVerificationRequired`/`ageDcql`) as the
       Mode-B/roadmap primitive and `gated()` as a deprecated shim; re-export from `index.ts`. Keep the
       envelope **wire-shape** assertions in `packages/attesto-gate/src/envelope.test.ts` (the
       `_attesto`/`present.min_age`/`trust_level` checks moved out of `index.test.ts` per T001 — distinct from
@@ -76,25 +76,30 @@ per task; DCO sign-off (`git commit -s`).
 (+ per-order `approveUrl`); a non-alcohol cart → a link with no `age` entry. The `checkout` tool mints +
 surfaces (Mode A); the `place-order` completion path enforces (403). **Independent test**: `checkout-gate.test.ts`.
 
-- [ ] T010 [US1] Contract test (conditional drop): non-alcohol cart ⇒ no `age` entry; add an alcohol line
+- [X] T010 [US1] Contract test (conditional drop): non-alcohol cart ⇒ no `age` entry; add an alcohol line
       ⇒ `age` at `minAge:21` with an `approveUrl` bound to that order id, in `packages/attesto-gate/src/manifest.test.ts`.
-- [ ] T011 [US1] Contract test (MCP layer, in-memory transport) — consolidated Mode A: `checkout` for an
+- [X] T011 [US1] Contract test (MCP layer, in-memory transport) — consolidated Mode A: `checkout` for an
       age-restricted unverified cart returns **both** a `checkoutUrl` **and** the manifest (age `gate`,
       `minAge:21`, `approveUrl` decoding to the same `order.id`); a non-alcohol cart → link, no `age` entry.
       **Replace** the old `verification_required`/no-link assertions in `checkout-gate.test.ts` with these
       manifest assertions. The *enforcement* bypass (unverified `place-order` → 403, fails-closed if the gate
       is removed) is the completion-path test re-run in **T026**, not the tool — the tool only mints/surfaces.
-- [ ] T012 [US1] Implement `age.over(n).when()` resolution + the age manifest entry + `approveUrl`
+- [X] T012 [US1] Implement `age.over(n).when()` resolution + the age manifest entry + `approveUrl`
       derivation (`walletOrigin + order.id`) in `packages/attesto-gate/src/manifest.ts` / `credentials.ts`.
 - [ ] T013 [US1] Implement `attesto.mount(app)` to mount the **existing** `/credential-gate` ceremony +
       `verificationStore` (do NOT reimplement OpenID4VP/mdoc; keep `payment-gate/credential-gate/verify.ts`
       fail-closed checks) in `packages/attesto-gate/src/client.ts`, wired in `app.ts`.
-- [ ] T014 [US1] Wire `server.ts` checkout tool to `attesto.requirements(order, [required(age.over(21).when(hasAlcohol))])`.
+      _Partial (v0.1): `mount(app)` ships as the store seam (exposes the per-order store on `app.locals`,
+      tested in `client.test.ts`) and the demo's existing fail-closed `/credential-gate/*` routes remain the
+      ceremony — NOT yet wired into `app.ts`, and route-ownership extraction (mount registers the routes) is
+      deferred to keep the live ceremony intact. US1 MVP works without it: the tool surfaces the manifest and
+      `place-order` enforces._
+- [X] T014 [US1] Wire `server.ts` checkout tool to `attesto.requirements(order, [required(age.over(21).when(hasAlcohol))])`.
       Enrich the `GateOrder` lines with `minimumAge` **re-derived from the catalog** server-side (inv #2 — the
       real `PricedCartLine` doesn't carry it); the grounded predicate is `hasAlcohol = (o) => o.lines.some(l => l.minimumAge != null)`
       (alcohol items have `minimumAge: 21`). Return `structuredContent: { orderId, checkoutUrl, requires }` —
       the link is always minted (Mode A); the manifest surfaces what the page will require.
-- [ ] T015 [US1] Verify: `npm run build` green (deploy-safe) + `checkout-gate.test.ts` green; commit (DCO).
+- [X] T015 [US1] Verify: `npm run build` green (deploy-safe) + `checkout-gate.test.ts` green; commit (DCO).
 
 **Checkpoint**: US1 is a shippable MVP — the gate works end to end in the demo.
 
