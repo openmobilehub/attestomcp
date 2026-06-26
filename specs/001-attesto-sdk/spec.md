@@ -71,7 +71,7 @@ Consolidated is the default. (The separate-blocking shape survives only for **Mo
 
 | Credential | Reported in Ctx 1 | Proof ceremony (Ctx 2) | Enforced server-side |
 | :-- | :-- | :-- | :-- |
-| **age** (required) | ✅ in `requires` | `/credential-gate/age` — OpenID4VP/mdoc, phone *(mounted by the SDK)* | `/verify` **+ every completion path → 403** (`passkey/routes.ts:67`, `dc-payment/routes.ts:58`, `app.ts:71`) |
+| **age** (required, *conditional*) | ✅ when the cart is age-restricted | `/credential-gate/age` — OpenID4VP/mdoc, phone *(mounted by the SDK)* | `/verify` **+ every completion path → 403** (`passkey/routes.ts:67`, `dc-payment/routes.ts:58`, `app.ts:71`) |
 | **membership** (optional) | ✅ in `requires` | `/credential-gate/loyalty` — a **discount card**; present loyalty → 10% off | discount reconciled in pricing (`mandate.ts` Gate 1) |
 | **payment** (required) | ✅ in `requires` | `/payment-gate/passkey` or `/dc-payment` (WebAuthn / wallet-signed AP2 over caBLE) | 4 mandate gates + settlement gates completion (`completion.ts`) |
 
@@ -114,13 +114,15 @@ server.registerTool(
   async ({ items }) => {
     const order = priceCart(items);                       // your catalog → order (stable id)
     const requires = attesto.requirements(order, [        // what Context 2 will ask for (for the agent to relay)
-      required(age.over(21)),                             // required · enforced at the page + completion
+      required(age),                                      // CONDITIONAL: fires only if a cart line is
+                                                          //   age-restricted (alcohol); threshold from the product
       optional(membership.discount(10)),                  // optional · applied only if presented
       required(payment.in("usd")),                        // required · amount derived from the order
     ]);
+    // `requires` lists only what THIS cart actually needs — no alcohol ⇒ no age step.
     return {
       structuredContent: { orderId: order.id, checkoutUrl: yourCheckoutPage(order), requires },
-      content: [{ type: "text", text: `Checkout ready — verify age 21+, optionally apply your membership discount, and pay on your phone: ${yourCheckoutPage(order)}` }],
+      content: [{ type: "text", text: `Checkout ready: ${yourCheckoutPage(order)}` }], // agent reads `requires` to tell the user the steps
     };
   },
 );
@@ -137,6 +139,14 @@ call. Nothing is injected off-screen.
   `payment.in("usd")`. An age gate that sets a currency is a compile error. Payment amount is **derived**
   from the order, never a field you pass (keeps amount-binding in agreement — invariant #3).
 
+**Conditional by the cart.** `attesto.requirements(order, policy)` *resolves* the declared policy against
+the actual order and **drops gates that don't apply**. `age` is conditional: it fires only when a cart line
+is age-restricted — the SDK reads `order.lines[].minimumAge` (the same `requiredAgeForLines` rule the demo
+uses), at that line's threshold. A cart of headphones ⇒ `requires` is just `[payment]`, no age card; add a
+bottle of whiskey ⇒ the age card appears at 21+. `age.over(21)` stays available to *pin* the threshold from
+the policy, but the conditionality is automatic either way. (This is why the order must carry per-line
+restriction data — the GateOrder contract, §8.)
+
 **Additional credential gates — beyond the three built-ins.** `age` / `membership` / `payment` are just
 *pre-defined* credentials. Any consequential check is added the same way: define it once, drop it into the
 same ordered policy. A credential is four things — what to ask, how to read it, what proving it does, how
@@ -150,6 +160,7 @@ const prescription = defineCredential({
   request: dcql({ docType: "org.hl7.prescription.1", claims: ["rx_valid"] }), // what to ask the wallet
   verify:  (c) => c.rx_valid === true,                                        // is it proven?
   effect:  gate(),                                                            // gate() | discount() | authorize()
+  appliesTo: (order) => order.lines.some((l) => l.requiresRx),                // CONDITIONAL: only for Rx items
   ui:      { label: "Prescription", action: "Verify prescription" },          // the card shown in Context 2
 });
 
@@ -162,8 +173,8 @@ const veteran = defineCredential({
 });
 
 attesto.requirements(order, [
-  required(age.over(21)),
-  required(prescription),          // your custom gate — blocks until proven
+  required(age),                   // conditional on alcohol (see §4)
+  required(prescription),          // your custom gate — conditional on Rx (appliesTo)
   optional(veteran),               // your custom optional discount
   required(payment.in("usd")),
 ]);
@@ -177,6 +188,9 @@ attesto.requirements(order, [
   server-side at completion for `gate()` / `authorize()` effects.
 - Passed **by object, no registration** — `required(prescription)`. Publish one as its own tiny package
   and anyone can `required(theirCredential)` it.
+- **Conditional, like `age`:** add `appliesTo: (order) => …` so a gate fires only when relevant to the cart
+  (prescription only for Rx lines). Omit it and the credential always applies — `requirements()` resolves
+  it the same way it resolves `age`.
 
 **v0.1 scope [clarify]:** ship the three built-ins + `defineCredential` + the generic ceremony route, with
 one custom example (a prescription `gate()`) proving the extension point. Arbitrary `discount()` amounts
@@ -229,3 +243,6 @@ Two orthogonal typed axes, surfaced (never silent):
   generalization is roadmap.
 - **Storefront testing:** v0.1 uses the storefront as the integration **harness** (the gate is proven by
   running it in the real checkout); the storefront gets its own `specs/002-attesto-storefront` later.
+- **GateOrder contract:** the order's lines carry the restriction data the SDK resolves conditional gates
+  from — `minimumAge` (for `age`) and any custom flags (e.g. `requiresRx`, read by a credential's
+  `appliesTo`). No extra callback; it's data on the order, re-derived server-side (invariant #2).
