@@ -6,16 +6,23 @@
 // Then add http://localhost:3005/mcp to Goose (Add Extension → Streamable HTTP).
 // Try: "what do you sell?" → "add the whiskey and check out" (age 21+ is surfaced)
 //      → "add the headphones and check out" (no age gate).
+//
+// `attesto.mount(store.app)` reads the ceremony seams the storefront published on
+// `store.app.locals.attesto` and wires the ceremony rails onto THIS server, so the
+// checkout page links to real /attesto/* routes the buyer can complete end-to-end:
+// prove age → present membership → authorize payment, recorded so get-order-status
+// reflects it. Set GATE_SECRET for a stable challenge key across restarts (a dev
+// server uses an ephemeral per-process key otherwise).
 
 import { createStorefront } from "@openmobilehub/attesto-storefront/server";
 import { Attesto, age, membership, payment, required, optional } from "@openmobilehub/attesto-gate";
 
-const store = createStorefront();                 // the whole storefront — one line, nothing to configure
+const store = createStorefront({ signingKey: process.env.GATE_SECRET }); // the whole storefront — one line
 const attesto = new Attesto();
-attesto.mount(store.app);                          // Attesto mounts onto it
+attesto.mount(store.app);                          // …reads the seams + wires the /attesto/* ceremony rails
 
 const hasAlcohol = (order) => order.lines.some((l) => l.minimumAge != null);
-store.gate((order) =>                              // …and gates the checkout tool
+store.gate((order) =>                              // …and gates the checkout tool (payment settles LAST)
   attesto.requirements(order, [
     required(age.over(21).when(hasAlcohol)),        // 21+ — only when the cart has alcohol
     optional(membership.discount(10)),              // 10% off with a loyalty credential

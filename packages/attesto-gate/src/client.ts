@@ -25,6 +25,10 @@ const DEFAULT_WALLET_ORIGIN = `http://localhost:${process.env.PORT ?? 3000}`;
 export class Attesto {
   readonly walletOrigin: string;
   readonly store: VerificationStore;
+  // True once the ceremony rails are wired onto a host app (so `/attesto/*` routes
+  // exist on this server). `requirements()` then emits approve links that resolve
+  // to those mounted routes rather than the legacy `/credential-gate/*` shape.
+  private mountedRoutes = false;
 
   constructor(opts: AttestoOptions = {}) {
     let origin = opts.walletOrigin?.trim();
@@ -58,7 +62,7 @@ export class Attesto {
    * payment-last; no functions cross the wire.
    */
   requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[] {
-    return resolveRequirements(order, policy, { walletOrigin: this.walletOrigin });
+    return resolveRequirements(order, policy, { walletOrigin: this.walletOrigin, mountedRoutes: this.mountedRoutes });
   }
 
   /**
@@ -78,8 +82,22 @@ export class Attesto {
   mount(app: ExpressApp, ceremony?: MountCeremony): void {
     if (ceremony) {
       mountCeremony(app as CeremonyApp, { ...ceremony, verificationStore: this.store });
+      this.mountedRoutes = true;
       return;
     }
+    // Zero-arg compose (the quickstart): a host (e.g. attesto-storefront) has
+    // already populated the ceremony seams on `app.locals.attesto`. Wire the rails
+    // straight from those seams — including the host's OWN verificationStore when it
+    // supplied one, so its `completion` seam shares the exact per-order state the
+    // rails write (invariant 4). Falls back to Attesto's own store otherwise.
+    const locals = (app.locals.attesto ?? {}) as Partial<CeremonySeams>;
+    if (locals.orderStore && locals.catalog && locals.completion) {
+      mountCeremony(app as CeremonyApp, locals.verificationStore ? {} : { verificationStore: this.store });
+      this.mountedRoutes = true;
+      return;
+    }
+    // Legacy (no seams): expose the per-order store so a host's existing
+    // fail-closed routes resolve verification THROUGH Attesto.
     const existing = app.locals.attesto as { store?: VerificationStore } | undefined;
     if (existing?.store === this.store) return; // idempotent
     app.locals.attesto = { store: this.store, walletOrigin: this.walletOrigin };
