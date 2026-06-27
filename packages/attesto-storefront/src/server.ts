@@ -72,7 +72,7 @@ export interface Storefront {
 // ── widget bundle (single-file html, built by vite into dist/ui/) ───────────
 
 const SKYBRIDGE_MIME = "text/html+skybridge";
-const IMAGE_DOMAINS = ["https://picsum.photos", "https://fastly.picsum.photos"];
+const IMAGE_DOMAINS = ["https://loremflickr.com", "https://picsum.photos", "https://fastly.picsum.photos"];
 
 function bundleCandidates(): string[] {
   return [join(import.meta.dirname, "ui", "mcp-app.html"), join(process.cwd(), "dist", "ui", "mcp-app.html")];

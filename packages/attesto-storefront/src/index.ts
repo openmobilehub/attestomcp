@@ -166,13 +166,15 @@ export function getReviews(reviews: Record<string, Review[]> | undefined, produc
 }
 
 /** A tiny runnable catalog (incl. one age-restricted item) so the package demos itself. */
+// Real keyword-matched product photos via loremflickr (a single CSP domain that
+// redirects within itself); `lock` pins a stable image per product.
 export const SAMPLE_CATALOG: Product[] = [
   {
     id: "aurora-headphones",
     name: "Aurora Wireless Headphones",
     price: 199.0,
     currency: "USD",
-    image: "https://picsum.photos/seed/aurora-headphones/400/300",
+    image: "https://loremflickr.com/400/300/headphones?lock=1",
     category: "Audio",
     description: "Over-ear ANC headphones with 40h battery life.",
   },
@@ -181,9 +183,46 @@ export const SAMPLE_CATALOG: Product[] = [
     name: "Oak Reserve Whiskey Collection",
     price: 124.0,
     currency: "USD",
-    image: "https://picsum.photos/seed/oak-whiskey/400/300",
+    image: "https://loremflickr.com/400/300/whiskey,bottle?lock=2",
     category: "Beverages",
     description: "Trio of small-batch aged whiskeys. 21+ only.",
     minimumAge: 21,
+  },
+  {
+    id: "drift-mouse",
+    name: "Drift Wireless Mouse",
+    price: 49.0,
+    currency: "USD",
+    image: "https://loremflickr.com/400/300/computer,mouse?lock=3",
+    category: "Electronics",
+    description: "Ergonomic silent-click wireless mouse, 6-month battery.",
+  },
+  {
+    id: "celebration-champagne",
+    name: "Celebration Champagne Duo",
+    price: 89.0,
+    currency: "USD",
+    image: "https://loremflickr.com/400/300/champagne?lock=4",
+    category: "Beverages",
+    description: "Brut champagne duo with two crystal flutes. 21+ only.",
+    minimumAge: 21,
+  },
+  {
+    id: "summit-backpack",
+    name: "Summit Trail Backpack",
+    price: 129.0,
+    currency: "USD",
+    image: "https://loremflickr.com/400/300/backpack?lock=5",
+    category: "Outdoors",
+    description: "35L weatherproof hiking backpack with a stowaway rain cover.",
+  },
+  {
+    id: "lumen-desk-lamp",
+    name: "Lumen LED Desk Lamp",
+    price: 59.0,
+    currency: "USD",
+    image: "https://loremflickr.com/400/300/desk,lamp?lock=6",
+    category: "Home",
+    description: "Dimmable LED desk lamp with a USB-C charging base.",
   },
 ];
