@@ -1,8 +1,8 @@
 // The credential-gate rail (age + membership) — the GDC-hero MVP. Registers its
 // routes onto the host app through the Foundational mount() seam:
 //   GET  /attesto/credential?order=<id>&cred=<age|membership>  → the gate page
-//   GET  /attesto/credential/request?order=<id>&cred=<…>       → OpenID4VP request (scaffold)
-//   POST /attesto/credential/verify                            → presence-only verify
+//   GET  /attesto/credential/request?order=<id>&cred=<…>       → REAL OpenID4VP + org-iso-mdoc requests
+//   POST /attesto/credential/verify                            → instant-demo claims OR a real presentation
 //
 // Dependency-free (no `express` import — invariant from mount.ts): the handlers are
 // registered against the structural CeremonyApp.get/post, and the verify body is
@@ -13,16 +13,28 @@
 // a tampered/unknown id is refused — CT3, invariant 2), and the age threshold is
 // re-derived from the catalog-priced lines, never the token (T013, invariant 5).
 //
+// Verification has TWO paths feeding ONE policy (evaluateCredential):
+//   • instant-demo  — body carries `claims` directly (no wallet round-trip; the
+//                     tested default for the e2e + bypass suite).
+//   • real presentation — body carries `result` from navigator.credentials.get; the
+//                     wallet's response is JWE/HPKE-decrypted, nonce/origin-bound,
+//                     and the ISO-mdoc DeviceResponse parsed before the same policy
+//                     runs. Dispatched by the wallet's `result.protocol`
+//                     (openid4vp → verifyCredentialPresentation; org-iso-mdoc →
+//                     verifyMdocPresentation). The wire crypto is REAL; the issuer
+//                     trust anchor is not (trust_level presence-only-demo).
+//
 // Enforcement (CT9 / invariant 1): the verify handler grants age ONLY on the
 // explicit positive claim at the order's threshold; the OTHER half — refusing an
 // unverified age-restricted order — lives in the shared `completeOrder` seam
-// (completion.ts), so every payment rail honors it. The demo's POST
-// /checkout/place-order and the MCP order-completion tool are the remaining two
-// completion paths; wiring the demo to consume this rail is **T014 (deferred)**.
+// (completion.ts), so every payment rail honors it.
 import { resolveOrder, type CeremonyApp, type CeremonyContext, type RailRegistrar } from "../mount.js";
 import type { RequestLike } from "../origin.js";
 import { buildCredentialRequest } from "./request.js";
-import { evaluateCredential, requiredAgeForOrder, type CredentialKind } from "./verify.js";
+import { evaluateCredential, requiredAgeForOrder, verifyCredentialPresentation, type CredentialKind, type CredGateResult } from "./verify.js";
+import { verifyMdocPresentation } from "./mdoc-verify.js";
+import { buildMdocRequestParts, sealMdocContext } from "../mdoc/mdoc-iso.js";
+import { mdocDocSpec } from "./doc-spec.js";
 import { renderCredentialPage } from "./page.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
@@ -84,6 +96,12 @@ async function recordVerified(ctx: CeremonyContext, orderId: string, kind: Crede
   }
 }
 
+// The membership discount percent the order applies, re-derived from the re-priced
+// order (never the token) — used to surface the membership detail.
+function percentFor(order: { discount: number; subtotal: number }): number | undefined {
+  return order.discount > 0 && order.subtotal > 0 ? Math.round((order.discount / order.subtotal) * 100) : undefined;
+}
+
 export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: CeremonyContext): void => {
   // The Foundational fail-fast tests mount() with a route-less app shape; only
   // attach when the host app can actually route (CeremonyApp.get/post are optional).
@@ -104,23 +122,48 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
         minimumAge: requiredAgeForOrder(order) ?? undefined,
         total: order.total,
         currency: order.currency,
-        percent: order.discount > 0 && order.subtotal > 0 ? Math.round((order.discount / order.subtotal) * 100) : undefined,
+        percent: percentFor(order),
       }),
     );
   });
 
-  // GET the (scaffold) OpenID4VP request descriptor for this kind.
+  // GET the REAL request. Offer BOTH protocols; the platform's DC API self-selects
+  // the one it supports (Android Chrome → openid4vp, iOS WebKit → org-iso-mdoc).
   get("/attesto/credential/request", async (req, res) => {
     const kind = parseKind(req.query.cred);
     if (!kind) { res.status(404).json({ error: "unknown credential" }); return; }
     const order = await resolveOrder(ctx, typeof req.query.order === "string" ? req.query.order : undefined);
     if (!order) { res.status(404).json({ error: "order not found" }); return; }
-    res.json(buildCredentialRequest(kind, originOf(ctx, req), { minimumAge: requiredAgeForOrder(order) ?? undefined }));
+    try {
+      const minimumAge = kind === "age" ? requiredAgeForOrder(order) ?? 21 : undefined;
+      const reqOrigin = originOf(ctx, req);
+      const oid = await buildCredentialRequest(kind, reqOrigin, ctx.signingKey, { minimumAge });
+      // Signed (reader-authenticated) by default — required by iOS. ?signed=0 forces
+      // the unsigned path for diagnostics.
+      const signed = req.query.signed !== "0";
+      const mdoc = await buildMdocRequestParts(mdocDocSpec(kind, minimumAge ?? 21), reqOrigin.origin, signed);
+      const mdocContextToken = await sealMdocContext(
+        { readerPrivateJwk: mdoc.readerPrivateJwk, base64EncryptionInfo: mdoc.base64EncryptionInfo },
+        ctx.signingKey,
+      );
+      res.json({
+        requests: [
+          { protocol: "openid4vp-v1-signed", data: { request: oid.request } },
+          { protocol: "org-iso-mdoc", data: mdoc.data },
+        ],
+        dcql_query: oid.dcql_query,
+        readerContextToken: oid.readerContextToken,
+        mdocContextToken,
+        trust_level: oid.trust_level,
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
   });
 
-  // POST verify — presence-only. Resolve + re-price the order (CT3), evaluate the
-  // disclosed claims (explicit positive claim — CT4/CT5), write the per-order
-  // record. The OpenID4VP encrypted-presentation path is scaffolded (501).
+  // POST verify — instant-demo claims OR a real wallet presentation. Resolve +
+  // re-price the order (CT3), evaluate the disclosed claims (explicit positive claim
+  // — CT4/CT5), write the per-order record on success.
   post("/attesto/credential/verify", async (req, res) => {
     const body = await readJsonBody(req);
     const kind = parseKind(body.cred);
@@ -128,16 +171,36 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
     const order = await resolveOrder(ctx, typeof body.order === "string" ? body.order : undefined);
     if (!order) { res.status(400).json({ verified: false, error: "missing or invalid order" }); return; }
 
-    // OpenID4VP signed/encrypted presentation path — scaffolded, PR-in-flight.
-    if (body.presentation !== undefined && body.claims === undefined) {
-      res.status(501).json({ verified: false, error: "openid4vp credential presentation is scaffolded/in-flight; use the presence-only claims path", trust_level: "presence-only-demo" });
-      return;
-    }
-
-    const claims = (body.claims && typeof body.claims === "object" ? body.claims : {}) as Record<string, unknown>;
     const minimumAge = kind === "age" ? requiredAgeForOrder(order) ?? 21 : undefined;
-    const out = evaluateCredential(kind, claims, { minimumAge });
-    if (out.verified) await recordVerified(ctx, order.id, kind, out.membershipNumber);
-    res.json(out);
+    const percent = kind === "membership" ? percentFor(order) : undefined;
+
+    try {
+      let out: CredGateResult;
+      const result = body.result as { protocol?: string; data?: unknown } | undefined;
+      if (result && typeof result === "object") {
+        // REAL wallet presentation — dispatch by the protocol the wallet used.
+        if (result.protocol === "org-iso-mdoc") {
+          if (typeof body.mdocContextToken !== "string") {
+            res.status(400).json({ verified: false, error: "missing mdocContextToken for org-iso-mdoc" });
+            return;
+          }
+          out = await verifyMdocPresentation({ kind, result, mdocContextToken: body.mdocContextToken, origin: originOf(ctx, req), secret: ctx.signingKey, minimumAge, percent });
+        } else {
+          if (typeof body.readerContextToken !== "string") {
+            res.status(400).json({ verified: false, error: "missing readerContextToken for openid4vp presentation" });
+            return;
+          }
+          out = await verifyCredentialPresentation({ kind, result, readerContextToken: body.readerContextToken, secret: ctx.signingKey, minimumAge, percent });
+        }
+      } else {
+        // Instant-demo claims path (the tested default).
+        const claims = (body.claims && typeof body.claims === "object" ? body.claims : {}) as Record<string, unknown>;
+        out = evaluateCredential(kind, claims, { minimumAge, percent });
+      }
+      if (out.verified) await recordVerified(ctx, order.id, kind, out.membershipNumber);
+      res.json(out);
+    } catch (err) {
+      res.status(400).json({ verified: false, error: (err as Error).message, trust_level: "presence-only-demo" });
+    }
   });
 };

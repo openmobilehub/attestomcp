@@ -261,11 +261,14 @@ describe("CT11 — page / request descriptor / receipt all state presence-only-d
     expect(html).toContain("presence-only-demo");
   });
 
-  it("the OpenID4VP request descriptor is fenced presence-only-demo, marked scaffold/in-flight, and carries the amount-bound transaction_data", () => {
+  it("the OpenID4VP request is fenced presence-only-demo, REAL-signed, and carries the amount-bound transaction_data", async () => {
     const order = catalog.createOrder([{ productId: "aurora-headphones", quantity: 1 }], "ORD-A");
-    const req = buildDcPaymentRequest(order, localhost);
+    const req = await buildDcPaymentRequest(order, localhost, "stable-test-secret");
     expect(req.trust_level).toBe("presence-only-demo");
-    expect(req.status).toBe("scaffold-in-flight");
+    // The request is now a REAL ES256-signed OpenID4VP JWT, not a scaffold descriptor.
+    expect(req.protocol).toBe("openid4vp-v1-signed");
+    expect(req.request.split(".").length).toBe(3);
+    expect(req.readerContextToken.length).toBeGreaterThan(0);
     expect(req.dcql_query.credentials.length).toBeGreaterThan(0);
     expect(req.transaction_data.length).toBeGreaterThan(0);
   });
@@ -278,12 +281,14 @@ describe("CT11 — page / request descriptor / receipt all state presence-only-d
     expect(res.body.mandate.trust_level).toBe("presence-only-demo");
   });
 
-  it("the encrypted wallet-presentation path is scaffolded — 501 pointing at the presence-only path", async () => {
+  it("the encrypted wallet-presentation path is REAL — it requires a readerContextToken (400, not 501) and records nothing without one", async () => {
     const h = harness();
     h.seed("ORD-P", [{ id: "aurora-headphones", quantity: 1 }]);
-    const res = await request(h.app).post("/attesto/dc-payment/verify").send({ order: "ORD-P", presentation: "<jwe>" });
-    expect(res.status).toBe(501);
-    expect(res.body.trust_level).toBe("presence-only-demo");
+    // A `result` with no sealed reader context can't decrypt — the real path refuses
+    // (400), it does NOT scaffold a 501 nor record anything.
+    const res = await request(h.app).post("/attesto/dc-payment/verify").send({ order: "ORD-P", result: { protocol: "openid4vp-v1-signed", data: { response: "<jwe>" } } });
+    expect(res.status).toBe(400);
+    expect(res.body.completed).toBeFalsy();
     expect(h.records.size).toBe(0);
   });
 });

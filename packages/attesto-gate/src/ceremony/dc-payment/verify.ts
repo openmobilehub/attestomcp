@@ -1,21 +1,30 @@
-// AP2-shaped DC payment mandate + four deterministic gates — the WORKING
-// presence-only mechanism, adapted from the demo's payment-gate/dc-payment/mandate.ts.
+// AP2-shaped DC payment mandate + four deterministic gates. TWO verify paths feed
+// ONE set of gates:
+//   • the instant-demo path (buildDcMandate + runDcGates) — disclosed instrument
+//     claims passed in directly; the amount-bound transaction_data is re-derived +
+//     re-checked, so a tampered amount is refused. The tested default (CT6–CT8).
+//   • the REAL OpenID4VP path (verifyDcPresentation, below) — the wallet's
+//     JWE-encrypted response is decrypted (jose ECDH-ES compactDecrypt), the ISO
+//     18013-5 mdoc DeviceResponse is parsed, and the wallet's device-SIGNED
+//     transaction_data_hash (from deviceSigned) is extracted and re-checked against
+//     SHA-256 of the transaction_data we sent — proving the wallet authorized THIS
+//     amount/payee, not merely that a token decrypted.
 //
-// TRUST IS PRESENCE-ONLY (Principle VII / FR-011). The disclosed instrument claims
-// are taken at face value: the wallet's signed mdoc DeviceResponse (issuer/device
-// signatures, the JWE-encrypted vp_token, and the device SIGNATURE over the
-// transaction_data_hash) is NOT cryptographically verified here — that is the
-// PR-in-flight crypto the demo does with jose + cbor-x + @peculiar/x509, scaffolded
-// alongside in request.ts and refused 501 by the route's presentation path. What IS
-// enforced — and what the four gates re-derive rather than trust — is the
-// AMOUNT BINDING (Security invariants 2/3): the payable is re-summed from the
-// catalog-priced lines and re-checked against the transaction_data and the presented
-// amount, so a tampered amount is refused. No gate trusts a `verified` flag.
+// TRUST_LEVEL stays "presence-only-demo" (Principle VII / FR-011): the wire crypto
+// — JWE decryption, the ISO-mdoc CBOR parse, the transaction_data hash binding — is
+// REAL; what is NOT yet verified is the issuer/device COSE SIGNATURE against a real
+// trust anchor (main self-signs its mdoc certs). Faithfully ported from the demo's
+// payment-gate/dc-payment/{mandate,verify}.ts. No gate trusts a `verified` flag —
+// AMOUNT BINDING (Security invariants 2/3) is always re-derived from the
+// catalog-priced lines.
 import { randomUUID } from "node:crypto";
+import * as jose from "jose";
 import { buildBindingFields, DEFAULT_LOYALTY_DISCOUNT_PCT } from "../mandate.js";
 import type { CeremonyOrder } from "../types.js";
 import type { Origin } from "../origin.js";
 import { buildTransactionData, decodeTransactionData, encodeTransactionData, hashTransactionData } from "./txData.js";
+import { openReaderContext } from "../mdoc/readerContext.js";
+import { decodeVpToken, extractTransactionDataHash, inspectAuthBlocks } from "../mdoc/mdoc.js";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -51,10 +60,22 @@ export interface DcMandate {
     type: "openid4vp-dc-api";
     /** The amount-bound transaction_data the wallet would sign over (base64url). */
     transactionData: string;
-    /** SHA-256 of `transactionData` (the value the device signs; re-derived in Gate 1). */
-    transactionDataHash: string;
+    /**
+     * The transaction_data_hash Gate 1 re-checks against SHA-256(transactionData).
+     * Instant-demo: the server's own hash (always matches). REAL path: the value
+     * EXTRACTED from the wallet's device-signed DeviceResponse — so Gate 1 verifies
+     * the wallet actually authorized THIS amount/payee.
+     */
+    transactionDataHash: string | null;
     /** Presence-only: the instrument was disclosed but not cryptographically verified. */
     presented: boolean;
+    /**
+     * REAL path only — the wallet's raw mdoc vp_token (base64url DeviceResponse) and
+     * the structural issuerAuth/deviceAuth presence Gate 2 reads. Absent on the
+     * instant-demo path (Gate 2 falls back to instrument presence there).
+     */
+    vpToken?: string;
+    authBlocks?: { hasIssuerAuth: boolean; hasDeviceAuth: boolean };
   };
   // Honesty axis (Principle VII) — carried on every mandate so the limitation is
   // stated in the data, not buried in prose.
@@ -142,13 +163,20 @@ export function runDcGates(mandate: DcMandate, origin: Origin, opts: { loyaltyDi
     detail: `hash ${hashOk ? "✓" : "✗"} · amount ${amountOk ? "✓" : "✗"} (${txd.payload.amount}/${mandate.payment.amount} vs ${payable}) · currency ${currencyOk ? "✓" : "✗"} · payee ${payeeOk ? "✓" : "✗"} (${txd.payload.payee?.id} vs ${expectedPayee})`,
   });
 
-  // Gate 2 — authorization present. Presence-only: a disclosed instrument id stands
-  // in for the issuerAuth + deviceAuth blocks the demo inspects on the real mdoc.
+  // Gate 2 — authorization present. On the REAL path, the wallet's mdoc carries
+  // structural issuerAuth + deviceAuth blocks (inspected from the parsed
+  // DeviceResponse); on the instant-demo path a disclosed instrument id stands in
+  // for them. Either way this is presence-only — the COSE signatures themselves are
+  // NOT verified against a trust anchor (acknowledged future work).
   const instrumentId = mandate.payment.instrument.instrumentId;
+  const auth = ua.authBlocks;
+  const authPass = auth ? auth.hasIssuerAuth && auth.hasDeviceAuth : !!instrumentId;
   results.push({
     gate: "Authorization present",
-    pass: !!instrumentId,
-    detail: `instrument=${instrumentId ?? "∅"} (presence-only — device/issuer signatures not verified)`,
+    pass: authPass,
+    detail: auth
+      ? `issuerAuth ${auth.hasIssuerAuth ? "✓" : "✗"} · deviceAuth ${auth.hasDeviceAuth ? "✓" : "✗"} (presence-only — COSE signatures not verified)`
+      : `instrument=${instrumentId ?? "∅"} (presence-only — device/issuer signatures not verified)`,
   });
 
   // Gate 3 — credential not expired (disclosed expiry_date in the future).
@@ -162,4 +190,102 @@ export function runDcGates(mandate: DcMandate, origin: Origin, opts: { loyaltyDi
   results.push({ gate: "Subject binding", pass: subjectOk, detail: `subject=${mandate.subject.credentialId} · instrument=${instrumentId}` });
 
   return results;
+}
+
+// ── REAL OpenID4VP path ───────────────────────────────────────────────────────
+// Disclosed mdoc claim values can be {_tag, value} (e.g. tag-1004 dates) or raw.
+function disclosedClaims(vpStr: string): Record<string, unknown> {
+  const disclosed = decodeVpToken({ dpc: vpStr });
+  return Object.fromEntries((disclosed[0]?.claims ?? []).map((c) => [c.label.split(" / ").pop()!, c.value]));
+}
+
+/**
+ * Build the DC mandate from a REAL wallet DeviceResponse. Unlike the instant-demo
+ * builder, `transactionDataHash` is the value EXTRACTED from the wallet's
+ * device-signed mdoc (deviceSigned/transaction_data_hash) — Gate 1 then re-checks it
+ * equals SHA-256 of the transaction_data WE sealed (transactionDataB64). The vpToken
+ * + parsed issuerAuth/deviceAuth presence drive Gate 2. The instrument fields come
+ * from the issuer-signed namespaces of the SAME DeviceResponse.
+ */
+export function buildDcMandateFromPresentation(args: {
+  order: CeremonyOrder;
+  vpStr: string;
+  transactionDataB64: string;
+  issuer?: string;
+}): DcMandate {
+  const { order, vpStr, transactionDataB64 } = args;
+  const now = new Date();
+  const expires = new Date(now.getTime() + 5 * 60_000);
+  const claims = disclosedClaims(vpStr);
+  const instrument: DcInstrument = {
+    issuer: claimText(claims["issuer_name"]),
+    instrumentId: claimText(claims["payment_instrument_id"]),
+    maskedAccount: claimText(claims["masked_account_reference"]),
+    holder: claimText(claims["holder_name"]),
+    expiry: claimText(claims["expiry_date"]),
+  };
+  const blocks = inspectAuthBlocks(vpStr);
+  return {
+    type: "ap2.PaymentMandate",
+    version: "0.1-dc-demo",
+    id: "mandate_pm_" + randomUUID(),
+    issuedAt: now.toISOString(),
+    expiresAt: expires.toISOString(),
+    issuer: args.issuer ?? DEFAULT_ISSUER,
+    subject: { credentialId: instrument.instrumentId },
+    cart: order,
+    payment: { instrument, amount: order.total, currency: order.currency },
+    userAuthorization: {
+      type: "openid4vp-dc-api",
+      transactionData: transactionDataB64,
+      // The wallet's signed hash — re-checked in Gate 1 against our recomputed hash.
+      transactionDataHash: extractTransactionDataHash(vpStr),
+      presented: true,
+      vpToken: vpStr,
+      authBlocks: { hasIssuerAuth: blocks.hasIssuerAuth, hasDeviceAuth: blocks.hasDeviceAuth },
+    },
+    trust_level: "presence-only-demo",
+  };
+}
+
+export interface DcVerification {
+  mandate: DcMandate;
+  gates: GateResult[];
+}
+
+/**
+ * Verify the wallet's REAL OpenID4VP presentation: open the sealed reader context,
+ * JWE-decrypt the response (jose ECDH-ES compactDecrypt), pull the mdoc vp_token,
+ * build the amount-bound mandate from the device-signed DeviceResponse, and run the
+ * four gates. Faithfully ported from the demo's payment-gate/dc-payment/verify.ts.
+ * The crypto (decryption + the transaction_data hash binding) is REAL; the issuer
+ * trust anchor is not (trust_level presence-only-demo).
+ */
+export async function verifyDcPresentation(args: {
+  order: CeremonyOrder;
+  origin: Origin;
+  result: { protocol?: string; data?: unknown };
+  readerContextToken: string;
+  secret: string;
+}): Promise<DcVerification> {
+  const { order, origin, result, readerContextToken, secret } = args;
+  const ctx = await openReaderContext(readerContextToken, secret);
+
+  let data: unknown = result?.data;
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch { /* leave as string */ }
+  }
+  const jwe: string | undefined = (data as { response?: string } | undefined)?.response;
+  if (!jwe) throw new Error("no .response (JWE) in result.data");
+
+  const encPrivKey = await jose.importJWK(ctx.ecdhPrivateJwk, "ECDH-ES");
+  const { plaintext } = await jose.compactDecrypt(jwe, encPrivKey);
+  const openid4vpResponse = JSON.parse(new TextDecoder().decode(plaintext)) as { vp_token?: { dpc?: unknown } };
+  const vpToken = openid4vpResponse.vp_token; // { dpc: [ "<DeviceResponse b64url>" ] }
+  const vpStr: string | undefined = Array.isArray(vpToken?.dpc) ? (vpToken!.dpc[0] as string) : (vpToken?.dpc as string | undefined);
+  if (!vpStr) throw new Error("no vp_token.dpc in decrypted response");
+
+  const mandate = buildDcMandateFromPresentation({ order, vpStr, transactionDataB64: ctx.transactionDataB64 });
+  const gates = runDcGates(mandate, origin);
+  return { mandate, gates };
 }

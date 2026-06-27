@@ -1,46 +1,70 @@
-// OpenID4VP request descriptor for the dc-payment rail — SCAFFOLD, PR-in-flight.
+// REAL signed OpenID4VP request for the dc-payment rail. Faithfully ported from the
+// demo's payment-gate/dc-payment/request.ts. It mints a reader cert
+// (@peculiar/x509), an ephemeral ECDH response-encryption key, a fresh nonce, embeds
+// the amount-bound `transaction_data` (txData.ts), and ES256-signs the verifier-bound
+// request object (jose.SignJWT). The transaction_data — and the ECDH key — are sealed
+// into a reader context (a JWE) so /verify re-checks the wallet's device-signed
+// transaction_data_hash against SHA-256 of exactly what we sent.
 //
-// The WORKING presence-only mechanism is verify.ts (build the amount-bound mandate
-// + run the four gates). This module scaffolds the OpenID4VP signed-request SHAPE
-// alongside it — the DCQL the wallet receives, the origin binding
-// (client_id / expected_origins), and the real amount-bound `transaction_data`
-// entry (txData.ts) — so the rail mirrors the demo's dc-payment split
-// (dcql / request / verify / page / routes). It deliberately stops short of the
-// reader-cert (x509) signing + JWE response encryption + nonce sealing the demo's
-// payment-gate/dc-payment/request.ts does via jose, so the package stays
-// dependency-light while the OpenID4VP path lands. It is fenced presence-only-demo
-// and marked `scaffold-in-flight` so no surface mistakes it for a live, trusted
-// verifier.
+// The crypto here is REAL (signed request, amount binding, origin/RP binding, sealed
+// key); the issuer TRUST ANCHOR is not (the reader cert is self-signed) — trust_level
+// stays presence-only-demo.
+import * as jose from "jose";
 import { buildDcPaymentDcql } from "./dcql.js";
 import { buildTransactionData, encodeTransactionData } from "./txData.js";
+import { makeReaderCert, makeEncryptionKey } from "../mdoc/reader.js";
+import { sealReaderContext } from "../mdoc/readerContext.js";
 import type { CeremonyOrder } from "../types.js";
 import type { Origin } from "../origin.js";
 import type { DcqlQuery } from "../../types.js";
 
-export interface DcPaymentRequestDescriptor {
+export interface SignedDcPaymentRequest {
   protocol: "openid4vp-v1-signed";
-  /** Honesty: this is the request SHAPE, not a live signed/encrypted request yet. */
-  status: "scaffold-in-flight";
-  /** x509 SAN-DNS client id bound to this server's RP-ID (invariant 6). */
-  client_id: string;
-  /** Only this origin may satisfy the request. */
-  expected_origins: string[];
-  /** What the wallet is asked to disclose. */
+  /** The ES256-signed OpenID4VP request JWT (real). */
+  request: string;
+  /** The DCQL embedded in the signed request (echoed for callers/tests). */
   dcql_query: DcqlQuery;
   /** The amount-bound transaction_data entries (base64url) — REAL binding. */
   transaction_data: string[];
+  /** Sealed reader context (ECDH key + bound transaction_data) carried to /verify. */
+  readerContextToken: string;
   trust_level: "presence-only-demo";
 }
 
-/** Build the (scaffold) OpenID4VP request descriptor for the payment credential. */
-export function buildDcPaymentRequest(order: CeremonyOrder, origin: Origin): DcPaymentRequestDescriptor {
-  return {
-    protocol: "openid4vp-v1-signed",
-    status: "scaffold-in-flight",
+/** Build the REAL signed OpenID4VP request for the payment credential. */
+export async function buildDcPaymentRequest(order: CeremonyOrder, origin: Origin, secret: string): Promise<SignedDcPaymentRequest> {
+  const { x5c, privateKey } = await makeReaderCert(origin.rpID);
+  const { encJwk, ecdhPrivateJwk } = await makeEncryptionKey();
+  const dcql = buildDcPaymentDcql();
+  const txDataB64 = encodeTransactionData(buildTransactionData(order, origin));
+  const nonce = jose.base64url.encode(crypto.getRandomValues(new Uint8Array(16)));
+
+  const requestObject = {
+    response_type: "vp_token",
+    response_mode: "dc_api.jwt",
     client_id: `x509_san_dns:${origin.rpID}`,
     expected_origins: [origin.origin],
-    dcql_query: buildDcPaymentDcql(),
-    transaction_data: [encodeTransactionData(buildTransactionData(order, origin))],
+    nonce,
+    dcql_query: dcql,
+    client_metadata: {
+      vp_formats_supported: { mso_mdoc: { issuerauth_alg_values: [-7], deviceauth_alg_values: [-7] } },
+      jwks: { keys: [encJwk] },
+    },
+    transaction_data: [txDataB64],
+  };
+
+  const request = await new jose.SignJWT(requestObject)
+    .setProtectedHeader({ alg: "ES256", typ: "oauth-authz-req+jwt", x5c: [x5c] })
+    .setIssuedAt()
+    .sign(privateKey as unknown as jose.KeyLike);
+
+  const readerContextToken = await sealReaderContext({ ecdhPrivateJwk, transactionDataB64: txDataB64, nonce }, secret);
+  return {
+    protocol: "openid4vp-v1-signed",
+    request,
+    dcql_query: dcql,
+    transaction_data: [txDataB64],
+    readerContextToken,
     trust_level: "presence-only-demo",
   };
 }

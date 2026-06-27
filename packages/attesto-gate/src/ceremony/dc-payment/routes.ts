@@ -1,8 +1,8 @@
 // The dc-payment rail (Digital Credentials API + OpenID4VP, amount-bound) — US3.
 // Registers its routes onto the host app through the Foundational mount() seam:
 //   GET  /attesto/dc-payment?order=<id>          → the payment gate page
-//   GET  /attesto/dc-payment/request?order=<id>  → OpenID4VP request descriptor (scaffold)
-//   POST /attesto/dc-payment/verify              → presence-only verify → SHARED completeOrder
+//   GET  /attesto/dc-payment/request?order=<id>  → REAL signed OpenID4VP request (+ amount-bound transaction_data)
+//   POST /attesto/dc-payment/verify              → instant-demo claims OR a real presentation → SHARED completeOrder
 //
 // Dependency-free (no `express` import — invariant from mount.ts): handlers register
 // against the structural CeremonyApp.get/post, and the verify body is read either
@@ -14,11 +14,18 @@
 // uses (no second completion path — FR-008, CT8): it re-prices, enforces the age
 // gate, settles (when configured), records idempotently, and clears the cart +
 // per-order verification.
+//
+// Verify has TWO paths feeding ONE set of gates + the SAME completion seam:
+//   • instant-demo — body carries `claims` directly (the tested default; CT6–CT8).
+//   • real presentation — body carries `result` from navigator.credentials.get; the
+//     wallet's JWE response is decrypted, the device-signed transaction_data_hash is
+//     re-checked against what we sealed, and the parsed mdoc drives the gates. The
+//     wire crypto is REAL; the issuer trust anchor is not (presence-only-demo).
 import { resolveOrder, type CeremonyApp, type CeremonyContext, type RailRegistrar } from "../mount.js";
 import type { RequestLike } from "../origin.js";
 import type { CompletionInput } from "../types.js";
 import { buildDcPaymentRequest } from "./request.js";
-import { buildDcMandate, runDcGates } from "./verify.js";
+import { buildDcMandate, runDcGates, verifyDcPresentation, type DcMandate, type GateResult } from "./verify.js";
 import { renderDcPaymentPage } from "./page.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
@@ -84,35 +91,54 @@ export const registerDcPaymentGate: RailRegistrar = (app: CeremonyApp, ctx: Cere
     );
   });
 
-  // GET the (scaffold) OpenID4VP request descriptor for this order — carries the
-  // REAL amount-bound transaction_data; the signed/encrypted shape is in-flight.
+  // GET the REAL signed OpenID4VP request for this order — ES256-signed, carrying the
+  // amount-bound transaction_data, with the reader context (ECDH key + bound
+  // transaction_data) sealed for /verify.
   get("/attesto/dc-payment/request", async (req, res) => {
     const order = await resolveOrder(ctx, typeof req.query.order === "string" ? req.query.order : undefined);
     if (!order) { res.status(404).json({ error: "order not found" }); return; }
-    res.json(buildDcPaymentRequest(order, originOf(ctx, req)));
+    try {
+      res.json(await buildDcPaymentRequest(order, originOf(ctx, req), ctx.signingKey));
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
   });
 
-  // POST verify — presence-only. Resolve + re-price the order (CT3), build the
-  // amount-bound mandate, run the four deterministic gates, and complete THROUGH
-  // the shared completeOrder seam (FR-008, CT8). The OpenID4VP encrypted-presentation
-  // path is scaffolded (501).
+  // POST verify — instant-demo claims OR a real wallet presentation. Resolve +
+  // re-price the order (CT3), build the amount-bound mandate, run the four
+  // deterministic gates, and complete THROUGH the shared completeOrder seam
+  // (FR-008, CT8).
   post("/attesto/dc-payment/verify", async (req, res) => {
     const body = await readJsonBody(req);
-
-    // OpenID4VP signed/encrypted wallet presentation path — scaffolded, PR-in-flight.
-    if (body.presentation !== undefined || body.result !== undefined) {
-      res.status(501).json({ completed: false, error: "openid4vp encrypted wallet presentation is scaffolded/in-flight; use the presence-only claims path", trust_level: "presence-only-demo" });
-      return;
-    }
-
     const order = await resolveOrder(ctx, typeof body.order === "string" ? body.order : undefined);
     if (!order) { res.status(400).json({ completed: false, error: "missing or invalid order" }); return; }
 
     const origin = originOf(ctx, req);
-    const claims = (body.claims && typeof body.claims === "object" ? body.claims : {}) as Record<string, unknown>;
-    const presentedAmount = typeof body.amount === "number" ? body.amount : order.total;
-    const mandate = buildDcMandate({ order, origin, claims, presentedAmount });
-    const gates = runDcGates(mandate, origin);
+    let mandate: DcMandate;
+    let gates: GateResult[];
+    try {
+      const result = body.result as { protocol?: string; data?: unknown } | undefined;
+      if (result && typeof result === "object") {
+        // REAL OpenID4VP presentation — decrypt the wallet's response, re-check the
+        // device-signed transaction_data_hash, and run the gates.
+        if (typeof body.readerContextToken !== "string") {
+          res.status(400).json({ completed: false, error: "missing readerContextToken for openid4vp presentation" });
+          return;
+        }
+        const out = await verifyDcPresentation({ order, origin, result, readerContextToken: body.readerContextToken, secret: ctx.signingKey });
+        mandate = out.mandate;
+        gates = out.gates;
+      } else {
+        // Instant-demo claims path (the tested default).
+        const claims = (body.claims && typeof body.claims === "object" ? body.claims : {}) as Record<string, unknown>;
+        const presentedAmount = typeof body.amount === "number" ? body.amount : order.total;
+        mandate = buildDcMandate({ order, origin, claims, presentedAmount });
+        gates = runDcGates(mandate, origin);
+      }
+    } catch (err) {
+      res.status(400).json({ completed: false, error: (err as Error).message, trust_level: "presence-only-demo" });
+      return;
+    }
 
     // Complete through the SHARED seam (idempotent record + re-price + age gate +
     // optional settle + clear cart & per-order verification). No second path.

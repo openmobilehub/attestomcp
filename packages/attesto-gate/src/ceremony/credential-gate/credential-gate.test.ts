@@ -279,10 +279,14 @@ describe("CT11 — page / request descriptor / receipt all state presence-only-d
     expect(html).toContain("presence-only-demo");
   });
 
-  it("the OpenID4VP request descriptor is fenced presence-only-demo and marked scaffold/in-flight", () => {
-    const req = buildCredentialRequest("age", { rpID: "shop.example", origin: "https://shop.example" }, { minimumAge: 21 });
+  it("the OpenID4VP request descriptor is fenced presence-only-demo and carries a REAL signed request + DCQL", async () => {
+    const req = await buildCredentialRequest("age", { rpID: "shop.example", origin: "https://shop.example" }, "stable-test-secret", { minimumAge: 21 });
     expect(req.trust_level).toBe("presence-only-demo");
-    expect(req.status).toBe("scaffold-in-flight");
+    // The request is now a REAL ES256-signed OpenID4VP JWT (three base64url segments),
+    // not a scaffold descriptor — the crypto is real; only the issuer trust anchor is fenced.
+    expect(req.protocol).toBe("openid4vp-v1-signed");
+    expect(req.request.split(".").length).toBe(3);
+    expect(req.readerContextToken.length).toBeGreaterThan(0);
     expect(req.dcql_query.credentials.length).toBeGreaterThan(0);
   });
 
