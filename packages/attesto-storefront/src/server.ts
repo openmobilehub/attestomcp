@@ -53,11 +53,12 @@ export interface StorefrontOptions {
   orderStore?: OrderStore<CompletedOrderRecord>;
 }
 
-/** A completed-order record `get-order-status` reports (the demo's ceremony writes a richer one). */
+/** A completed-order record the widget poll + `get-order-status` read (the demo's ceremony writes a richer one). */
 export interface CompletedOrderRecord {
   orderId: string;
-  total: number;
+  amount: number;
   currency: string;
+  method: string;
   completedAt: string;
 }
 
@@ -304,8 +305,21 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   });
   app.post("/checkout/place-order", async (req: Request, res: Response) => {
     const order = createdOrders.get(String(req.body?.order ?? ""));
-    if (order) await orderStore.write(order.id, { orderId: order.id, total: order.total, currency: order.currency, completedAt: new Date().toISOString() });
-    res.type("html").send(`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:32rem;margin:3rem auto"><h1>✓ Order placed (demo)</h1><p>You can close this tab.</p></body>`);
+    if (order) {
+      await orderStore.write(order.id, { orderId: order.id, amount: order.total, currency: order.currency, method: "demo", completedAt: new Date().toISOString() });
+      await cartStore.write(new Map()); // completion empties the cart
+    }
+    res.type("html").send(`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:32rem;margin:3rem auto"><h1>✓ Order placed (demo)</h1><p>You can close this tab — the storefront will update.</p></body>`);
+  });
+
+  // The widget polls this after checkout to learn when the buyer finished on the page
+  // (MCP has no server→client push). It then shows the confirmation + clears its cart.
+  app.get("/checkout/order-status", async (req: Request, res: Response) => {
+    // The widget iframe polls this cross-origin; allow it (simple GET → no preflight).
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const orderId = typeof req.query.orderId === "string" ? req.query.orderId : "";
+    const order = orderId ? await orderStore.read(orderId) : null;
+    res.json({ completed: !!order, order });
   });
 
   return {
