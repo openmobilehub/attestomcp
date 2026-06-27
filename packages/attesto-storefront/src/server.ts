@@ -73,7 +73,9 @@ export interface Storefront {
 // ── widget bundle (single-file html, built by vite into dist/ui/) ───────────
 
 const SKYBRIDGE_MIME = "text/html+skybridge";
-const IMAGE_DOMAINS = ["https://loremflickr.com", "https://picsum.photos", "https://fastly.picsum.photos"];
+// Product images are self-contained `data:` URIs (added to the CSP below); picsum
+// stays allowlisted in case a custom catalog uses remote images.
+const IMAGE_DOMAINS = ["https://picsum.photos", "https://fastly.picsum.photos"];
 
 function bundleCandidates(): string[] {
   return [join(import.meta.dirname, "ui", "mcp-app.html"), join(process.cwd(), "dist", "ui", "mcp-app.html")];
@@ -163,11 +165,28 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     registerAppTool(
       server,
       "browse-products",
-      { title: "Browse Products", description: "Open an interactive product picker to browse and add products.", inputSchema: {}, annotations: { readOnlyHint: true }, _meta: UI_META },
+      {
+        title: "Browse Products",
+        description:
+          "Show the storefront catalog as an interactive visual product picker (a grid with images). " +
+          "Call this whenever the user asks what you sell, what's available, to see/show/browse products, or " +
+          "to shop — it renders the grid for them. Prefer it over describing the catalog in text.",
+        inputSchema: {},
+        annotations: { readOnlyHint: true },
+        _meta: UI_META,
+      },
       async (): Promise<CallToolResult> => {
         const priced = await readPriced();
         return {
-          content: [{ type: "text", text: `Opened the product picker (${catalog.length} products). Add items by id with add-to-cart / set-quantity / remove-from-cart; read it with get-cart; check out with checkout.` }],
+          content: [
+            {
+              type: "text",
+              text:
+                `The product picker is now showing the catalog visually to the user (${catalog.length} products in a grid with images). ` +
+                `Do NOT re-list the products as text — they can see them. Briefly invite them to pick items or tell you what to add. ` +
+                `Adjust the cart by id with add-to-cart / set-quantity / remove-from-cart; check out with checkout.`,
+            },
+          ],
           structuredContent: { products: catalog, cart: priced },
           _meta: { [CATALOG_META_KEY]: { products: catalog }, [CART_META_KEY]: priced },
         };
