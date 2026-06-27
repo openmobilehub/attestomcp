@@ -150,6 +150,30 @@ function methodLabel(method: string | undefined, settled: boolean): string {
   }
 }
 
+// Best-effort programmatic open of the checkout page. Sandboxed widget iframes
+// block plain target="_blank", so we route through the host bridge first; if the
+// bridge is missing, throws, or never resolves (some hosts, e.g. Gemini, do this
+// with openLink), a window.open fallback is attempted. Either way the widget also
+// renders a tappable link — the guaranteed path — so this never blocks the UI.
+function tryOpenCheckout(url: string, bridgeOpen?: OpenLinkFn): void {
+  let opened = false;
+  if (bridgeOpen) {
+    try {
+      void Promise.resolve(bridgeOpen(url)).catch(() => {});
+      opened = true;
+    } catch {
+      // bridge unavailable; fall through to window.open
+    }
+  }
+  if (!opened) {
+    try {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      // popups blocked; the rendered link remains the fallback
+    }
+  }
+}
+
 // After checkout, poll the same-origin status endpoint until the user completes
 // the purchase on the gate page. This runs in the browser — the live surface
 // that can poll — so the agent is never asked to. Resolves with the order on
@@ -218,6 +242,7 @@ function HostApp() {
   const [cart, setCart] = useState<PricedCart>(emptyCart());
   const [insets, setInsets] = useState<Insets>();
   const [confirmedOrder, setConfirmedOrder] = useState<CompletedOrder | null>(null);
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
   const appRef = useRef<Parameters<NonNullable<Parameters<typeof useApp>[0]["onAppCreated"]>>[0] | null>(null);
   // Mirrors `cart` so setQuantity can read the current value synchronously
   // (state is async) and compute the next optimistic cart.
@@ -284,22 +309,33 @@ function HostApp() {
     const result = await appRef.current.callServerTool({ name: "checkout", arguments: { items } });
     const parsed = parseJsonContent<{ orderId?: string; checkoutUrl?: string }>(result);
     if (!parsed?.checkoutUrl) return;
-    await appRef.current.openLink({ url: parsed.checkoutUrl });
-    if (!parsed.orderId) return;
+    const { checkoutUrl, orderId } = parsed;
+    // Surface the link (guaranteed tap path) and best-effort auto-open. Neither
+    // is awaited: the button must not stay disabled through the open or the
+    // multi-minute completion poll, and some hosts never resolve openLink.
+    setConfirmedOrder(null);
+    setPendingCheckoutUrl(checkoutUrl);
+    tryOpenCheckout(checkoutUrl, (url) => appRef.current?.openLink({ url }));
+    if (!orderId) return;
+    // Poll for completion in the background; the checkout() promise has already
+    // resolved, so the button is back to "Checkout" while the user pays.
     if (pollRef.current) pollRef.current.cancelled = true;
     const signal = { cancelled: false };
     pollRef.current = signal;
-    const order = await pollOrderCompletion(new URL(parsed.checkoutUrl).origin, parsed.orderId, signal);
-    if (!order || signal.cancelled) return;
-    setConfirmedOrder(order); // read-only confirmation panel in the widget
-    // The gate clears the cart server-side; refresh the badge to match.
-    const refreshed = await appRef.current?.callServerTool({ name: "get-cart", arguments: {} });
-    const c = refreshed && parseJsonContent<PricedCart>(refreshed);
-    if (c) applyCart(c); // applyCart pushes cart context; override with the order below
-    // Silent: agent knows the order without anything landing in the composer.
-    appRef.current
-      ?.updateModelContext({ content: [{ type: "text", text: orderContextMarkdown(order) }] })
-      .catch(console.error);
+    void (async () => {
+      const order = await pollOrderCompletion(new URL(checkoutUrl).origin, orderId, signal);
+      if (!order || signal.cancelled) return;
+      setPendingCheckoutUrl(null);
+      setConfirmedOrder(order); // read-only confirmation panel in the widget
+      // The gate clears the cart server-side; refresh the badge to match.
+      const refreshed = await appRef.current?.callServerTool({ name: "get-cart", arguments: {} });
+      const c = refreshed && parseJsonContent<PricedCart>(refreshed);
+      if (c) applyCart(c); // applyCart pushes cart context; override with the order below
+      // Silent: agent knows the order without anything landing in the composer.
+      appRef.current
+        ?.updateModelContext({ content: [{ type: "text", text: orderContextMarkdown(order) }] })
+        .catch(console.error);
+    })();
   }, [applyCart]);
 
   // Hooks must run unconditionally — keep this above the early returns or the
@@ -311,7 +347,7 @@ function HostApp() {
   if (error) return <div className={styles.status}><strong>Error:</strong> {error.message}</div>;
   if (!app) return <div className={styles.status}>Connecting…</div>;
 
-  return <Picker products={products} cart={cart} insets={insets} setQuantity={setQuantity} checkout={checkout} openLink={openLink} confirmedOrder={confirmedOrder} />;
+  return <Picker products={products} cart={cart} insets={insets} setQuantity={setQuantity} checkout={checkout} openLink={openLink} confirmedOrder={confirmedOrder} pendingCheckoutUrl={pendingCheckoutUrl} />;
 }
 
 // ----- ChatGPT mode: connects to the window.openai bridge -----
@@ -325,6 +361,7 @@ function ChatGptApp() {
   const [products, setProducts] = useState<Product[]>(CATALOG);
   const [cart, setCart] = useState<PricedCart>(emptyCart());
   const [confirmedOrder, setConfirmedOrder] = useState<CompletedOrder | null>(null);
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
 
   // browse-products yields { products, cart }; cart tools yield a PricedCart.
   const applyToolOutput = useCallback((output: unknown) => {
@@ -357,23 +394,31 @@ function ChatGptApp() {
     const result = await oai.callTool?.("checkout", { items });
     const parsed = structuredOf(result) as { orderId?: string; checkoutUrl?: string } | undefined;
     if (!parsed?.checkoutUrl) return;
-    await oai.openExternal?.({ href: parsed.checkoutUrl });
-    if (!parsed.orderId) return;
+    const { checkoutUrl, orderId } = parsed;
+    // Surface the link + best-effort auto-open; never block the button on the
+    // open or the multi-minute poll (see HostApp.checkout for the rationale).
+    setConfirmedOrder(null);
+    setPendingCheckoutUrl(checkoutUrl);
+    tryOpenCheckout(checkoutUrl, (url) => oai.openExternal?.({ href: url }));
+    if (!orderId) return;
     if (pollRef.current) pollRef.current.cancelled = true;
     const signal = { cancelled: false };
     pollRef.current = signal;
-    const order = await pollOrderCompletion(new URL(parsed.checkoutUrl).origin, parsed.orderId, signal);
-    if (!order || signal.cancelled) return;
-    setConfirmedOrder(order); // read-only confirmation panel in the widget
-    const refreshed = await oai.callTool?.("get-cart", {});
-    applyToolOutput(structuredOf(refreshed));
+    void (async () => {
+      const order = await pollOrderCompletion(new URL(checkoutUrl).origin, orderId, signal);
+      if (!order || signal.cancelled) return;
+      setPendingCheckoutUrl(null);
+      setConfirmedOrder(order); // read-only confirmation panel in the widget
+      const refreshed = await oai.callTool?.("get-cart", {});
+      applyToolOutput(structuredOf(refreshed));
+    })();
   }, [oai, applyToolOutput, cart]);
 
   const openLink = useCallback<OpenLinkFn>(async (url) => {
     await oai.openExternal?.({ href: url });
   }, [oai]);
 
-  return <Picker products={products} cart={cart} setQuantity={setQuantity} checkout={checkout} openLink={openLink} confirmedOrder={confirmedOrder} />;
+  return <Picker products={products} cart={cart} setQuantity={setQuantity} checkout={checkout} openLink={openLink} confirmedOrder={confirmedOrder} pendingCheckoutUrl={pendingCheckoutUrl} />;
 }
 
 // ----- Standalone mode: runs in a plain browser with the local catalog -----
@@ -404,9 +449,13 @@ interface PickerProps {
   checkout?: CheckoutFn;
   openLink?: OpenLinkFn;
   confirmedOrder?: CompletedOrder | null;
+  // Set once checkout is minted: the merchant URL the user must finish on. The
+  // widget renders it as a tappable link so checkout proceeds even when the
+  // host's open bridge is unavailable (the auto-open is best-effort).
+  pendingCheckoutUrl?: string | null;
 }
 
-function Picker({ products, cart, insets, setQuantity, checkout, openLink, confirmedOrder }: PickerProps) {
+function Picker({ products, cart, insets, setQuantity, checkout, openLink, confirmedOrder, pendingCheckoutUrl }: PickerProps) {
   const [checkingOut, setCheckingOut] = useState(false);
 
   // The stepper reflects the live cart: each card shows the quantity already in
@@ -540,6 +589,30 @@ function Picker({ products, cart, insets, setQuantity, checkout, openLink, confi
               </div>
             )}
           </dl>
+        </div>
+      )}
+
+      {pendingCheckoutUrl && !confirmedOrder && (
+        <div className={styles.pending} role="status" aria-live="polite">
+          <div className={styles.pendingHeader}>Finish in your browser</div>
+          <p className={styles.pendingText}>
+            A secure checkout page is opening. Clear the checks there — age,
+            payment — and once you pass them all, your order confirmation appears
+            right here. If the page didn’t open, tap below.
+          </p>
+          <a
+            className={styles.continueLink}
+            href={pendingCheckoutUrl}
+            onClick={(e) => {
+              // Sandboxed iframe: a plain target="_blank" is blocked. Route the
+              // tap through the host bridge, falling back to window.open.
+              e.preventDefault();
+              if (openLink) void openLink(pendingCheckoutUrl);
+              else window.open(pendingCheckoutUrl, "_blank", "noopener");
+            }}
+          >
+            Continue to checkout ↗
+          </a>
         </div>
       )}
 

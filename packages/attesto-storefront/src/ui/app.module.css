@@ -54,6 +54,44 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Pending-checkout prompt: shown after the order is minted, while the user
+   finishes on the merchant page. Distinct (blue) from the green confirmation,
+   and always carries a tappable link so checkout works even where the host's
+   open bridge is missing (e.g. Gemini). */
+.pending {
+  margin: 0 16px 12px;
+  padding: 14px 16px;
+  border: 1px solid light-dark(#bcd4f5, #294a73);
+  border-radius: 12px;
+  background: light-dark(#f1f6fe, #16243a);
+}
+
+.pendingHeader {
+  font-size: 14px;
+  font-weight: 600;
+  color: light-dark(#1f5fbf, #6aa8f0);
+  margin-bottom: 6px;
+}
+
+.pendingText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+.continueLink {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  color: #fff;
+  background: light-dark(#1f5fbf, #2f6fd0);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
