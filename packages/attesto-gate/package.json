@@ -30,8 +30,12 @@
     "agentic-commerce"
   ],
   "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "@peculiar/x509": "^1.14.3",
     "@simplewebauthn/browser": "^13.3.0",
-    "@simplewebauthn/server": "^13.3.1"
+    "@simplewebauthn/server": "^13.3.1",
+    "cbor-x": "^1.6.4",
+    "jose": "^5.10.0"
   },
   "devDependencies": {
     "@types/supertest": "^7.2.0",
