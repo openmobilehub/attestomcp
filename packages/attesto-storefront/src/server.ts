@@ -37,6 +37,25 @@ import type { CartItemInput, Order, PricedCart, Product, Review } from "./index.
 import { appToolMeta } from "./tool-meta.js";
 import { MemoryCartStore, MemoryOrderStore } from "./state.js";
 import type { CartStore, OrderStore } from "./state.js";
+// Composition with @openmobilehub/attesto-gate (Context 2): the storefront pre-binds
+// the gate's shared `completeOrder` over ITS OWN stores + catalog and publishes the
+// ceremony seams on `app.locals.attesto`, so `new Attesto().mount(store.app)` wires
+// the `/attesto/*` rails with zero explicit args (the quickstart). The gate stays an
+// optional pairing — only this server module imports it; the pure pricing core
+// (`./index.js`) does not.
+import {
+  completeOrder,
+  MemoryVerificationStore,
+  type CartItemRef,
+  type CeremonyCatalog,
+  type CeremonyOrder,
+  type CeremonyOrderStore,
+  type CompletedRecord,
+  type CompletionInput,
+  type CompletionResult,
+  type RepriceOpts,
+  type VerificationStore,
+} from "@openmobilehub/attesto-gate";
 
 /** Given a priced order, return the `requires` manifest (or `undefined` = ungated). */
 export type GateResolver = (order: Order) => unknown[] | undefined;
@@ -59,15 +78,47 @@ export interface StorefrontOptions {
    * instance that never saw the order.
    */
   createdOrderStore?: OrderStore<Order>;
+  /**
+   * Per-order verification state the mounted ceremony writes (age proven / loyalty
+   * applied) and this server's `completion` seam reads back to re-price + enforce
+   * the age gate. Default in-memory; inject a shared store on a serverless
+   * deployment. Published on `app.locals.attesto` so `attesto.mount(store.app)`
+   * wires the rails against the SAME state (Security invariant 4).
+   */
+  verificationStore?: VerificationStore;
+  /**
+   * Stable HMAC key for the ceremony's challenge nonce (e.g. `process.env.GATE_SECRET`).
+   * Required so an options→verify hop survives an instance split on serverless. When
+   * absent, `allowEphemeralKey` defaults true so a single-process dev server / tests
+   * just run with a per-process key.
+   */
+  signingKey?: string;
+  /** Allow a per-process ephemeral signing key (default: true unless `signingKey` is set). */
+  allowEphemeralKey?: boolean;
+  /**
+   * Optional demo-mode settlement seam (e.g. on-chain). Throwing GATES completion:
+   * a configured-but-failed settle records nothing and leaves the cart intact.
+   */
+  settle?: (order: CeremonyOrder) => Promise<Record<string, unknown> & { network: string; txId: string; status: string }>;
 }
 
-/** A completed-order record the widget poll + `get-order-status` read (the demo's ceremony writes a richer one). */
+/**
+ * A completed-order record the widget poll + `get-order-status` read. The standalone
+ * demo `place-order` writes the lean shape (orderId/amount/currency/method/completedAt);
+ * the mounted ceremony's shared `completeOrder` writes the richer one (mandate id,
+ * gate outcomes, instrument, settlement) — both satisfy this superset so the poll
+ * reads either.
+ */
 export interface CompletedOrderRecord {
   orderId: string;
   amount: number;
   currency: string;
   method: string;
   completedAt: string;
+  mandateId?: string;
+  instrument?: unknown;
+  gates?: { gate: string; pass: boolean; detail: string }[];
+  settlement?: unknown;
 }
 
 export interface Storefront {
@@ -124,6 +175,30 @@ export function originFromRequest(req: Request): string {
   return host ? `${proto}://${host}`.replace(/\/+$/, "") : "";
 }
 
+// Re-home a mounted-ceremony approve link (`/attesto/*`) onto THIS server's origin —
+// the same base the checkout link uses — so the gate links and the checkout link
+// share an origin (the rails are registered on this same app). Links to any other
+// path (e.g. a developer's external wallet origin) pass through untouched.
+function homeApproveUrl(approveUrl: string, base: string): string {
+  try {
+    const u = new URL(approveUrl, "http://re-home.invalid");
+    if (u.pathname.startsWith("/attesto/")) return `${base}${u.pathname}${u.search}`;
+  } catch {
+    /* not URL-shaped — leave as-is */
+  }
+  return approveUrl;
+}
+
+// Re-home every `/attesto/*` approveUrl in a `requires` manifest onto `base`.
+function homeRequires(requires: unknown[], base: string): unknown[] {
+  return requires.map((e) => {
+    const entry = e as { approveUrl?: unknown };
+    return typeof entry.approveUrl === "string"
+      ? { ...entry, approveUrl: homeApproveUrl(entry.approveUrl, base) }
+      : e;
+  });
+}
+
 export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   const catalog = opts.catalog ?? SAMPLE_CATALOG;
   const reviews = opts.reviews;
@@ -132,6 +207,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // Created-but-not-completed orders, for the checkout page + place-order. A store
   // (not a process Map) so it can be shared across serverless instances.
   const createdOrderStore: OrderStore<Order> = opts.createdOrderStore ?? new MemoryOrderStore<Order>();
+  // Per-order verification state shared with the mounted ceremony (the rails write
+  // it; the completion seam below reads it back to re-price + enforce the age gate).
+  const verificationStore: VerificationStore = opts.verificationStore ?? new MemoryVerificationStore();
   let resolveGate: GateResolver | undefined;
   let baseUrl = opts.baseUrl?.replace(/\/+$/, "") ?? "";
 
@@ -147,6 +225,44 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // application/x-www-form-urlencoded; the SDK app only parses JSON, so add a
   // urlencoded parser or place-order's `req.body.order` is always undefined.
   app.use(express.urlencoded({ extended: false }));
+
+  // ── Attesto ceremony seams (Context 2) ──────────────────────────────────────
+  // Pre-bound so `new Attesto().mount(store.app)` wires the `/attesto/*` rails with
+  // ZERO explicit args — it reads these off `app.locals.attesto` (see the quickstart).
+  // The catalog re-prices server-side (the amount source of truth — invariant 2); the
+  // completion seam is the gate's shared `completeOrder` bound over THIS server's
+  // stores, so a finished ceremony records the order + clears the cart the SAME way
+  // get-order-status / the order-status poll read.
+  const ceremonyCatalog: CeremonyCatalog = {
+    createOrder: (items: CartItemRef[], orderId: string, repriceOpts?: RepriceOpts): CeremonyOrder =>
+      createOrder(items, orderId, catalog, { ageVerified: repriceOpts?.ageVerified, loyaltyApplied: repriceOpts?.loyaltyApplied }),
+  };
+  const ceremonyOrderStore: CeremonyOrderStore = {
+    // A storefront Order is structurally a CeremonyOrder; resolveOrder re-prices it
+    // from the catalog regardless, recovering only the line items + id (CT3).
+    read: (orderId: string) => createdOrderStore.read(orderId),
+  };
+  const completion = (input: CompletionInput): Promise<CompletionResult> =>
+    completeOrder(input, {
+      catalog: ceremonyCatalog,
+      verificationStore,
+      records: {
+        read: async (orderId: string) => ((await orderStore.read(orderId)) ?? undefined) as CompletedRecord | undefined,
+        write: async (record: CompletedRecord) => { await orderStore.write(record.orderId, record); },
+      },
+      cart: { clear: async () => { await cartStore.write(new Map()); } },
+      ...(opts.settle ? { settle: opts.settle } : {}),
+    });
+  app.locals.attesto = {
+    orderStore: ceremonyOrderStore,
+    verificationStore,
+    catalog: ceremonyCatalog,
+    completion,
+    // signingKey survives an instance split; default to an ephemeral per-process key
+    // for a single-process dev server / tests when none is configured.
+    ...(opts.signingKey ? { signingKey: opts.signingKey } : {}),
+    allowEphemeralKey: opts.allowEphemeralKey ?? !opts.signingKey,
+  };
 
   // ── cart logic (closure over the injected catalog + the cart store) ───────
   const priceFrom = (cart: Map<string, number>): PricedCart =>
@@ -252,7 +368,10 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         const order = createOrder(entries, `ORD-${Math.random().toString(36).slice(2, 8)}`, catalog);
         await createdOrderStore.write(order.id, order);
         const checkoutUrl = `${baseUrl}/checkout?order=${order.id}`;
-        const requires = resolveGate?.(order); // ← where Attesto mounts on
+        // ← where Attesto mounts on. Re-home any /attesto/* approve link onto this
+        // server's origin, so the gate links share the checkout link's base.
+        const rawRequires = resolveGate?.(order);
+        const requires = rawRequires ? homeRequires(rawRequires, baseUrl) : undefined;
         const priced = priceFrom(new Map(entries.map((e) => [e.productId, e.quantity])));
         // Cart-bearing structuredContent (FR-014): a fresh ChatGPT widget instance
         // hydrates the real cart instead of an empty one.
@@ -336,7 +455,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   app.get("/checkout", async (req: Request, res: Response) => {
     const order = await createdOrderStore.read(String(req.query.order ?? ""));
     if (!order) return res.status(404).type("html").send("<h1>Unknown order</h1>");
-    const requires = (resolveGate?.(order) ?? []) as Array<{ label?: string; credential?: string; approveUrl?: string }>;
+    // Link to the mounted ceremony routes, re-homed onto this server's origin (in
+    // policy order, payment last). This page links; it does NOT run the ceremony.
+    const requires = homeRequires(resolveGate?.(order) ?? [], baseUrl) as Array<{ label?: string; credential?: string; approveUrl?: string }>;
     const reqList = requires.length
       ? `<ul>${requires.map((r) => `<li>${r.approveUrl ? `<a href="${r.approveUrl}">${r.label ?? r.credential}</a>` : (r.label ?? r.credential)}</li>`).join("")}</ul>`
       : "<p>No verification required.</p>";

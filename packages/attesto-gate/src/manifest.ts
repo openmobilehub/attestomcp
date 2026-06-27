@@ -7,6 +7,7 @@
 // what the agent and the widget receive.
 
 import type {
+  Effect,
   GateOrder,
   Step,
   TrustLevel,
@@ -24,12 +25,34 @@ export interface ResolveContext {
    * the Mode-B / blocking shape — roadmap.)
    */
   enforcedAt?: "tool" | "checkout";
+  /**
+   * Set once `attesto.mount()` has wired the ceremony rails onto the host app, so
+   * the approve links resolve to THIS server's mounted `/attesto/*` routes instead
+   * of the legacy `/credential-gate/*` shape. age/membership share the credential
+   * page (`?cred=…`); payment authorizes on the dc-payment page.
+   */
+  mountedRoutes?: boolean;
 }
 
 /** Per-order approve link, e.g. `https://shop.example/credential-gate/age?order=ORD-1`. */
 function approveUrlFor(walletOrigin: string, credentialId: string, orderId: string): string {
   const origin = walletOrigin.replace(/\/$/, "");
   return `${origin}/credential-gate/${credentialId}?order=${encodeURIComponent(orderId)}`;
+}
+
+/**
+ * Per-order approve link onto the MOUNTED ceremony routes (`attesto.mount()`):
+ *   payment/authorize → `…/attesto/dc-payment?order=…`  (passkey is the alt rail)
+ *   age / membership / other gate → `…/attesto/credential?order=…&cred=<id>`
+ * Same origin the checkout link uses, so the host can re-home it onto its own base.
+ */
+function mountedApproveUrlFor(walletOrigin: string, credentialId: string, effect: Effect["kind"], orderId: string): string {
+  const origin = walletOrigin.replace(/\/$/, "");
+  const order = encodeURIComponent(orderId);
+  if (effect === "authorize" || credentialId === "payment") {
+    return `${origin}/attesto/dc-payment?order=${order}`;
+  }
+  return `${origin}/attesto/credential?order=${order}&cred=${encodeURIComponent(credentialId)}`;
 }
 
 /**
@@ -67,9 +90,14 @@ export function resolveRequirements(
       };
       if (c.params?.minAge != null) entry.minAge = c.params.minAge;
       if (effect === "discount" && c.params?.percent != null) entry.discountPct = c.params.percent;
-      // A gate/authorize is proven via a per-order ceremony link; a discount is
-      // merely presented, so it carries no approve link (data-model).
-      if (effect === "gate" || effect === "authorize") {
+      if (ctx.mountedRoutes) {
+        // Ceremony is mounted: every entry that maps to a `/attesto/*` route gets a
+        // per-order approve link — including the membership discount, which is
+        // proven on the same credential page (so the buyer can opt into the discount).
+        entry.approveUrl = mountedApproveUrlFor(ctx.walletOrigin, c.id, effect, order.id);
+      } else if (effect === "gate" || effect === "authorize") {
+        // Legacy `/credential-gate/*` shape — a gate/authorize is proven via a
+        // per-order ceremony link; a discount is merely presented, no approve link.
         entry.approveUrl = approveUrlFor(ctx.walletOrigin, c.id, order.id);
       }
       return entry;

@@ -22,6 +22,34 @@ export { age, membership, payment, required, optional, defineCredential, dcql, g
 // ── Store ────────────────────────────────────────────────────────────────
 export { MemoryVerificationStore } from "./store.js";
 
+// ── Ceremony composition (host-side: bind completion over YOUR stores) ──────
+// A composing host (e.g. @openmobilehub/attesto-storefront) binds `completeOrder`
+// to its completed-order / cart stores + catalog and exposes it as the `completion`
+// seam on `app.locals.attesto`, so a finished ceremony records + clears through the
+// SAME shared path every rail uses (FR-008). The ceremony entity types let the host
+// type those seam adapters without re-declaring them.
+export { completeOrder } from "./ceremony/completion.js";
+export type {
+  CompletionContext,
+  CompletedRecord,
+  CompletedOrderStore,
+  ClearableCart,
+  SettlementRecordLike,
+} from "./ceremony/completion.js";
+export type {
+  CeremonyOrder,
+  CeremonyOrderLine,
+  CeremonyOrderStore,
+  CeremonyCatalog,
+  CartItemRef,
+  RepriceOpts,
+  CompletionInput,
+  CompletionResult,
+  CompletionSeam,
+  SettlementSeam,
+  GateOutcome,
+} from "./ceremony/types.js";
+
 // ── Public types ───────────────────────────────────────────────────────────
 export type {
   AttestoOptions,
