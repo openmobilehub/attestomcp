@@ -56,6 +56,10 @@ attesto.mount(app);   // registers the ceremony routes onto a host Express app
 - **CT12 — brownfield parity.** With the demo consuming `mount()`, `npm run build` + the live deploy stay green;
   the pre-existing suite stays green (253/1-skip baseline as a floor, no new skips) and the new bypass tests pass;
   the **user-visible** result is identical (discount mechanism intentionally unified, FR-005). (FR-012)
+- **CT13 — shared three-gate checkout renderer.** `attesto-gate` provides a reusable renderer for the
+  `requirements()` manifest (numbered gates with live status, payment last, discount reflected in the total),
+  route-agnostic (renders each entry's `approveUrl`). The storefront checkout page AND the demo's checkout page
+  render the **same** component; the demo's swap is behavior-preserving (its pinned HTML tests stay green). (T030)
 
 ## Out of scope (v0.2+)
 Real KB-JWT / key-bound mandate signing; cryptographic mdoc issuer-trust verification; any *new* ceremony behavior.
