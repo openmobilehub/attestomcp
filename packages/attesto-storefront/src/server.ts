@@ -21,6 +21,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import {
@@ -142,6 +143,10 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   const UI_META = appToolMeta({ resourceUri: RESOURCE_URI, skybridgeUri: SKYBRIDGE_URI });
 
   const app = createMcpExpressApp({ host: "0.0.0.0" });
+  // The checkout page submits its "complete purchase" form as
+  // application/x-www-form-urlencoded; the SDK app only parses JSON, so add a
+  // urlencoded parser or place-order's `req.body.order` is always undefined.
+  app.use(express.urlencoded({ extended: false }));
 
   // ── cart logic (closure over the injected catalog + the cart store) ───────
   const priceFrom = (cart: Map<string, number>): PricedCart =>

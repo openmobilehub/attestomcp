@@ -4,6 +4,7 @@
 // isolation), CT9/FR-014 (the ChatGPT widget meta — widgetAccessible).
 
 import { describe, it, expect } from "vitest";
+import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createStorefront, originFromRequest, type Storefront } from "./server.js";
@@ -87,6 +88,28 @@ describe("CT5 — the widget ui:// resource is registered", () => {
     expect(uris.some((u) => u.startsWith("ui://"))).toBe(true);
     // (Reading the bundle exercises loadBundle from dist/ui at runtime; the build
     // produces it and the manual host check (T031) confirms it renders.)
+  });
+});
+
+describe("checkout completion round-trip — the HTTP form post the widget poll depends on", () => {
+  it("place-order (urlencoded form) records completion that order-status then reports", async () => {
+    const store = createStorefront(); // app + mcpServer share the same closure stores
+    const c = await connect(store);
+    const sc = (await c.callTool({ name: "checkout", arguments: { items: [{ productId: "drift-mouse", quantity: 1 }] } })).structuredContent as any;
+    const orderId = sc.orderId as string;
+
+    // Not completed until the buyer finishes on the page.
+    const before = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(before.body.completed).toBe(false);
+
+    // The checkout page submits application/x-www-form-urlencoded — the app must
+    // parse it or `req.body.order` is undefined and completion is never recorded.
+    await request(store.app).post("/checkout/place-order").type("form").send({ order: orderId }).expect(200);
+
+    // The widget's poll now sees the completed order.
+    const after = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(after.body.completed).toBe(true);
+    expect(after.body.order?.orderId).toBe(orderId);
   });
 });
 
