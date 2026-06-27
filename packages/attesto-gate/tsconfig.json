@@ -25,6 +25,9 @@
     "src/ceremony/credential-gate/request.ts",
     "src/ceremony/credential-gate/verify.ts",
     "src/ceremony/credential-gate/page.ts",
-    "src/ceremony/credential-gate/routes.ts"
+    "src/ceremony/credential-gate/routes.ts",
+    "src/ceremony/passkey/verify.ts",
+    "src/ceremony/passkey/page.ts",
+    "src/ceremony/passkey/routes.ts"
   ]
 }
