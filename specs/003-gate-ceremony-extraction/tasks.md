@@ -72,9 +72,9 @@ applied. The GDC hero. **Independent test**: the bypass tests in T009 + the manu
 **Goal**: payment authorizes via WebAuthn passkey (Touch ID/Windows Hello + caBLE), four gates run, optional
 Hedera-testnet settlement. **Independent test**: T016.
 
-- [ ] T016 [P] [US2] Bypass tests in `packages/attesto-gate/src/ceremony/passkey/passkey.test.ts` (supertest + recorded WebAuthn fixture): CT6 (four deterministic gates run; replayed/expired challenge rejected; mismatched origin/RP-ID rejected); CT7 (tampered amount refused by the amount-integrity gate, re-priced from catalog).
-- [ ] T017 [US2] Extract the passkey rail into `packages/attesto-gate/src/ceremony/passkey/` (`verify.ts`, `routes.ts`, `page.ts`) + serve `@simplewebauthn/browser` ESM same-origin at `/attesto/lib/sw/*`.
-- [ ] T018 [US2] Wire the four gates (T007) + `completeOrder` (T006); same-device and cross-device (`?xdev=1` caBLE) toggle bound to the derived origin/RP-ID (FR-007, CT6).
+- [X] T016 [P] [US2] Bypass tests in `packages/attesto-gate/src/ceremony/passkey/passkey.test.ts` (supertest + recorded WebAuthn fixture): CT6 (four deterministic gates run; replayed/expired challenge rejected; mismatched origin/RP-ID rejected); CT7 (tampered amount refused by the amount-integrity gate, re-priced from catalog).
+- [X] T017 [US2] Extract the passkey rail into `packages/attesto-gate/src/ceremony/passkey/` (`verify.ts`, `routes.ts`, `page.ts`) + serve `@simplewebauthn/browser` ESM same-origin at `/attesto/lib/sw/*`.
+- [X] T018 [US2] Wire the four gates (T007) + `completeOrder` (T006); same-device and cross-device (`?xdev=1` caBLE) toggle bound to the derived origin/RP-ID (FR-007, CT6).
 - [ ] T019 [US2] Demo consumes the passkey route via `mount()`; optional Hedera/x402 settlement through the injected `settlement` seam (demo-mode; failed settlement ⇒ no paid record, FR-013).
 - [ ] T020 [US2] Verify US2: `npm run build` + `npx vitest run packages/attesto-gate` (incl. T016) + full `npm test` green.
 
