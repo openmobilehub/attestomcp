@@ -14,7 +14,7 @@ const store = createStorefront();
 const attesto = new Attesto();
 attesto.mount(store.app);                          // ← 003: the real ceremony routes
 store.gate((o) => attesto.requirements(o, [
-  required(age.over(21).when((l) => l.minimumAge != null)),
+  required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
   optional(membership.discount(10)),
   required(payment.in("usd")),
 ]));
