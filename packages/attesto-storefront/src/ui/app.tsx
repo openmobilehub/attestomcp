@@ -285,6 +285,7 @@ function HostApp() {
   const setQuantity = useCallback<SetQuantityFn>(async (productId, quantity) => {
     if (!appRef.current) return;
     setConfirmedOrder(null); // editing the cart starts a new order
+    setPendingCheckoutUrl(null); // …which invalidates any pending checkout link
     applyCart(withQuantity(cartRef.current, productId, quantity)); // optimistic
     const result = await appRef.current.callServerTool({
       name: "set-quantity",
@@ -381,6 +382,7 @@ function ChatGptApp() {
 
   const setQuantity = useCallback<SetQuantityFn>(async (productId, quantity) => {
     setConfirmedOrder(null); // editing the cart starts a new order
+    setPendingCheckoutUrl(null); // …which invalidates any pending checkout link
     setCart((prev) => withQuantity(prev, productId, quantity)); // optimistic
     const result = await oai.callTool?.("set-quantity", { productId, quantity });
     applyToolOutput(structuredOf(result)); // authoritative
@@ -622,7 +624,7 @@ function Picker({ products, cart, insets, setQuantity, checkout, openLink, confi
             ? `🛒 ${cart.itemCount} in cart · ${formatMoney(cart.total, cart.currency)}`
             : "🛒 Cart is empty"}
         </span>
-        {checkout && cart.itemCount > 0 && (
+        {checkout && cart.itemCount > 0 && !pendingCheckoutUrl && (
           <button
             className={styles.checkout}
             disabled={checkingOut}
