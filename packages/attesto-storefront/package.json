@@ -3,7 +3,18 @@
   "version": "0.1.0",
   "description": "The agentic storefront core — the cart/pricing/order model for an MCP shopping app, catalog-injected (own-the-code). Pairs with @openmobilehub/attesto-gate.",
   "license": "Apache-2.0",
+  "author": "Open Mobile Hub (Linux Foundation)",
+  "homepage": "https://github.com/openmobilehub/mcp-apps-shopping-demo/tree/main/packages/attesto-storefront#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openmobilehub/mcp-apps-shopping-demo.git",
+    "directory": "packages/attesto-storefront"
+  },
+  "bugs": {
+    "url": "https://github.com/openmobilehub/mcp-apps-shopping-demo/issues"
+  },
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -16,9 +27,14 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
   "files": [
     "dist",
-    "README.md"
+    "dist/ui",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "vite build --config vite.config.ui.ts && tsc -p tsconfig.json",
