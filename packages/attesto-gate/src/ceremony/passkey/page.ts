@@ -13,7 +13,7 @@
 // → resolveOrder), so the amount shown and bound comes from the catalog, never the
 // order id/token (invariant 2).
 import type { CeremonyOrder } from "../types.js";
-import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter } from "../theme.js";
+import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar } from "../theme.js";
 
 function money(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
@@ -67,6 +67,7 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
     <button id="go" class="btn btn-primary">Authorize ${total}</button>
     <a class="toggle" href="${toggleHref}">${toggleText}</a>
     <div id="log"></div>
+    ${settlingBar()}
     <div id="receipt"></div>
   </div>
   ${trustFooter()}
@@ -77,6 +78,7 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
     const RETURN_URL = ${JSON.stringify(returnUrl)};
     const log = document.getElementById("log");
     const btn = document.getElementById("go");
+    const settling = document.getElementById("settling");
     const step = (t, c = "") => { const d = document.createElement("div"); d.className = "step " + c; d.textContent = t; log.appendChild(d); };
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
     btn.addEventListener("click", async () => {
@@ -87,11 +89,12 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
         step("→ Touch ID / passkey prompt");
         const response = await startRegistration({ optionsJSON: options });
         step("→ verify · Settling via x402 on Hedera testnet (if configured)… can take ~10s");
+        settling.classList.add("on");
         const out = await fetch("/attesto/passkey/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ response, challengeToken, order: ORDER_ID }),
-        }).then((r) => r.json());
+        }).then((r) => r.json()).finally(() => settling.classList.remove("on"));
         if (!out.mandate) throw new Error(out.error || "authorization failed");
         step("✓ authorized · mandate built (" + out.trust_level + ")", "ok");
         renderReceipt(out);

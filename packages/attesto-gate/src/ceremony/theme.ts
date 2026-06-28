@@ -147,6 +147,14 @@ const DESIGN_CSS = `
   .receipt-banner .sub { font-weight: 500; font-size: .85rem; opacity: .95; margin-top: 4px; }
   .receipt-banner a { color: #fff; text-decoration: underline; }
 
+  /* Indeterminate settling bar — shown while x402 settles on-chain (~10s). A teal
+     sliver slides across a hairline track so the buyer sees the wait is live work,
+     not a hang. Hidden until a page adds .on; both payment rails use it. */
+  .settling-bar { display: none; margin: 14px 0 2px; height: 6px; background: var(--hairline); border-radius: 999px; overflow: hidden; }
+  .settling-bar.on { display: block; }
+  .settling-bar > i { display: block; width: 35%; height: 100%; background: var(--accent); border-radius: 999px; animation: settle-slide 1.15s ease-in-out infinite; }
+  @keyframes settle-slide { from { margin-left: -35%; } to { margin-left: 100%; } }
+
   /* x402 settlement receipt — on-chain proof, design-system styled. The settle card
      reuses the surface chrome; the teal left rail marks it as the success path. */
   .settle {
@@ -197,6 +205,13 @@ export function brandHeader(opts: { h1?: string; tagline?: string } = {}): strin
       ? `<div class="head"><h1>${escapeHtml(opts.h1)}</h1>${opts.tagline != null ? `<p class="tagline">${escapeHtml(opts.tagline)}</p>` : ""}</div>`
       : "";
   return `<div class="brand"><span class="wordmark">ATTESTO</span><span class="demo-pill">DEMO</span></div>${heading}`;
+}
+
+/** An indeterminate "settling…" progress bar (hidden until JS adds `.on`). Shown on
+ *  the payment rails while x402 settlement runs on-chain (~10s) so the wait reads as
+ *  live work. `id` defaults to "settling" for the page script to toggle. */
+export function settlingBar(id = "settling"): string {
+  return `<div class="settling-bar" id="${id}"><i></i></div>`;
 }
 
 // ── Order summary card ──────────────────────────────────────────────────────

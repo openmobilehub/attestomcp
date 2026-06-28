@@ -386,6 +386,14 @@ describe("CT11 — page + receipt state presence-only-demo (not a real safety co
     expect(renderPasskeyPage({ order, returnUrl: "/demo/checkout?order=ORD-RET" })).toContain("/demo/checkout?order=ORD-RET");
   });
 
+  it("renders the indeterminate settling bar (the ~10s x402 on-chain wait reads as live work)", () => {
+    const order = catalog.createOrder([{ productId: "aurora-headphones", quantity: 1 }], "ORD-BAR");
+    const html = renderPasskeyPage({ order });
+    expect(html).toContain('id="settling"');
+    expect(html).toContain("settling-bar");
+    expect(html).toContain('settling.classList.add("on")');
+  });
+
   it("the verify receipt carries trust_level presence-only-demo", async () => {
     const h = harness();
     h.seed("ORD-P", [{ id: "aurora-headphones", quantity: 1 }]);

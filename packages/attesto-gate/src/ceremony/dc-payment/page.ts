@@ -15,7 +15,7 @@
 // crypto is real; the wallet's device/issuer trust anchor is not — never a real safety
 // control. Self-contained: takes the re-priced amount + lines, not a demo Order type.
 
-import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter } from "../theme.js";
+import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar } from "../theme.js";
 
 export interface DcPaymentLine {
   name: string;
@@ -81,6 +81,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     <button id="go-dc" class="btn btn-primary">Authorize ${money(total, currency)} with my wallet</button>
     <button id="go" class="btn btn-secondary">Authorize ${money(total, currency)} (instant demo)</button>
     <div id="log"></div>
+    ${settlingBar()}
     <div id="receipt"></div>
   </div>
   ${trustFooter()}
@@ -92,6 +93,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     const log = document.getElementById("log");
     const goDc = document.getElementById("go-dc");
     const btn = document.getElementById("go");
+    const settling = document.getElementById("settling");
     const step = (t, c = "") => { const d = document.createElement("div"); d.className = "step " + c; d.textContent = t; log.appendChild(d); };
     function notice(html) { const d = document.createElement("div"); d.className = "notice"; d.innerHTML = html; log.appendChild(d); }
     // Escape any server-returned value before it goes into innerHTML (txId, accountId,
@@ -131,10 +133,11 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
           let data = result && result.data != null ? result.data : null;
           if (typeof data === "string") { try { data = JSON.parse(data); } catch (e) {} }
           step("→ verify · Settling via x402 on Hedera testnet (if configured)… can take ~10s");
+          settling.classList.add("on");
           const out = await fetch("/attesto/dc-payment/verify", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ order: ORDER, readerContextToken: rd.readerContextToken, result: { protocol: (result && result.protocol) || null, data } }),
-          }).then((r) => r.json());
+          }).then((r) => r.json()).finally(() => settling.classList.remove("on"));
           if (!out.mandate) throw new Error(out.error || "authorization failed");
           step("✓ presentation verified · mandate built (" + out.mandate.trust_level + ")", "ok");
           renderReceipt(out);
@@ -152,10 +155,11 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
       btn.disabled = true;
       try {
         step("→ verify (presence-only, amount-bound) · Settling via x402 on Hedera testnet (if configured)… can take ~10s");
+        settling.classList.add("on");
         const out = await fetch("/attesto/dc-payment/verify", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order: ORDER, amount: AMOUNT, claims: DEMO_CLAIMS }),
-        }).then((r) => r.json());
+        }).then((r) => r.json()).finally(() => settling.classList.remove("on"));
         if (!out.mandate) throw new Error(out.error || "authorization failed");
         step("✓ presentation verified · mandate built (" + out.mandate.trust_level + ")", "ok");
         renderReceipt(out);
