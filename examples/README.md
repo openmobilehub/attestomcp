@@ -110,3 +110,37 @@ In every case `payment` settles last (the resolver moves `authorize` effects to 
   to stay genuinely runnable on a `createStorefront()` order.
 - `trust_level` is `"presence-only-demo"`: v0.1 enforces disclosure + nonce binding, **not** issuer/device
   signatures — a flow demonstration, not a real safety control yet.
+
+## `with-x402-settlement.mjs` — settle payment on-chain via the `settle` seam
+
+The gate authorizes payment; **settlement is a seam you inject**. `createStorefront({ settle })` threads an
+optional `settle(order)` into the gate's shared `completeOrder`: after the four payment gates pass, `settle`
+runs and its record rides along on the completion — surfaced on the receipt and in `get-order-status`.
+
+```ts
+const settle = async (order) => {
+  // amount re-derived server-side from the (already re-priced) order — never a client figure
+  return { network: "hedera-testnet", status: "settled", txId: "0.0.123@…", hashscanUrl: "https://…" };
+};
+
+const store = createStorefront({ settle });   // ← the only new line vs storefront.mjs
+```
+
+### Run it
+
+```bash
+npm run build:packages
+node examples/with-x402-settlement.mjs   # → http://localhost:3007/mcp
+```
+
+Buy the whiskey → prove age → authorize payment, and the receipt shows the on-chain settlement record.
+
+### What it proves
+
+- **Settlement is fail-closed.** If `settle` **throws**, `completeOrder` records nothing and the cart stays
+  intact (authorized-but-not-settled) — a flaky chain never marks an order paid (`completion.ts`).
+- **The amount is never trusted from the client.** `settle` receives the order whose total `completeOrder`
+  already re-derived from the catalog (Security invariant 2).
+- The example's `settle` is a **mock** so it runs with no credentials; the file's commented block shows the
+  **real** Hedera/x402 wiring (`settleOrder` + `hederaSettlementConfig` over the blocky402 facilitator,
+  a fresh session wallet per order on Hedera testnet) used by the reference demo at the repo root.

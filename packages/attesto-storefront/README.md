@@ -28,8 +28,8 @@ Apache-2.0, ESM. Two entry points: `.` (the pure pricing model, dependency-light
 page) over HTTP at `/mcp`. It publishes the ceremony seams on `store.app.locals.attesto`, so
 `new Attesto().mount(store.app)` wires the real `/attesto/*` ceremony rails with zero glue, and
 `store.gate()` resolves your policy on every `checkout` call (copied from
-[`examples/storefront.mjs`](../../examples/storefront.mjs) /
-[`storefront-gate.test.ts`](../../storefront-gate.test.ts)):
+[`examples/storefront.mjs`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/examples/storefront.mjs) /
+[`storefront-gate.test.ts`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/storefront-gate.test.ts)):
 
 ```ts
 import { createStorefront } from "@openmobilehub/attesto-storefront/server";
@@ -64,7 +64,7 @@ false. Without `store.gate(...)` the storefront is ungated: a plain checkout lin
 ## The three execution contexts
 
 `createStorefront()` is built around the split the gate enforces — conflating these is forbidden
-([spec §0](../../specs/001-attesto-sdk/spec.md)):
+([spec §0](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md)):
 
 1. **Tool — mints the link + reports requirements.** The `checkout` tool snapshots the cart into an
    order, returns `{ orderId, checkoutUrl, requires }`, and runs **no ceremony** (no phone in the loop).

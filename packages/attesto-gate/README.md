@@ -25,8 +25,8 @@ Express-shaped host.
 The whole flow in ≤ 10 lines — a credential-gated agentic storefront. `createStorefront()`
 publishes the ceremony seams; `new Attesto().mount(store.app)` wires the real `/attesto/*`
 ceremony rails; `store.gate()` resolves your policy on every `checkout` call (copied from
-[`examples/storefront.mjs`](../../examples/storefront.mjs) /
-[`storefront-gate.test.ts`](../../storefront-gate.test.ts)):
+[`examples/storefront.mjs`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/examples/storefront.mjs) /
+[`storefront-gate.test.ts`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/storefront-gate.test.ts)):
 
 ```ts
 import { createStorefront } from "@openmobilehub/attesto-storefront/server";
@@ -59,7 +59,7 @@ the widget shows the confirmation. Add the headphones instead and the age gate d
 ## The three execution contexts
 
 The split is load-bearing — conflating them is the documented root cause of confusion
-([spec §0](../../specs/001-attesto-sdk/spec.md)). v0.1 is consolidated **Mode A**:
+([spec §0](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md)). v0.1 is consolidated **Mode A**:
 
 1. **Tool — mints the link + reports requirements.** Your `checkout` handler runs once when
    checkout is requested. There is no phone in the loop, so it does **not** run a ceremony — it
@@ -88,7 +88,7 @@ conditional with `.when((order) => boolean)` — it returns a fresh `Credential`
 predicate is AND-ed onto any existing `appliesTo`.
 
 **Gate any credential** with `defineCredential` — no registration step, usable by object
-(from [`specs/001-attesto-sdk/quickstart.md`](../../specs/001-attesto-sdk/quickstart.md)):
+(from [`specs/001-attesto-sdk/quickstart.md`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/quickstart.md)):
 
 ```ts
 import { defineCredential, dcql, gate } from "@openmobilehub/attesto-gate";
@@ -165,8 +165,8 @@ ageDcql()  ·  ENVELOPE_VERSION  ·  ENVELOPE_SENTINEL
 //        CompletionSeam / SettlementSeam / CeremonyOrder (host composition)
 ```
 
-Full, compiler-checked contract: [`specs/001-attesto-sdk/`](../../specs/001-attesto-sdk/) (the
-[quickstart](../../specs/001-attesto-sdk/quickstart.md), [`spec.md`](../../specs/001-attesto-sdk/spec.md),
-and the [mount contract](../../specs/003-gate-ceremony-extraction/contracts/attesto-mount.api.md)).
+Full, compiler-checked contract: [`specs/001-attesto-sdk/`](https://github.com/openmobilehub/mcp-apps-shopping-demo/tree/main/specs/001-attesto-sdk/) (the
+[quickstart](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/quickstart.md), [`spec.md`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md),
+and the [mount contract](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/003-gate-ceremony-extraction/contracts/attesto-mount.api.md)).
 
 Apache-2.0 · part of [Open Mobile Hub](https://openmobilehub.org) (Linux Foundation).
