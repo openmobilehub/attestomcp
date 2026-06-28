@@ -30,6 +30,14 @@ export { MemoryVerificationStore } from "./store.js";
 // type those seam adapters without re-declaring them.
 export { completeOrder } from "./ceremony/completion.js";
 
+// ── Cart Mandate (ap2.CartMandate) — signed, tamper-evident cart envelope ────
+// Additive + fail-closed: `issueCartMandate` seals a server-priced cart with the host's
+// HMAC key; `verifyCartMandate` (and `completeOrder`, when given a `cartMandate` +
+// `signingKey`) refuses a tampered / replayed / expired cart BEFORE re-pricing. The
+// catalog stays the price authority (invariant 2); trust_level is presence-only-demo.
+export { issueCartMandate, verifyCartMandate, DEFAULT_CART_MANDATE_TTL_MS } from "./ceremony/cartMandate.js";
+export type { CartMandate, CartMandateLine, CartMandateRefusal, CartMandateVerdict, IssueCartMandateArgs } from "./ceremony/cartMandate.js";
+
 // ── Ceremony presentation (the ONE shared three-gate checkout page) ─────────
 // Both the committed demo and @openmobilehub/attesto-storefront render their
 // checkout page through `renderRequirements(order, manifest, verification)` — one
