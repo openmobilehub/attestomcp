@@ -13,7 +13,7 @@
 // → resolveOrder), so the amount shown and bound comes from the catalog, never the
 // order id/token (invariant 2).
 import type { CeremonyOrder } from "../types.js";
-import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar } from "../theme.js";
+import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar, completionHandoffBanner } from "../theme.js";
 
 function money(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
@@ -76,6 +76,7 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
     const ORDER_ID = ${JSON.stringify(order.id)};
     const OPTIONS_URL = ${JSON.stringify(optionsUrl)};
     const RETURN_URL = ${JSON.stringify(returnUrl)};
+    const DONE_BANNER = ${JSON.stringify(completionHandoffBanner(returnUrl))};
     const log = document.getElementById("log");
     const btn = document.getElementById("go");
     const settling = document.getElementById("settling");
@@ -134,16 +135,11 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
         : out.settlementError
           ? '<div class="settle-failed">✗ Settlement failed — authorized, not settled: ' + esc(out.settlementError) + "</div>"
           : "";
-      // When the order completed AND settled on-chain, keep the receipt visible so the
-      // buyer sees the proof — a prominent manual return, no auto-redirect (the widget
-      // poll picks up completion in the chat anyway). A mock-complete (no settlement)
-      // keeps a short auto-redirect to the hub.
-      const settled = out.completed && !!s;
-      const done = out.completed
-        ? settled
-          ? '<div class="receipt-banner">✓ Purchase complete<div class="sub">Settled on-chain — proof below. <a href="' + RETURN_URL + '">Return to checkout ›</a></div></div>'
-          : '<div class="receipt-banner">✓ Purchase complete<div class="sub">Returning to checkout… <a href="' + RETURN_URL + '">continue now ›</a></div></div>'
-        : "";
+      // Every gate + payment is done ⇒ the order is COMPLETE. Lead with the prominent
+      // handoff: close this window and continue in the agent (the MCP host polls
+      // order-status and resumes). No auto-redirect — we don't yank the buyer off the
+      // "you're done" message; the on-chain proof + a secondary return link stay below.
+      const done = out.completed ? DONE_BANNER : "";
       const gates = '<div class="gate ' + (allPass ? "pass" : "fail") + '">' +
         (allPass ? "✓ All " + out.gates.length + " authorization gates passed" : "✗ " + (out.gates.length - passCount) + " of " + out.gates.length + " failed") + "</div>" + gateLines;
       el.innerHTML = done + '<div class="row-ok">✓ Payment Mandate authorized (amount-bound)</div>' +
@@ -152,9 +148,6 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
       if (out.completed) {
         btn.disabled = true;
         btn.textContent = "Authorized ✓";
-        // Mock-complete (no on-chain settlement) → short auto-redirect to the hub.
-        // Settled → leave the receipt up so the on-chain proof stays visible.
-        if (!settled) setTimeout(() => { window.location.assign(RETURN_URL); }, 1400);
       }
     }
   </script>

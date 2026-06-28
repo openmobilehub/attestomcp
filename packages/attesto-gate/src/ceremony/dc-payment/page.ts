@@ -15,7 +15,7 @@
 // crypto is real; the wallet's device/issuer trust anchor is not — never a real safety
 // control. Self-contained: takes the re-priced amount + lines, not a demo Order type.
 
-import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar } from "../theme.js";
+import { pageHead, brandHeader, progressRail, orderSummaryCard, trustFooter, settlingBar, completionHandoffBanner } from "../theme.js";
 
 export interface DcPaymentLine {
   name: string;
@@ -90,6 +90,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     const AMOUNT = ${JSON.stringify(total)};
     const DEMO_CLAIMS = ${JSON.stringify(DEMO_CLAIMS)};
     const RETURN_URL = ${JSON.stringify(returnUrl)};
+    const DONE_BANNER = ${JSON.stringify(completionHandoffBanner(returnUrl))};
     const log = document.getElementById("log");
     const goDc = document.getElementById("go-dc");
     const btn = document.getElementById("go");
@@ -197,26 +198,17 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
         : out.settlementError
           ? '<div class="settle-failed">✗ Settlement failed — authorized, not settled: ' + esc(out.settlementError) + "</div>"
           : "";
-      // When the order completed AND settled on-chain, keep the receipt visible so the
-      // buyer sees the proof — a prominent manual return, no auto-redirect (the widget
-      // poll picks up completion in the chat anyway). A mock-complete (no settlement)
-      // keeps the short auto-redirect.
-      const settled = out.completed && !!s;
-      const done = out.completed
-        ? settled
-          ? '<div class="receipt-banner">✓ Purchase complete<div class="sub">Settled on-chain — proof below. <a href="' + RETURN_URL + '">Return to checkout ›</a></div></div>'
-          : '<div class="receipt-banner">✓ Purchase complete<div class="sub">Returning to checkout… <a href="' + RETURN_URL + '">continue now ›</a></div></div>'
-        : "";
+      // Every gate + payment is done ⇒ the order is COMPLETE. Lead with the prominent
+      // handoff: close this window and continue in the agent (the MCP host polls
+      // order-status and resumes). No auto-redirect — we don't yank the buyer off the
+      // "you're done" message; the on-chain proof + a secondary return link stay below.
+      const done = out.completed ? DONE_BANNER : "";
       el.innerHTML = done + '<div class="row-ok">✓ Payment Mandate authorized (amount-bound)</div>' +
         '<div class="small" style="margin:4px 0 8px;">' + out.mandate.id + "</div>" + gates + settlement;
       el.style.display = "block";
       if (out.completed) {
         goDc.disabled = true;
         btn.textContent = "Authorized ✓";
-        // Mock-complete (no on-chain settlement) → short auto-redirect to the hub.
-        // Settled → leave the receipt up so the on-chain proof stays visible; the
-        // buyer returns via the prominent manual link above.
-        if (!settled) setTimeout(() => { window.location.assign(RETURN_URL); }, 1400);
       }
     }
   </script>

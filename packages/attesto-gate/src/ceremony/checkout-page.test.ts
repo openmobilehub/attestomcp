@@ -123,6 +123,9 @@ describe("renderRequirements — paid revisit", () => {
     expect(html).toContain("✓ Order paid · $124.00");
     expect(html).not.toContain('type="radio" name="pm"');
     expect(html).not.toContain("Apply loyalty discount");
+    // The paid revisit prominently states the close-window / continue-in-agent handoff.
+    expect(html).toContain("close this window");
+    expect(html).toContain("continue in your agent");
   });
 
   it("anchors the paid total + renders the on-chain settlement proof when present", () => {

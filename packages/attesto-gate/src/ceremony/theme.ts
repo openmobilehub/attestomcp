@@ -147,6 +147,20 @@ const DESIGN_CSS = `
   .receipt-banner .sub { font-weight: 500; font-size: .85rem; opacity: .95; margin-top: 4px; }
   .receipt-banner a { color: #fff; text-decoration: underline; }
 
+  /* Prominent end-of-ceremony handoff — shown when the WHOLE ceremony is done
+     (payment is the last gate). Bigger than the inline receipt banner: the order is
+     complete and the buyer can close the window; the agent (MCP host) polls
+     order-status and continues the conversation. */
+  .complete-banner {
+    background: var(--accent); color: #fff; border-radius: 14px; padding: 22px 18px 20px;
+    text-align: center; margin-bottom: 14px; box-shadow: var(--shadow);
+  }
+  .complete-banner .big { font-size: 1.35rem; font-weight: 800; line-height: 1.2; }
+  .complete-banner .sub { font-weight: 500; font-size: .92rem; opacity: .97; margin-top: 8px; line-height: 1.5; }
+  .complete-banner .sub strong { font-weight: 800; }
+  .complete-banner .ret { display: inline-block; margin-top: 12px; font-size: .82rem; opacity: .92; }
+  .complete-banner a { color: #fff; text-decoration: underline; }
+
   /* Indeterminate settling bar — shown while x402 settles on-chain (~10s). A teal
      sliver slides across a hairline track so the buyer sees the wait is live work,
      not a hang. Hidden until a page adds .on; both payment rails use it. */
@@ -212,6 +226,21 @@ export function brandHeader(opts: { h1?: string; tagline?: string } = {}): strin
  *  live work. `id` defaults to "settling" for the page script to toggle. */
 export function settlingBar(id = "settling"): string {
   return `<div class="settling-bar" id="${id}"><i></i></div>`;
+}
+
+/**
+ * The prominent end-of-ceremony handoff banner: every attestation + payment is done,
+ * so the order is COMPLETE. It tells the buyer they can close the window and continue
+ * in their agent — the MCP host polls order-status and resumes the conversation
+ * automatically (Mode A: the agent never runs the ceremony, it only orchestrates +
+ * polls). An optional secondary link returns to the checkout hub for a pure-browser
+ * flow. Built server-side and embedded into the gate page's receipt script.
+ */
+export function completionHandoffBanner(returnUrl?: string): string {
+  const ret = returnUrl
+    ? `<a class="ret" href="${escapeHtml(returnUrl)}">Staying in the browser? Return to checkout ›</a>`
+    : "";
+  return `<div class="complete-banner"><div class="big">✓ Order complete</div><div class="sub">You can <strong>close this window</strong> and continue in your agent — it has your order and will pick up from here.</div>${ret}</div>`;
 }
 
 // ── Order summary card ──────────────────────────────────────────────────────

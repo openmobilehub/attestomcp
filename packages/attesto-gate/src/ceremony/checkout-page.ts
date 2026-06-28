@@ -372,7 +372,9 @@ function renderPlaceScript(order: RenderOrder, methods: PaymentMethod[], payment
 // details (when present) carry the public on-chain proof.
 function renderPaid(paid: RenderPaid): string {
   const via = paid.settlement ? " via x402" : paid.method === "passkey" ? " via passkey" : "";
-  const banner = `<div class="receipt-banner">✓ Order paid · ${formatMoney(paid.amount, paid.currency)}${via}</div>`;
+  // The order is complete — lead with the prominent handoff (close the window, the
+  // agent polls order-status and continues), then the on-chain proof below.
+  const banner = `<div class="complete-banner"><div class="big">✓ Order paid · ${formatMoney(paid.amount, paid.currency)}${via}</div><div class="sub">You can <strong>close this window</strong> and continue in your agent — it has your order and will pick up from here.</div></div>`;
   const detail = paid.settlement
     ? `<p class="small" style="margin:0;">Settled on ${escapeHtml(paid.settlement.network)} · paid from ${escapeHtml(paid.settlement.payer.accountId)} · <a href="${escapeHtml(paid.settlement.hashscanUrl)}" target="_blank" rel="noopener">View on HashScan</a></p>`
     : `<p class="small" style="margin:0;">No on-chain settlement for this payment method.</p>`;

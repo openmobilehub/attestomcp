@@ -394,6 +394,17 @@ describe("CT11 — page + receipt state presence-only-demo (not a real safety co
     expect(html).toContain('settling.classList.add("on")');
   });
 
+  it("on completion, prominently states the order is complete + the close-window / continue-in-agent handoff", () => {
+    const order = catalog.createOrder([{ productId: "aurora-headphones", quantity: 1 }], "ORD-DONE");
+    const html = renderPasskeyPage({ order });
+    // The prominent end-of-ceremony banner is embedded for the receipt script to show
+    // once every gate + payment is done (Mode A: the agent polls + resumes).
+    expect(html).toContain("complete-banner");
+    expect(html).toContain("Order complete");
+    expect(html).toContain("close this window");
+    expect(html).toContain("continue in your agent");
+  });
+
   it("the verify receipt carries trust_level presence-only-demo", async () => {
     const h = harness();
     h.seed("ORD-P", [{ id: "aurora-headphones", quantity: 1 }]);
