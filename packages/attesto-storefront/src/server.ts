@@ -521,6 +521,18 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   app.post("/checkout/place-order", async (req: Request, res: Response) => {
     const order = await createdOrderStore.read(String(req.body?.order ?? ""));
     if (order) {
+      // Security invariant 1 — enforce gates on EVERY completion path, not just the
+      // rendered page. This instant-demo path completes WITHOUT a device ceremony, so
+      // it is only ever valid for an UNGATED order. A gated order (age / payment
+      // requirements) MUST complete through the fail-closed payment gate; refuse it
+      // here server-side. The checkout page only offers this button for ungated
+      // orders, but a DIRECT POST of a gated order id would otherwise bypass the gate
+      // entirely — e.g. an age-restricted order completing with no age proof. Hiding
+      // the button is not enforcement.
+      if ((resolveGate?.(order) ?? []).length > 0) {
+        res.status(403).type("html").send(`<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:32rem;margin:3rem auto"><h1>Verification required</h1><p>This order has age / payment requirements — complete it through checkout. It can't be placed from the instant-demo path.</p></body>`);
+        return;
+      }
       await orderStore.write(order.id, { orderId: order.id, amount: order.total, currency: order.currency, method: "demo", completedAt: new Date().toISOString() });
       await cartStore.write(new Map()); // completion empties the cart
     }

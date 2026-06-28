@@ -170,6 +170,37 @@ describe("GET /checkout — the shared three-gate page (renderRequirements)", ()
     expect(res.text).toContain("Complete purchase (demo)");
     expect(res.text).not.toContain("Payment is locked");
   });
+
+  // BYPASS (Security invariant 1, load-bearing): the instant-demo place-order path
+  // completes WITHOUT a device ceremony, so it must refuse a GATED order — otherwise a
+  // direct POST of an age-restricted order id completes with NO age proof (the UI hides
+  // the button on gated orders, but hiding a button is not enforcement). This test FAILS
+  // if the server-side gated check is removed.
+  it("BYPASS: a gated order POSTed straight to place-order is refused server-side, records nothing", async () => {
+    const store = gatedStore();
+    const orderId = await checkoutId(await connect(store), "oak-whiskey");
+    // Direct POST of the gated, age-restricted order id to the instant-demo path.
+    await request(store.app).post("/checkout/place-order").type("form").send({ order: orderId }).expect(403);
+    // Nothing recorded — order-status stays pending (no completion written).
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(false);
+  });
+
+  // The same gated order DOES complete once it runs the real ceremony through the
+  // mounted rails (age proof → dc-payment) — so the refusal above was the gate, not an
+  // unrelated failure.
+  it("the refused gated order completes through the mounted payment gate (age proof → dc-payment)", async () => {
+    const store = gatedStore();
+    const orderId = await checkoutId(await connect(store), "oak-whiskey");
+    await request(store.app).post("/attesto/credential/verify").send({ order: orderId, cred: "age", claims: { age_over_21: true } });
+    const pay = await request(store.app).post("/attesto/dc-payment/verify").send({
+      order: orderId,
+      claims: { payment_instrument_id: "acct_demo_1", expiry_date: "2031-12-31", masked_account_reference: "•••• 4242", issuer_name: "Demo Bank", holder_name: "T" },
+    });
+    expect(pay.body.completed).toBe(true);
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(true);
+  });
 });
 
 describe("CT6 — cart state is per storefront instance (no bleed)", () => {

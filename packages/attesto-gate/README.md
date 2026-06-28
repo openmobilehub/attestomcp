@@ -80,7 +80,7 @@ Built-ins, custom credentials, and effects are one shape (`Credential` + `Effect
 | Builder | Effect | Verifies |
 | :-- | :-- | :-- |
 | `age.over(n)` | `gate()` | the explicit positive `age_over_${n} === true` (an 18+ proof never satisfies a 21+ gate) |
-| `membership.discount(n)` | `discount({ percent: n })` | a non-empty `membership_id`; applies the discount once |
+| `membership.discount(n)` | `discount({ percent: n })` | a non-empty `membership_number`; applies the discount once |
 | `payment.in(cur)` | `authorize()` | `authorized === true`; settles last, amount derived from the order |
 
 Wrap each in `required(c)` or `optional(c)` to build the ordered policy array. Attach a call-site
