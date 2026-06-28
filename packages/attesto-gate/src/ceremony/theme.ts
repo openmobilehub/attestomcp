@@ -146,6 +146,35 @@ const DESIGN_CSS = `
   }
   .receipt-banner .sub { font-weight: 500; font-size: .85rem; opacity: .95; margin-top: 4px; }
   .receipt-banner a { color: #fff; text-decoration: underline; }
+
+  /* x402 settlement receipt — on-chain proof, design-system styled. The settle card
+     reuses the surface chrome; the teal left rail marks it as the success path. */
+  .settle {
+    margin-top: 14px; padding: 14px 16px; background: #f0fdfa;
+    border: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+    border-radius: 10px;
+  }
+  .settle .settle-head { font-weight: 700; font-size: .95rem; color: var(--success); margin: 0 0 8px; }
+  .settle dl.kv { display: grid; grid-template-columns: 64px 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
+  .settle dl.kv dt { color: var(--muted); font-size: .8rem; padding-top: 1px; }
+  .settle dl.kv dd { margin: 0; word-break: break-word; }
+  .settle .dim { color: var(--muted); font-weight: 400; font-size: .78rem; }
+  .settle .mono { font-family: ui-monospace, Menlo, monospace; font-size: .78rem; word-break: break-all; }
+  /* Prominent, tappable HashScan link — the buyer is on their phone; one tap to the
+     live explorer is the third-party proof (no QR; the package has no qr route). */
+  .settle .hashscan {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 12px; height: 44px; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: .92rem;
+    text-decoration: none;
+  }
+  .settle .hashscan:hover { background: var(--accent-hover); }
+  /* Calm "authorized, not settled" line — never alarming red wall; a muted danger row. */
+  .settle-failed {
+    margin-top: 14px; padding: 12px 14px; background: #fef2f2;
+    border: 1px solid var(--hairline); border-left: 3px solid var(--danger);
+    border-radius: 10px; font-size: .88rem; color: var(--danger);
+  }
 `;
 
 /** <head> with the shared design-system CSS. `extraCss` lets a page add the few
