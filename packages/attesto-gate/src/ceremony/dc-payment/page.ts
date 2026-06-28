@@ -77,7 +77,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
   ${rail}
   ${summary}
   <div class="card">
-    <p class="lede">Present a payment credential from your phone wallet. Chrome shows a QR; scanning it uses the cross-device channel (FIDO caBLE). Your wallet signs over this exact amount — nothing is charged (demo).</p>
+    <p class="lede">Present a payment credential from your phone wallet. Chrome shows a QR; scanning it uses the cross-device channel (FIDO caBLE). Your wallet signs over this exact amount, then payment settles on-chain via the <strong>x402</strong> protocol — on a <strong>test network</strong>, no real money, a tiny token amount (a fixed demo rate, not the dollar total).</p>
     <button id="go-dc" class="btn btn-primary">Authorize ${money(total, currency)} with my wallet</button>
     <button id="go" class="btn btn-secondary">Authorize ${money(total, currency)} (instant demo)</button>
     <div id="log"></div>
@@ -94,6 +94,9 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     const btn = document.getElementById("go");
     const step = (t, c = "") => { const d = document.createElement("div"); d.className = "step " + c; d.textContent = t; log.appendChild(d); };
     function notice(html) { const d = document.createElement("div"); d.className = "notice"; d.innerHTML = html; log.appendChild(d); }
+    // Escape any server-returned value before it goes into innerHTML (txId, accountId,
+    // the settlementError message): they're built server-side but never trusted raw.
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
 
     // Pre-fetch the REAL signed OpenID4VP request so navigator.credentials.get() can be
     // called SYNCHRONOUSLY inside the tap. iOS WebKit drops the transient user
@@ -127,7 +130,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
         .then(async (result) => {
           let data = result && result.data != null ? result.data : null;
           if (typeof data === "string") { try { data = JSON.parse(data); } catch (e) {} }
-          step("→ verify");
+          step("→ verify · Settling via x402 on Hedera testnet (if configured)… can take ~10s");
           const out = await fetch("/attesto/dc-payment/verify", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ order: ORDER, readerContextToken: rd.readerContextToken, result: { protocol: (result && result.protocol) || null, data } }),
@@ -135,6 +138,8 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
           if (!out.mandate) throw new Error(out.error || "authorization failed");
           step("✓ presentation verified · mandate built (" + out.mandate.trust_level + ")", "ok");
           renderReceipt(out);
+          // Configured-but-failed settle: authorized, not settled — let the buyer retry.
+          if (out.settlementError) { step("✗ settlement failed — authorized, not settled (retry below)", "err"); goDc.disabled = false; prefetch(); }
         })
         .catch((err) => {
           step("✗ " + ((err && err.message) || String(err)), "err");
@@ -146,7 +151,7 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
-        step("→ verify (presence-only, amount-bound)");
+        step("→ verify (presence-only, amount-bound) · Settling via x402 on Hedera testnet (if configured)… can take ~10s");
         const out = await fetch("/attesto/dc-payment/verify", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order: ORDER, amount: AMOUNT, claims: DEMO_CLAIMS }),
@@ -154,6 +159,8 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
         if (!out.mandate) throw new Error(out.error || "authorization failed");
         step("✓ presentation verified · mandate built (" + out.mandate.trust_level + ")", "ok");
         renderReceipt(out);
+        // Configured-but-failed settle: authorized, not settled — let the buyer retry.
+        if (out.settlementError) { step("✗ settlement failed — authorized, not settled (retry below)", "err"); btn.disabled = false; }
       } catch (err) {
         step("✗ " + (err?.message ?? String(err)), "err");
         btn.disabled = false;
@@ -163,18 +170,49 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
     function renderReceipt(out) {
       const el = document.getElementById("receipt");
       const gates = out.gates.map((g) => '<div class="gate ' + (g.pass ? "pass" : "fail") + '">' + (g.pass ? "✓" : "✗") + " " + g.gate + " — " + g.detail + "</div>").join("");
+      // The x402 on-chain settlement receipt. When the host settled (Hedera/blocky402),
+      // show the actual tinybar amount, payer/merchant, speed, tx, and a PROMINENT
+      // tappable HashScan link — the third-party proof the buyer (on their phone) taps
+      // straight into the live explorer. A configured-but-failed settle is the calm
+      // "authorized, not settled" line (FR-013) — never an alarming wall.
+      const s = out.settlement;
+      const settlement = s
+        ? '<div class="settle"><div class="settle-head">✓ Settled via x402 on Hedera testnet</div>' +
+          '<dl class="kv">' +
+          "<dt>Amount</dt><dd>" + (s.amountTinybar / 1e8) + ' ℏ <span class="dim">(' + esc(s.fxRate) + ")</span></dd>" +
+          "<dt>From</dt><dd>" + esc(s.payer.accountId) + ' <span class="dim">' +
+          (s.payer.kind === "session-wallet"
+            ? "wallet created for this order, " + (s.walletAgeMs / 1000).toFixed(1) + "s old when it paid"
+            : "demo customer") + "</span></dd>" +
+          "<dt>To</dt><dd>" + esc(s.payTo) + ' <span class="dim">merchant</span></dd>' +
+          "<dt>Speed</dt><dd>settled in " + (s.settledInMs / 1000).toFixed(1) + "s</dd>" +
+          '<dt>Tx</dt><dd><span class="mono">' + esc(s.txId) + "</span></dd>" +
+          "</dl>" +
+          '<a class="hashscan" href="' + esc(s.hashscanUrl) + '" target="_blank" rel="noopener">View on HashScan ›</a>' +
+          "</div>"
+        : out.settlementError
+          ? '<div class="settle-failed">✗ Settlement failed — authorized, not settled: ' + esc(out.settlementError) + "</div>"
+          : "";
+      // When the order completed AND settled on-chain, keep the receipt visible so the
+      // buyer sees the proof — a prominent manual return, no auto-redirect (the widget
+      // poll picks up completion in the chat anyway). A mock-complete (no settlement)
+      // keeps the short auto-redirect.
+      const settled = out.completed && !!s;
       const done = out.completed
-        ? '<div class="receipt-banner">✓ Purchase complete<div class="sub">Returning to checkout… <a href="' + RETURN_URL + '">continue now ›</a></div></div>'
+        ? settled
+          ? '<div class="receipt-banner">✓ Purchase complete<div class="sub">Settled on-chain — proof below. <a href="' + RETURN_URL + '">Return to checkout ›</a></div></div>'
+          : '<div class="receipt-banner">✓ Purchase complete<div class="sub">Returning to checkout… <a href="' + RETURN_URL + '">continue now ›</a></div></div>'
         : "";
       el.innerHTML = done + '<div class="row-ok">✓ Payment Mandate authorized (amount-bound)</div>' +
-        '<div class="small" style="margin:4px 0 8px;">' + out.mandate.id + "</div>" + gates;
+        '<div class="small" style="margin:4px 0 8px;">' + out.mandate.id + "</div>" + gates + settlement;
       el.style.display = "block";
       if (out.completed) {
         goDc.disabled = true;
         btn.textContent = "Authorized ✓";
-        // Final gate done — return to the checkout hub, which shows the paid
-        // confirmation (and the widget poll picks it up in the chat).
-        setTimeout(() => { window.location.assign(RETURN_URL); }, 1400);
+        // Mock-complete (no on-chain settlement) → short auto-redirect to the hub.
+        // Settled → leave the receipt up so the on-chain proof stays visible; the
+        // buyer returns via the prominent manual link above.
+        if (!settled) setTimeout(() => { window.location.assign(RETURN_URL); }, 1400);
       }
     }
   </script>

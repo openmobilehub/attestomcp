@@ -152,6 +152,9 @@ export const registerDcPaymentGate: RailRegistrar = (app: CeremonyApp, ctx: Cere
       gates,
     };
     const result = await ctx.completion(input);
-    res.json({ mandate, gates, completed: result.completed, ...(result.reason ? { reason: result.reason } : {}), ...(result.settlement ? { settlement: result.settlement } : {}) });
+    // Forward the on-chain settlement (when configured + succeeded) AND the
+    // settlementError (a configured-but-failed settle → authorized-but-not-settled,
+    // FR-013) so the page can render the x402 receipt or the calm refusal line.
+    res.json({ mandate, gates, completed: result.completed, ...(result.reason ? { reason: result.reason } : {}), ...(result.settlement ? { settlement: result.settlement } : {}), ...(result.settlementError ? { settlementError: result.settlementError } : {}) });
   });
 };
