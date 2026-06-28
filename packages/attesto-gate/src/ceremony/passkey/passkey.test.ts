@@ -381,7 +381,7 @@ describe("CT11 — page + receipt state presence-only-demo (not a real safety co
     // The return URL is the checkout hub for THIS order, so completion routes the
     // buyer forward (fresh GET → paid state) rather than back into bfcache.
     expect(html).toContain("/checkout?order=ORD-RET");
-    expect(html).toContain("return to checkout");
+    expect(html).toContain("Return to checkout");
     // An explicit override is honored (the committed demo can re-home the link).
     expect(renderPasskeyPage({ order, returnUrl: "/demo/checkout?order=ORD-RET" })).toContain("/demo/checkout?order=ORD-RET");
   });
