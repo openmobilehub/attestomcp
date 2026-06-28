@@ -69,6 +69,28 @@ the "green at every commit" rule). The entanglements:
 | `packages/attesto-*/**` tests | unchanged — already the source of truth |
 | `storefront-gate.test.ts` | unchanged — already drives the composed `mount()` path |
 
+## Retirement order (post-flip — from the actual import graph, 2026-06-28)
+
+Steps 1–2 are **done** (factory + `api/index.ts` → composition; demo consumes the packages, green). The
+remaining retirement is interconnected — execute in THIS order so each step stays green:
+
+1. **Rewire `main.ts` first** (the local/stdio dev entrypoint still imports `createApp` + `createServer`):
+   HTTP mode → `composeStorefront({...})`; stdio mode → `createStorefront(...).mcpServer()` over
+   `StdioServerTransport`. Until this lands, `app.ts`/`server.ts` can't be deleted.
+2. **Delete the ceremony dead-set + tests** (now imported only by each other + their tests): `app.ts`,
+   `server.ts`, `checkout.ts`, `payment-gate/{passkey,dc-payment,credential-gate,qr,mandate,challengeToken,origin}`,
+   and the demo stores (`cartStore.ts`/`orderStore.ts`/`verificationStore.ts`) — plus `app.test.ts`,
+   `checkout*.test.ts`, `instant-demo-honesty.test.ts`, the `payment-gate/**` tests (~28, superseded by the
+   package's ceremony tests), and the store tests. Update `tsconfig*.json` includes as files go.
+3. **KEEP `payment-gate/hedera-settlement/`** — the composition's `settle` seam imports it
+   (`api/compose-storefront.ts`). Do NOT delete it. (Eventually it could move into the package, but not now.)
+4. **Widget (D7):** drop `src/` + the demo's vite widget build; the package ships the extracted
+   `dist/ui/mcp-app.html`. Adjust `vite.config.ts` + the `build:ui` script.
+5. **Trim `catalog.ts`** to the data only (`CATALOG`, `REVIEWS`, types — used by `api/index.ts`); the demo
+   pricing functions die with `checkout.ts`. Adjust `catalog.test.ts`.
+6. **Final gate:** full suite + build green; `attesto-discovery.ts` (+ its test) stays — it's the one
+   demo-specific surface `api/index.ts` keeps.
+
 ## Risk register
 
 - **Prod demo regression** (`mcp-apps-nine`) — mitigated by making the cutover a separate, explicit, reviewed
