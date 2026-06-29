@@ -144,3 +144,46 @@ Buy the whiskey → prove age → authorize payment, and the receipt shows the o
 - The example's `settle` is a **mock** so it runs with no credentials; the file's commented block shows the
   **real** Hedera/x402 wiring (`settleOrder` + `hederaSettlementConfig` over the blocky402 facilitator,
   a fresh session wallet per order on Hedera testnet) used by the reference demo at the repo root.
+
+## `gate-any-action.mjs` — gate a **non-commerce** action (identity-first, no checkout)
+
+The storefront examples all end in a **purchase**. This one proves the broader claim — *identity leads,
+payments is one application* — by gating a **non-commerce** action: an MCP tool that releases sensitive
+records, behind an identity credential, with **no payment anywhere**.
+
+```ts
+import { buildVerificationRequired, isVerificationRequired, ageDcql } from "@openmobilehub/attesto-gate";
+
+function releaseRecords(args, ctx) {
+  if (!ctx.ageVerified) {
+    return buildVerificationRequired({         // ← gate any tool call: return a typed refusal,
+      order: { id: args.requestId, total: 0, currency: "USD" }, //   a $0 ACTION, not a sale
+      credential: "age", minAge: 21, request: ageDcql(),
+      approveUrl: `https://shop.example/attesto/credential?order=${args.requestId}&cred=age`,
+      detail: "Releasing these records requires proof the requester is 21+.",
+    });
+  }
+  return { released: true, records: [/* … */] };
+}
+```
+
+### Run it
+
+```bash
+npm run build --workspaces
+node examples/gate-any-action.mjs
+```
+
+It prints the `verification_required` envelope the agent sees on the gated call, then the action's result
+after the credential is proven. The same shape gates `approve-deploy`, `file-prescription-refill`,
+`grant-access` — any consequential action.
+
+### Honest limits
+
+- The envelope + the gating decision are real today. The user proves on the `approve_url` **page** that
+  `attesto.mount()` serves (see `storefront.mjs` for the full ceremony); a fully **page-less** proving
+  handshake is on the roadmap.
+- The built-in `envelopeInstruction()` is worded for the **checkout** framing ("buyer", "placed"), so this
+  example builds an **action-agnostic** instruction from the envelope's fields instead. (An action-agnostic
+  instruction helper is a small follow-up.)
+- `trust_level` is `"presence-only-demo"` — don't gate anything needing a real safety guarantee on it yet.
