@@ -1,17 +1,17 @@
-# Publishing the Attesto packages
+# Publishing the AttestoMcp packages
 
 Release checklist for the two npm packages extracted from this repo:
 
-- **`@openmobilehub/attesto-gate`** — the credential/payment Gate (`new Attesto()`, `attesto.mount(app)`).
-- **`@openmobilehub/attesto-storefront`** — the reference storefront (`createStorefront()`).
+- **`@openmobilehub/attestomcp-gate`** — the credential/payment Gate (`new AttestoMcp()`, `attestomcp.mount(app)`).
+- **`@openmobilehub/attestomcp-storefront`** — the reference storefront (`createStorefront()`).
 
 Both are at `0.1.0`, Apache-2.0, ESM, ship their own types, and declare `publishConfig.access: public`
 (required for a scoped public package).
 
 ## Pre-flight (verified by the pre-publish audit)
 
-- [x] Both build clean from a wiped `dist/` — `npm run -w @openmobilehub/attesto-gate build`,
-      `npm run -w @openmobilehub/attesto-storefront build`.
+- [x] Both build clean from a wiped `dist/` — `npm run -w @openmobilehub/attestomcp-gate build`,
+      `npm run -w @openmobilehub/attestomcp-storefront build`.
 - [x] `exports` maps resolve to emitted files: gate `.`; storefront `.` and `./server`.
 - [x] The storefront's runtime asset `dist/ui/mcp-app.html` (read via `readFile` at request time) **is**
       in the tarball (`npm pack --dry-run` confirms). The `files` allowlist covers it via `"dist"`.
@@ -24,16 +24,16 @@ Both are at `0.1.0`, Apache-2.0, ESM, ship their own types, and declare `publish
 
 ## Publish order (load-bearing)
 
-`@openmobilehub/attesto-storefront` depends on `@openmobilehub/attesto-gate` via a semver range
+`@openmobilehub/attestomcp-storefront` depends on `@openmobilehub/attestomcp-gate` via a semver range
 (`^0.1.0`, **not** `workspace:*`), so it only resolves once the gate is on the registry:
 
-1. Publish **`@openmobilehub/attesto-gate@0.1.0`** first.
-2. Then publish **`@openmobilehub/attesto-storefront@0.1.0`**.
+1. Publish **`@openmobilehub/attestomcp-gate@0.1.0`** first.
+2. Then publish **`@openmobilehub/attestomcp-storefront@0.1.0`**.
 
 ```bash
 npm run build:packages                                   # build both dist/
-npm publish -w @openmobilehub/attesto-gate --access public
-npm publish -w @openmobilehub/attesto-storefront --access public
+npm publish -w @openmobilehub/attestomcp-gate --access public
+npm publish -w @openmobilehub/attestomcp-storefront --access public
 ```
 
 > Requires `@openmobilehub` org publish rights on npm (`npm whoami` / `npm login`). This is a

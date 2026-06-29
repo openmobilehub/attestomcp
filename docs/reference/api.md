@@ -1,13 +1,13 @@
 # API reference
 
-The public API of the two Attesto packages, grounded in the actual exports.
+The public API of the two AttestoMcp packages, grounded in the actual exports.
 
-- **`@openmobilehub/attesto-gate`** — the Gate: `new Attesto()`, the policy
+- **`@openmobilehub/attestomcp-gate`** — the Gate: `new AttestoMcp()`, the policy
   builders, the credential model, the stores, and the honesty types.
-- **`@openmobilehub/attesto-storefront`** — the storefront core: `createStorefront()`
+- **`@openmobilehub/attestomcp-storefront`** — the storefront core: `createStorefront()`
   and its options.
 
-Attesto is the **consent layer for AI agents**: an AI agent must prove a verifiable
+AttestoMcp is the **consent layer for AI agents**: an AI agent must prove a verifiable
 credential from the user's phone wallet before a consequential action — a payment, an
 age gate, an access grant — completes. **Identity leads; payments is one application.**
 
@@ -24,41 +24,41 @@ age gate, an access grant — completes. **Identity leads; payments is one appli
 
 ---
 
-## `@openmobilehub/attesto-gate`
+## `@openmobilehub/attestomcp-gate`
 
 ```ts
 import {
-  Attesto,
+  AttestoMcp,
   age, membership, payment,
   required, optional,
   defineCredential, dcql, gate, discount, authorize,
   MemoryVerificationStore,
-} from "@openmobilehub/attesto-gate";
+} from "@openmobilehub/attestomcp-gate";
 ```
 
-### `class Attesto`
+### `class AttestoMcp`
 
 The configure-once client. Construct with your wallet origin (or zero-config for local
 dev), then make declarative calls.
 
 ```ts
-new Attesto(opts?: AttestoOptions)
+new AttestoMcp(opts?: AttestoMcpOptions)
 ```
 
-| Field (`AttestoOptions`) | Type | Default | Meaning |
+| Field (`AttestoMcpOptions`) | Type | Default | Meaning |
 | :-- | :-- | :-- | :-- |
 | `walletOrigin` | `string` | `http://localhost:${PORT ?? 3000}` | Absolute origin the wallet ceremony binds to (e.g. `https://shop.example`). Wallet ceremonies (OpenID4VP / WebAuthn) are origin-bound. A scheme-less value or a localhost origin **in production** logs a warning (never throws) and falls back to the localhost default. |
 | `store` | `VerificationStore` | `new MemoryVerificationStore()` | Per-order verification state. Pluggable (e.g. Redis) for serverless. |
 
-Read-only properties after construction: `attesto.walletOrigin` (string, trailing
-slash stripped) and `attesto.store` (the resolved `VerificationStore`).
+Read-only properties after construction: `attestomcp.walletOrigin` (string, trailing
+slash stripped) and `attestomcp.store` (the resolved `VerificationStore`).
 
 ```ts
-const attesto = new Attesto();                                  // local dev — zero config
-const attesto = new Attesto({ walletOrigin: "https://shop.example" });  // deployed
+const attestomcp = new AttestoMcp();                                  // local dev — zero config
+const attestomcp = new AttestoMcp({ walletOrigin: "https://shop.example" });  // deployed
 ```
 
-#### `attesto.requirements(order, policy)` — Context 1
+#### `attestomcp.requirements(order, policy)` — Context 1
 
 ```ts
 requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[]
@@ -78,22 +78,22 @@ exactly what the agent and the widget receive.
   predicate is true (absent ⇒ always).
 
 ```ts
-const requires = attesto.requirements(order, [
+const requires = attestomcp.requirements(order, [
   required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
   optional(membership.discount(10)),
   required(payment.in("usd")),   // sorted last regardless of position
 ]);
 ```
 
-#### `attesto.mount(app, ceremony?)` — Context 2
+#### `attestomcp.mount(app, ceremony?)` — Context 2
 
 ```ts
 mount(app: ExpressApp, ceremony?: MountCeremony): void
 ```
 
-Wires the verification ceremony's `/attesto/*` rails onto your Express app. `ExpressApp`
+Wires the verification ceremony's `/attestomcp/*` rails onto your Express app. `ExpressApp`
 is a minimal structural type (`{ locals: Record<string, unknown> }`) — the package keeps
-itself dependency-free and never imports `express`. Attesto injects **its own** per-order
+itself dependency-free and never imports `express`. AttestoMcp injects **its own** per-order
 `verificationStore` (keyed by order id, never process-global), so you never pass it.
 
 Three modes:
@@ -102,20 +102,20 @@ Three modes:
    (a `MountCeremony` = `Partial<CeremonySeams>` minus `verificationStore`). Validates
    the seams, **fails fast** on a missing required one, and attaches each rail.
 2. **Zero-arg compose** (the quickstart) — a composing host such as
-   `createStorefront()` has already published the seams on `app.locals.attesto`;
+   `createStorefront()` has already published the seams on `app.locals.attestomcp`;
    `mount()` reads them off and wires the rails with no explicit args, sharing the
    host's own `verificationStore` when it supplied one.
 3. **Legacy (no seams, none on `app.locals`)** — exposes the per-order store on
-   `app.locals.attesto` so a host's existing fail-closed routes resolve verification
-   *through* Attesto. Attaches no new routes.
+   `app.locals.attestomcp` so a host's existing fail-closed routes resolve verification
+   *through* AttestoMcp. Attaches no new routes.
 
 Once rails are mounted, subsequent `requirements()` calls emit approve links that
-resolve to the mounted `/attesto/*` routes.
+resolve to the mounted `/attestomcp/*` routes.
 
 ```ts
 const store = createStorefront();
-const attesto = new Attesto();
-attesto.mount(store.app);    // zero-arg compose — reads store.app.locals.attesto
+const attestomcp = new AttestoMcp();
+attestomcp.mount(store.app);    // zero-arg compose — reads store.app.locals.attestomcp
 ```
 
 ### Policy builders
@@ -269,11 +269,11 @@ clear(orderId: string): void
 
 ```ts
 import type {
-  AttestoOptions, GateOrder, OrderLine, Credential, Step, Effect,
+  AttestoMcpOptions, GateOrder, OrderLine, Credential, Step, Effect,
   VerificationManifestEntry, VerificationStore, VerificationRecord,
   TrustLevel, DcqlQuery, DcqlClaim, DcqlCredentialOption,
-} from "@openmobilehub/attesto-gate";
-import type { ExpressApp } from "@openmobilehub/attesto-gate";
+} from "@openmobilehub/attestomcp-gate";
+import type { ExpressApp } from "@openmobilehub/attestomcp-gate";
 ```
 
 ### `GateOrder` / `OrderLine` (input to `requirements()`)
@@ -407,11 +407,11 @@ envelope's wire shape is a tested contract; do not break it.
 import {
   gated, buildVerificationRequired, isVerificationRequired, envelopeInstruction,
   ageDcql, ENVELOPE_VERSION, ENVELOPE_SENTINEL,
-} from "@openmobilehub/attesto-gate";
+} from "@openmobilehub/attestomcp-gate";
 import type {
   VerificationRequired, BuildEnvelopeArgs, BuiltinKind,
   EasyGatePolicy, GateDeps, MinimalToolResult,
-} from "@openmobilehub/attesto-gate";
+} from "@openmobilehub/attestomcp-gate";
 ```
 
 | Symbol | Kind | Purpose |
@@ -421,9 +421,9 @@ import type {
 | `isVerificationRequired(value)` | function | Type guard — detect the envelope by its sentinel. |
 | `envelopeInstruction(...)` | function | The agent-facing instruction string describing how to resume. |
 | `ageDcql()` | function | The age DCQL (ISO 18013-5 mDL + EU PID) the verifier uses. |
-| `ENVELOPE_VERSION` | const | `"attesto.verification/v1"`. |
+| `ENVELOPE_VERSION` | const | `"attestomcp.verification/v1"`. |
 | `ENVELOPE_SENTINEL` | const | `"verification_required"` — the field an agent keys on. |
-| `VerificationRequired` | type | The envelope shape: `_attesto` sentinel, `version`, `order`, `reason`, `present { credential, min_age?, request, approve_url }`, resume info. |
+| `VerificationRequired` | type | The envelope shape: `_attestomcp` sentinel, `version`, `order`, `reason`, `present { credential, min_age?, request, approve_url }`, resume info. |
 | `BuiltinKind` | type | `"age" \| "membership" \| "payment"`. |
 
 > Mode A (consolidated checkout) is the v0.1 default; this envelope is the blocking shape
@@ -432,7 +432,7 @@ import type {
 
 ---
 
-## `@openmobilehub/attesto-storefront`
+## `@openmobilehub/attestomcp-storefront`
 
 The storefront core — a runnable MCP shopping server (nine tools + the widget bundle +
 a checkout page), **catalog-injected**, gate-ready. Two entry points: `.` (the pure
@@ -440,7 +440,7 @@ pricing/order model) and `./server` (the runnable server, brings in
 `@modelcontextprotocol/sdk` + `express`).
 
 ```ts
-import { createStorefront } from "@openmobilehub/attesto-storefront/server";
+import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
 ```
 
 ### `createStorefront(opts?)`
@@ -452,8 +452,8 @@ createStorefront(opts?: StorefrontOptions): Storefront
 Stands up the real MCP storefront over HTTP at `/mcp` around an injected catalog. The
 `checkout` tool is **ungated by default**; call `store.gate(resolve)` to have it surface a
 `requires` manifest. It pre-binds the gate's `completeOrder` over its own stores + catalog
-and publishes the ceremony seams on `store.app.locals.attesto`, so `new Attesto().mount(store.app)`
-wires the `/attesto/*` rails with zero glue.
+and publishes the ceremony seams on `store.app.locals.attestomcp`, so `new AttestoMcp().mount(store.app)`
+wires the `/attestomcp/*` rails with zero glue.
 
 #### `StorefrontOptions`
 
@@ -467,7 +467,7 @@ All optional.
 | `cartStore` | `CartStore` | in-memory | The cart store. |
 | `orderStore` | `OrderStore<CompletedOrderRecord>` | in-memory | Completed-order store (read by `get-order-status`). |
 | `createdOrderStore` | `OrderStore<Order>` | in-memory | Created-but-not-yet-completed orders, keyed by order id (read by the checkout page + place-order). Inject a shared store on multi-instance serverless. |
-| `verificationStore` | `VerificationStore` | in-memory | Per-order verification state the mounted ceremony writes; published on `app.locals.attesto` so the rails and the completion seam share the same per-order state. |
+| `verificationStore` | `VerificationStore` | in-memory | Per-order verification state the mounted ceremony writes; published on `app.locals.attestomcp` so the rails and the completion seam share the same per-order state. |
 | `signingKey` | `string` | — | Stable HMAC key for the ceremony's challenge nonce (e.g. `process.env.GATE_SECRET`). Required so an options→verify hop survives an instance split on serverless. |
 | `allowEphemeralKey` | `boolean` | `true` unless `signingKey` is set | Allow a per-process ephemeral signing key (single-process dev / tests). |
 | `settle` | `(order: CeremonyOrder) => Promise<Record<string, unknown> & { network: string; txId: string; status: string }>` | — | Optional demo-mode settlement seam (e.g. on-chain). **Throwing GATES completion** — a configured-but-failed settle records nothing and leaves the cart intact. |
@@ -476,7 +476,7 @@ All optional.
 
 ```ts
 interface Storefront {
-  app: Express;                                       // the Express app — pass to attesto.mount()
+  app: Express;                                       // the Express app — pass to attestomcp.mount()
   catalog: Product[];                                 // the resolved catalog
   gate(resolve: GateResolver): void;                  // attach the policy resolver
   listen(port?: number): Promise<{ url: string; port: number }>;  // default port 3005
@@ -486,10 +486,10 @@ interface Storefront {
 type GateResolver = (order: Order) => unknown[] | undefined;  // requires manifest, or undefined = ungated
 ```
 
-- **`app`** — the Express app; `attesto.mount(app)` reads the ceremony seams off
-  `app.locals.attesto`.
+- **`app`** — the Express app; `attestomcp.mount(app)` reads the ceremony seams off
+  `app.locals.attestomcp`.
 - **`gate(resolve)`** — register a resolver run on every `checkout` call. Return the
-  `requires` manifest (typically `attesto.requirements(order, policy)`) or `undefined`
+  `requires` manifest (typically `attestomcp.requirements(order, policy)`) or `undefined`
   to leave checkout ungated. The same resolver also enforces the gates server-side on the
   completion path (a direct POST of a gated order to the instant-demo path is refused).
 - **`listen(port?)`** — start the HTTP server (default `3005`); resolves to
@@ -498,10 +498,10 @@ type GateResolver = (order: Order) => unknown[] | undefined;  // requires manife
 
 ```ts
 const store = createStorefront();
-const attesto = new Attesto();
-attesto.mount(store.app);
+const attestomcp = new AttestoMcp();
+attestomcp.mount(store.app);
 store.gate((order) =>
-  attesto.requirements(order, [
+  attestomcp.requirements(order, [
     required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
     optional(membership.discount(10)),
     required(payment.in("usd")),
@@ -518,8 +518,8 @@ Pure, catalog-injected functions (no globals) — useful standalone or to fork:
 import {
   priceCart, createOrder, requiredAgeForLines, getProduct, getReviews,
   SAMPLE_CATALOG, LOYALTY_DISCOUNT_PCT,
-} from "@openmobilehub/attesto-storefront";
-import type { Product, Order, PricedCart, PricedCartLine, Review, PriceOpts } from "@openmobilehub/attesto-storefront";
+} from "@openmobilehub/attestomcp-storefront";
+import type { Product, Order, PricedCart, PricedCartLine, Review, PriceOpts } from "@openmobilehub/attestomcp-storefront";
 
 const cart = priceCart([{ productId: "oak-whiskey", quantity: 1 }], SAMPLE_CATALOG);
 cart.hasAgeRestricted;                              // true → wire the gate on checkout
@@ -531,7 +531,7 @@ order.total;                                       // 124
 
 Each product's `minimumAge` is the single field that ties the two packages together:
 `priceCart` re-derives it onto every priced line, so a storefront `Order` feeds
-`attesto.requirements()` directly. The gate's amount is **re-derived server-side from this
+`attestomcp.requirements()` directly. The gate's amount is **re-derived server-side from this
 catalog**, never trusted from the order token.
 
 ---

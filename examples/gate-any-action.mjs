@@ -1,6 +1,6 @@
 // "Gate ANY consequential action with ANY credential" — identity-first, NO checkout.
 //
-//   npm run build --workspaces       # build the @openmobilehub/attesto-* packages
+//   npm run build --workspaces       # build the @openmobilehub/attestomcp-* packages
 //   node examples/gate-any-action.mjs
 //
 // The storefront example gates a PURCHASE. This one gates a NON-commerce action — an MCP
@@ -10,10 +10,10 @@
 // It uses the Mode-B `verification_required` envelope: instead of performing the action, a
 // gated tool returns a TYPED REFUSAL the agent drives — share a link, the user proves the
 // credential on their phone, the agent re-calls and the action runs. The agent keys on the
-// `_attesto` sentinel (isVerificationRequired) and follows envelopeInstruction.
+// `_attestomcp` sentinel (isVerificationRequired) and follows envelopeInstruction.
 //
 // HONESTY: the envelope + the gating decision are real today. The user proves on the
-// `approve_url` PAGE that `attesto.mount()` serves (see examples/storefront.mjs for the full
+// `approve_url` PAGE that `attestomcp.mount()` serves (see examples/storefront.mjs for the full
 // ceremony); a fully page-LESS proving handshake is on the roadmap (ROADMAP.md). trust_level
 // is "presence-only-demo" — the wire crypto is real, the issuer trust anchor is not yet, so
 // don't put a presence-only gate in front of anything that needs a real safety guarantee.
@@ -22,7 +22,7 @@ import {
   buildVerificationRequired,
   isVerificationRequired,
   ageDcql,
-} from "@openmobilehub/attesto-gate";
+} from "@openmobilehub/attestomcp-gate";
 
 // A sensitive action an agent might be asked to perform — NOT a purchase. The gate is the
 // same shape you'd put in front of "approve-deploy", "file-prescription-refill", or
@@ -36,7 +36,7 @@ function releaseRecords(args, ctx) {
       credential: "age",
       minAge: 21,
       request: ageDcql(),
-      approveUrl: `https://example.test/attesto/credential?order=${args.requestId}&cred=age`,
+      approveUrl: `https://example.test/attestomcp/credential?order=${args.requestId}&cred=age`,
       gate: "Age over 21",
       detail: "Releasing these records requires proof the requester is 21 or older.",
       resumeTool: "get-record-status",
@@ -60,7 +60,7 @@ const instruction =
   `then re-call once \`${refusal.resume.tool}\` reports completion. Don't perform the action until then.`;
 console.log("  agent instruction:\n   ", instruction);
 
-// 2) After the user proves age on the approve_url page (which attesto.mount() serves), the
+// 2) After the user proves age on the approve_url page (which attestomcp.mount() serves), the
 //    agent re-calls the tool and the action runs — no payment ever involved.
 const ok = releaseRecords({ requestId: "REQ-1", subject: "patient-7" }, { ageVerified: true });
 console.log("\n— after the credential is proven —");

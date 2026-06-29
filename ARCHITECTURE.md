@@ -1,6 +1,6 @@
 # Architecture
 
-How Attesto is put together, for contributors. Attesto is **the consent layer for AI
+How AttestoMcp is put together, for contributors. AttestoMcp is **the consent layer for AI
 agents**: an AI agent must prove a verifiable credential from the user's phone wallet
 before a consequential action — a payment, an age gate, an access grant — completes.
 **Identity leads; payments is one application** of the same gate.
@@ -9,8 +9,8 @@ This repo is two npm packages:
 
 | Package | What it is | Public surface |
 | :-- | :-- | :-- |
-| [`@openmobilehub/attesto-gate`](../../packages/attesto-gate) | The Gate — the policy DSL, the `requirements()` resolver, and the `mount()` ceremony that serves the `/attesto/*` verification rails. | `new Attesto()`, `attesto.requirements(order, policy)`, `attesto.mount(app)` |
-| [`@openmobilehub/attesto-storefront`](../../packages/attesto-storefront) | The agentic storefront core — a runnable MCP shopping server (cart → priced cart → order, nine tools, a widget, a checkout page), catalog-injected. | `createStorefront()` |
+| [`@openmobilehub/attestomcp-gate`](../../packages/attestomcp-gate) | The Gate — the policy DSL, the `requirements()` resolver, and the `mount()` ceremony that serves the `/attestomcp/*` verification rails. | `new AttestoMcp()`, `attestomcp.requirements(order, policy)`, `attestomcp.mount(app)` |
+| [`@openmobilehub/attestomcp-storefront`](../../packages/attestomcp-storefront) | The agentic storefront core — a runnable MCP shopping server (cart → priced cart → order, nine tools, a widget, a checkout page), catalog-injected. | `createStorefront()` |
 
 The reference DEMO that runs both packages on every surface (Claude, ChatGPT, Goose,
 Claude Code) lives in the separate
@@ -30,17 +30,17 @@ linked, not duplicated here.
 
 ## How the two packages compose: publish-seams → read-seams → zero glue
 
-The packages stay decoupled. `attesto-gate` never imports `express`, a catalog, or any
-store — it operates over **structural** types. `attesto-storefront` is the *only* side that
-imports `attesto-gate`, and the pure pricing core (`attesto-storefront`'s `.` entry point)
-doesn't even do that. They meet at exactly one place: `app.locals.attesto`.
+The packages stay decoupled. `attestomcp-gate` never imports `express`, a catalog, or any
+store — it operates over **structural** types. `attestomcp-storefront` is the *only* side that
+imports `attestomcp-gate`, and the pure pricing core (`attestomcp-storefront`'s `.` entry point)
+doesn't even do that. They meet at exactly one place: `app.locals.attestomcp`.
 
 ```ts
-const store = createStorefront();   // stands up the MCP server; PUBLISHES seams on store.app.locals.attesto
-const attesto = new Attesto();
-attesto.mount(store.app);           // READS those seams off app.locals.attesto and wires /attesto/* — zero args
+const store = createStorefront();   // stands up the MCP server; PUBLISHES seams on store.app.locals.attestomcp
+const attestomcp = new AttestoMcp();
+attestomcp.mount(store.app);           // READS those seams off app.locals.attestomcp and wires /attestomcp/* — zero args
 store.gate((order) =>               // resolved on every checkout call (payment settles LAST)
-  attesto.requirements(order, [
+  attestomcp.requirements(order, [
     required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
     optional(membership.discount(10)),
     required(payment.in("usd")),
@@ -50,11 +50,11 @@ const { url } = await store.listen(3005);
 ```
 
 The "zero glue" is literal. `createStorefront()` pre-binds the ceremony seams over *its
-own* stores + catalog and assigns them to `app.locals.attesto`
-([`packages/attesto-storefront/src/server.ts`](../../packages/attesto-storefront/src/server.ts), `createStorefront`):
+own* stores + catalog and assigns them to `app.locals.attestomcp`
+([`packages/attestomcp-storefront/src/server.ts`](../../packages/attestomcp-storefront/src/server.ts), `createStorefront`):
 
 ```ts
-app.locals.attesto = {
+app.locals.attestomcp = {
   orderStore: ceremonyOrderStore,      // resolve a created order by id
   verificationStore,                   // per-order age/loyalty state (shared with completion)
   catalog: ceremonyCatalog,            // server-side re-pricing — the amount source of truth
@@ -64,16 +64,16 @@ app.locals.attesto = {
 };
 ```
 
-Then `new Attesto().mount(store.app)`, called with **no** ceremony argument, takes the
+Then `new AttestoMcp().mount(store.app)`, called with **no** ceremony argument, takes the
 "zero-arg compose" path
-([`packages/attesto-gate/src/client.ts`](../../packages/attesto-gate/src/client.ts), `Attesto.mount`): it sees
-`orderStore`, `catalog`, and `completion` already on `app.locals.attesto`, hands them to
+([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts), `AttestoMcp.mount`): it sees
+`orderStore`, `catalog`, and `completion` already on `app.locals.attestomcp`, hands them to
 `mountCeremony`, and — because the host already supplied its own `verificationStore` — uses
 *that* store so the rails write the exact per-order state the host's `completion` seam reads
-back (Security invariant 4). `Attesto` injects its own per-order store *only* when the host
+back (Security invariant 4). `AttestoMcp` injects its own per-order store *only* when the host
 didn't supply one.
 
-The relationship is intentionally one-directional and optional: `attesto-gate` is a pairing
+The relationship is intentionally one-directional and optional: `attestomcp-gate` is a pairing
 the storefront *can* mount, not a dependency the pricing core carries.
 
 ---
@@ -81,11 +81,11 @@ the storefront *can* mount, not a dependency the pricing core carries.
 ## The `mount()` injected-seam contract
 
 `mountCeremony(app, options)` is the heart of the Gate side
-([`packages/attesto-gate/src/ceremony/mount.ts`](../../packages/attesto-gate/src/ceremony/mount.ts)). It reads the
-seams the host provides — from `options` **or** from `app.locals.attesto`, options winning —
+([`packages/attestomcp-gate/src/ceremony/mount.ts`](../../packages/attestomcp-gate/src/ceremony/mount.ts)). It reads the
+seams the host provides — from `options` **or** from `app.locals.attestomcp`, options winning —
 **fails fast** when a load-bearing one is missing (never silently degrades), resolves a
-`CeremonyContext`, re-exposes the resolved seams back onto `app.locals.attesto` (so a re-mount
-is idempotent and the storefront's own routes resolve verification *through* Attesto), and
+`CeremonyContext`, re-exposes the resolved seams back onto `app.locals.attestomcp` (so a re-mount
+is idempotent and the storefront's own routes resolve verification *through* AttestoMcp), and
 registers each rail's routes.
 
 ### `CeremonySeams` — what the host injects
@@ -132,20 +132,20 @@ re-derived.
 ## The three rails + the dcql / request / verify / page / routes mirror pattern
 
 `mount()` registers a fixed list of rail registrars
-([`mount.ts`](../../packages/attesto-gate/src/ceremony/mount.ts), `RAILS`):
+([`mount.ts`](../../packages/attestomcp-gate/src/ceremony/mount.ts), `RAILS`):
 
 ```ts
 const RAILS: RailRegistrar[] = [registerCredentialGate, registerPasskeyGate, registerDcPaymentGate];
 ```
 
-| Rail (`/attesto/*`) | What it proves | Standard / crypto | Trust today |
+| Rail (`/attestomcp/*`) | What it proves | Standard / crypto | Trust today |
 | :-- | :-- | :-- | :-- |
 | `credential-gate` | Age (`age_over_21 === true`) / loyalty membership | OpenID4VP (Android Chrome) **+** org-iso-mdoc (iOS WebKit), one DCQL/doc-spec each | `presence-only-demo` |
 | `passkey` | A WebAuthn assertion → an AP2-shaped payment mandate | WebAuthn same-device + cross-device caBLE (`@simplewebauthn`) — **real cryptography** | real WebAuthn crypto |
 | `dc-payment` | An amount-bound payment presentation | Digital Credentials API + signed OpenID4VP with amount-bound `transaction_data` | `presence-only-demo` |
 
 Each rail is a **self-contained directory** under
-[`packages/attesto-gate/src/ceremony/`](../../packages/attesto-gate/src/ceremony/) that mirrors the same split.
+[`packages/attestomcp-gate/src/ceremony/`](../../packages/attestomcp-gate/src/ceremony/) that mirrors the same split.
 A new gate **mirrors this structure** rather than copying it:
 
 | File | Responsibility |
@@ -153,27 +153,27 @@ A new gate **mirrors this structure** rather than copying it:
 | `dcql.ts` | The DCQL query the wallet receives — doctype + claim leaves (selective disclosure, never-retain). The credential rail derives it from the package's own `credentials.ts` builders so the wire request and the policy layer can't drift. |
 | `request.ts` | Builds the **real** signed OpenID4VP request — a reader cert (`@peculiar/x509`), an ephemeral ECDH response-encryption key, a fresh nonce, ES256-signed (`jose.SignJWT`), with the reader context (key + nonce, and for payment the amount-bound `transaction_data`) sealed into a JWE for `verify`. |
 | `verify.ts` | The two-paths-one-policy verifier: an **instant-demo** claims path (the tested default, no wallet round-trip) and a **real presentation** path (JWE/ECDH-ES decrypt, nonce/origin binding, ISO-mdoc parse) — both feeding the *same* policy check / deterministic gates. |
-| `page.ts` | The server-rendered gate page, drawn through the shared design system ([`theme.ts`](../../packages/attesto-gate/src/ceremony/theme.ts)) so the whole ceremony reads as one branded flow. Drives `navigator.credentials.get({ digital })` synchronously inside the tap (a pre-fetched request, to keep the transient user-activation iOS WebKit needs). Every surface states `presence-only-demo`. |
+| `page.ts` | The server-rendered gate page, drawn through the shared design system ([`theme.ts`](../../packages/attestomcp-gate/src/ceremony/theme.ts)) so the whole ceremony reads as one branded flow. Drives `navigator.credentials.get({ digital })` synchronously inside the tap (a pre-fetched request, to keep the transient user-activation iOS WebKit needs). Every surface states `presence-only-demo`. |
 | `routes.ts` | The `RailRegistrar`. Wires `GET <page>`, `GET <…>/request`, `POST <…>/verify` onto the host app; resolves **every** route's order through `resolveOrder`; reads the verify body from a host parser *or* straight off the request stream (so the rail never requires `express.json()`); records a successful verification scoped to the order id; and completes through `ctx.completion`. |
 
 Concretely, by rail:
 
 - **`credential-gate/`** — `dcql.ts`, `request.ts`, `verify.ts`, `page.ts`, `routes.ts`, plus
   `doc-spec.ts` (the single ISO doctype the iOS org-iso-mdoc path requests) and
-  `mdoc-verify.ts` (the iOS HPKE-decrypt path). Routes: `/attesto/credential`,
-  `/attesto/credential/request`, `/attesto/credential/verify`.
+  `mdoc-verify.ts` (the iOS HPKE-decrypt path). Routes: `/attestomcp/credential`,
+  `/attestomcp/credential/request`, `/attestomcp/credential/verify`.
 - **`passkey/`** — `verify.ts`, `page.ts`, `routes.ts` (no `dcql`/`request` — WebAuthn options
   come straight from `@simplewebauthn/server`, and the AP2 mandate + four gates live in the
-  shared [`mandate.ts`](../../packages/attesto-gate/src/ceremony/mandate.ts)). Routes:
-  `/attesto/passkey`, `/attesto/passkey/options`, `/attesto/passkey/verify`, plus a
-  `use`-mounted `/attesto/lib/sw/*` that serves the `@simplewebauthn/browser` ESM same-origin
+  shared [`mandate.ts`](../../packages/attestomcp-gate/src/ceremony/mandate.ts)). Routes:
+  `/attestomcp/passkey`, `/attestomcp/passkey/options`, `/attestomcp/passkey/verify`, plus a
+  `use`-mounted `/attestomcp/lib/sw/*` that serves the `@simplewebauthn/browser` ESM same-origin
   (no CDN) with path-traversal containment.
 - **`dc-payment/`** — `dcql.ts`, `request.ts`, `verify.ts`, `page.ts`, `routes.ts`, plus
   `txData.ts` (the single source of truth for the amount-bound `transaction_data`). Routes:
-  `/attesto/dc-payment`, `/attesto/dc-payment/request`, `/attesto/dc-payment/verify`.
+  `/attestomcp/dc-payment`, `/attestomcp/dc-payment/request`, `/attestomcp/dc-payment/verify`.
 
 Shared, reused-not-copied helpers sit one level up: the ISO-mdoc machinery in
-[`ceremony/mdoc/`](../../packages/attesto-gate/src/ceremony/mdoc/) (`mdoc-iso.ts`, `reader.ts` with
+[`ceremony/mdoc/`](../../packages/attestomcp-gate/src/ceremony/mdoc/) (`mdoc-iso.ts`, `reader.ts` with
 `makeReaderCert` / `makeEncryptionKey`, `readerContext.ts`), the AP2 mandate + the four
 deterministic gates in `mandate.ts`, origin derivation in `origin.ts`, and the stateless
 signed challenge in `challengeToken.ts`. A new rail reuses these rather than re-implementing
@@ -185,7 +185,7 @@ them.
 
 There is exactly **one** completion path. Both payment rails (`passkey`, `dc-payment`) call
 `ctx.completion(input)`; the host binds that seam to the package's `completeOrder`
-([`ceremony/completion.ts`](../../packages/attesto-gate/src/ceremony/completion.ts)) over its own stores. This is
+([`ceremony/completion.ts`](../../packages/attestomcp-gate/src/ceremony/completion.ts)) over its own stores. This is
 where the load-bearing security invariants are enforced once, for all rails, in order:
 
 1. **Gates.** Every deterministic gate in the mandate must pass, else refuse — recording
@@ -221,11 +221,11 @@ to prove) or a *rail* (a new ceremony surface).
 
 Most extensions are just a new credential the existing credential rail already knows how to
 serve. Define it with `defineCredential` + `dcql` + an effect builder
-([`packages/attesto-gate/src/credentials.ts`](../../packages/attesto-gate/src/credentials.ts)) and drop it into the
+([`packages/attestomcp-gate/src/credentials.ts`](../../packages/attestomcp-gate/src/credentials.ts)) and drop it into the
 same policy array — no registration step:
 
 ```ts
-import { defineCredential, dcql, gate, required } from "@openmobilehub/attesto-gate";
+import { defineCredential, dcql, gate, required } from "@openmobilehub/attestomcp-gate";
 
 const prescription = defineCredential({
   id: "prescription",
@@ -235,7 +235,7 @@ const prescription = defineCredential({
   appliesTo: (order) => order.lines.some((l) => l.requiresRx),
   ui: { label: "Prescription", action: "Verify prescription" },
 });
-// …then: required(prescription) in the policy you pass to attesto.requirements(order, policy)
+// …then: required(prescription) in the policy you pass to attestomcp.requirements(order, policy)
 ```
 
 The three effect builders — `gate()`, `discount({ percent })`, `authorize()` — are the only

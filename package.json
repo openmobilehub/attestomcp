@@ -1,12 +1,12 @@
 {
-  "name": "attesto",
+  "name": "attestomcp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Attesto — the consent layer for AI agents (@openmobilehub/attesto-* packages)",
+  "description": "AttestoMcp — the consent layer for AI agents (@openmobilehub/attestomcp-* packages)",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/openmobilehub/attesto",
-  "repository": { "type": "git", "url": "https://github.com/openmobilehub/attesto.git" },
+  "homepage": "https://github.com/openmobilehub/attestomcp",
+  "repository": { "type": "git", "url": "https://github.com/openmobilehub/attestomcp.git" },
   "workspaces": [
     "packages/*"
   ],
