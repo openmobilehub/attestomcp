@@ -7,6 +7,7 @@
 // settle means authorized-but-not-completed (no record, cart intact — FR-013).
 import type { VerificationStore } from "../types.js";
 import type { CartItemRef, CeremonyCatalog, CompletionInput, CompletionResult, GateOutcome } from "./types.js";
+import { verifyCartMandate } from "./cartMandate.js";
 
 // One on-chain (demo-mode) settlement backing a completed order. Kept structural
 // so the demo's richer SettlementRecord is assignable without the package taking
@@ -51,6 +52,10 @@ export interface CompletionContext {
   cart?: ClearableCart;
   /** Optional demo-mode settlement; throwing GATES completion (no record). */
   settle?: (order: CompletionInput["order"]) => Promise<SettlementRecordLike>;
+  /** Optional HMAC key for Cart Mandate verification. When set AND the input carries a
+   *  `cartMandate`, completion verifies it (signature + order-id binding + expiry)
+   *  before re-pricing. Absent ⇒ the cart-mandate check is skipped (additive). */
+  signingKey?: string;
 }
 
 export async function completeOrder(input: CompletionInput, ctx: CompletionContext): Promise<CompletionResult> {
@@ -66,6 +71,17 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
   const existing = await ctx.records.read(input.order.id);
   if (existing) {
     return { completed: true, ...(existing.settlement ? { settlement: existing.settlement } : {}) };
+  }
+
+  // Cart Mandate integrity (additive, fail-closed): if a signed cart mandate rode along
+  // AND we hold the key, verify it BEFORE re-pricing — a tampered, replayed (wrong-order)
+  // or expired cart is refused here with an explicit reason. The catalog STILL re-derives
+  // the price below; the signature proves the server issued the cart, not the price
+  // (invariant 2). A valid-signature-but-wrong-price mandate therefore still fails the
+  // re-price check — the mandate is defense-in-depth, never a substitute for it.
+  if (input.cartMandate && ctx.signingKey) {
+    const verdict = verifyCartMandate(input.cartMandate, input.order.id, ctx.signingKey);
+    if (!verdict.ok) return { completed: false, reason: "cart-mandate" };
   }
 
   // Invariant 2: never trust the order token — re-price the lines against the

@@ -5,6 +5,7 @@
 //
 // The seam CONTRACT (CeremonySeams / CeremonyContext) lives in mount.ts; this
 // file holds the entities those seams pass around.
+import type { CartMandate } from "./cartMandate.js";
 
 import type { SettlementRecordLike } from "./completion.js";
 
@@ -93,16 +94,22 @@ export interface CompletionInput {
   method: string;
   instrument?: unknown;
   gates: GateOutcome[];
+  /** Optional signed Cart Mandate (ap2.CartMandate). When present AND the context has a
+   *  `signingKey`, completion verifies it (signature + order-id binding + expiry) BEFORE
+   *  re-pricing and refuses a tampered/replayed/expired cart — additive, fail-closed
+   *  defense-in-depth; the catalog stays the price authority either way. */
+  cartMandate?: CartMandate;
 }
 
 export interface CompletionResult {
   completed: boolean;
   settlement?: SettlementRecordLike;
   settlementError?: string;
-  /** Why a non-completion happened — a failed ceremony ("gates"), a tampered token
-   *  re-priced against the catalog ("reprice"), or an age-restricted order with no
-   *  proven per-order age claim ("age"). */
-  reason?: "gates" | "reprice" | "age";
+  /** Why a non-completion happened — a failed ceremony ("gates"), a tampered/replayed/
+   *  expired Cart Mandate ("cart-mandate"), a tampered token re-priced against the
+   *  catalog ("reprice"), or an age-restricted order with no proven per-order age
+   *  claim ("age"). */
+  reason?: "gates" | "cart-mandate" | "reprice" | "age";
 }
 
 /**
