@@ -1,6 +1,6 @@
 # Roadmap
 
-Attesto is **the consent layer for AI agents**: an agent proves a verifiable credential
+AttestoMcp is **the consent layer for AI agents**: an agent proves a verifiable credential
 from the user's wallet before a consequential action completes. **Identity leads; payments
 is one application.** This roadmap is honest about exactly what binds cryptographically
 **today** versus what's next — because a consent layer is only useful if you can trust its
@@ -8,10 +8,10 @@ claims about itself.
 
 ## Shipping (v0.1)
 
-- **Mode A — consolidated checkout.** `createStorefront()` + `new Attesto().mount(app)` +
+- **Mode A — consolidated checkout.** `createStorefront()` + `new AttestoMcp().mount(app)` +
   `store.gate(policy)`. The agent's tool mints one checkout link and reports a serializable
   `requires` manifest; the buyer proves everything in one browser session on the mounted
-  `/attesto/*` rails; a poll reports completion. (See [the three execution
+  `/attestomcp/*` rails; a poll reports completion. (See [the three execution
   contexts](./docs/reference/execution-contexts.md).)
 - **The policy model.** `required(...)`/`optional(...)` over `age.over(n)`,
   `membership.discount(n)`, `payment.in(cur)`, with `.when((order) => …)` conditionals;

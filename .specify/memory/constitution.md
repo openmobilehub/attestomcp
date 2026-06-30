@@ -1,7 +1,7 @@
 <!--
 Sync Impact Report
 - Version change: (unratified template) → 1.0.0
-- Bump rationale: initial ratification of the Attesto SDK constitution.
+- Bump rationale: initial ratification of the AttestoMcp SDK constitution.
 - Principles: initial set — I. Stripe-grade, MCP-idiomatic API · II. The three execution contexts are
   sacred · III. Consolidated checkout flow · IV. One ordered, conditional policy array · V. Extensible to
   any credential · VI. structuredContent is data, not policy · VII. Honesty in the types; prefer simplicity
@@ -18,16 +18,16 @@ Sync Impact Report
 - Deferred TODOs: none
 -->
 
-# Attesto SDK Constitution
+# AttestoMcp SDK Constitution
 
-Attesto is the open consent layer for AI agents: an agent MUST prove a verifiable credential from the
+AttestoMcp is the open consent layer for AI agents: an agent MUST prove a verifiable credential from the
 user's phone wallet before a consequential MCP tool completes. Identity leads; payments is one application.
 These articles are non-negotiable — a change that violates one is blocking, even in demo code.
 
 ## Core Principles
 
 ### I. Stripe-grade, MCP-idiomatic API
-The public API MUST be configured once on a client (`new Attesto({...})`) and then driven by declarative
+The public API MUST be configured once on a client (`new AttestoMcp({...})`) and then driven by declarative
 calls. Examples MUST show the MCP `inputSchema` inline so a handler's destructured fields trace to it, and
 every value's origin MUST be visible on the page — NO injected-callback grab-bags, hidden config
 variables, or mystery handler parameters. Rationale: a developer reads it once and understands it; the
@@ -102,7 +102,7 @@ be fenced behind a demo-only mode and MUST NOT be presented as a real safety con
 
 ## Governance
 
-This constitution supersedes other practices for the Attesto SDK. Amendments MUST be made by editing this
+This constitution supersedes other practices for the AttestoMcp SDK. Amendments MUST be made by editing this
 file with a written rationale, MUST bump the version per the policy below, and MUST keep the dependent Spec
 Kit templates (`plan`, `spec`, `tasks`) in sync. Every plan's Constitution Check and every review MUST
 verify compliance with these articles; a deviation MUST be justified in writing, or the change is blocked.
