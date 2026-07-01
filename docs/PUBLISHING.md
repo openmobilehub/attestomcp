@@ -1,11 +1,11 @@
-# Publishing the AttestoMcp packages
+# Publishing the AttestoMCP packages
 
 Release checklist for the two npm packages extracted from this repo:
 
-- **`@openmobilehub/attestomcp-gate`** — the credential/payment Gate (`new AttestoMcp()`, `attestomcp.mount(app)`).
+- **`@openmobilehub/attestomcp-gate`** — the credential/payment Gate (`new AttestoMCP()`, `attestomcp.mount(app)`).
 - **`@openmobilehub/attestomcp-storefront`** — the reference storefront (`createStorefront()`).
 
-Both are at `0.1.0`, Apache-2.0, ESM, ship their own types, and declare `publishConfig.access: public`
+Both are at `0.2.0`, Apache-2.0, ESM, ship their own types, and declare `publishConfig.access: public`
 (required for a scoped public package).
 
 ## Pre-flight (verified by the pre-publish audit)
@@ -25,10 +25,10 @@ Both are at `0.1.0`, Apache-2.0, ESM, ship their own types, and declare `publish
 ## Publish order (load-bearing)
 
 `@openmobilehub/attestomcp-storefront` depends on `@openmobilehub/attestomcp-gate` via a semver range
-(`^0.1.0`, **not** `workspace:*`), so it only resolves once the gate is on the registry:
+(`^0.2.0`, **not** `workspace:*`), so it only resolves once the gate is on the registry:
 
-1. Publish **`@openmobilehub/attestomcp-gate@0.1.0`** first.
-2. Then publish **`@openmobilehub/attestomcp-storefront@0.1.0`**.
+1. Publish **`@openmobilehub/attestomcp-gate@0.2.0`** first.
+2. Then publish **`@openmobilehub/attestomcp-storefront@0.2.0`**.
 
 ```bash
 npm run build:packages                                   # build both dist/

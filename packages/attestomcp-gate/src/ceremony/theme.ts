@@ -1,4 +1,4 @@
-// theme.ts — the SHARED AttestoMcp design system for the browser ceremony flow.
+// theme.ts — the SHARED AttestoMCP design system for the browser ceremony flow.
 //
 // The checkout hub (checkout-page.ts) and the two gate pages (credential-gate/page.ts,
 // dc-payment/page.ts) all render through THIS module so they read as ONE branded flow:
@@ -327,5 +327,5 @@ export function progressRail(steps: RailStep[], currentIndex: number): string {
  * tests) — the wire crypto is real; the issuer trust anchor is not.
  */
 export function trustFooter(): string {
-  return `<div class="trust"><div class="trust-line">🔒 presence-only-demo · secured by AttestoMcp · the wire crypto is real; issuer trust anchor is not</div></div>`;
+  return `<div class="trust"><div class="trust-line">🔒 presence-only-demo · secured by AttestoMCP · the wire crypto is real; issuer trust anchor is not</div></div>`;
 }

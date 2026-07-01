@@ -19,7 +19,7 @@
 
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
 import {
-  AttestoMcp,
+  AttestoMCP,
   age,
   membership,
   payment,
@@ -67,7 +67,7 @@ const catalog = [
 ];
 
 const store = createStorefront({ catalog, signingKey: process.env.GATE_SECRET });
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app); // …reads the seams + wires the /attestomcp/* ceremony rails
 
 // ── The custom credential — defined by OBJECT, no registration (Principle V) ──
@@ -114,7 +114,7 @@ store.gate((order) =>
 // run server-side HERE and never cross the wire (Principle VI).
 
 const { url } = await store.listen(Number(process.env.PORT ?? 3006));
-console.log(`\n  ✓ AttestoMcp custom-credential storefront running → ${url}`);
+console.log(`\n  ✓ AttestoMCP custom-credential storefront running → ${url}`);
 console.log("  Add it to Goose as a Streamable HTTP connector, then try:");
 console.log('    "buy the amoxicillin"  → the Prescription gate is surfaced (appliesTo: Pharmacy)');
 console.log('    "buy the ibuprofen"    → NO prescription gate (OTC line)');

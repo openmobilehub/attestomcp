@@ -1,13 +1,13 @@
 # API reference
 
-The public API of the two AttestoMcp packages, grounded in the actual exports.
+The public API of the two AttestoMCP packages, grounded in the actual exports.
 
-- **`@openmobilehub/attestomcp-gate`** — the Gate: `new AttestoMcp()`, the policy
+- **`@openmobilehub/attestomcp-gate`** — the Gate: `new AttestoMCP()`, the policy
   builders, the credential model, the stores, and the honesty types.
 - **`@openmobilehub/attestomcp-storefront`** — the storefront core: `createStorefront()`
   and its options.
 
-AttestoMcp is the **consent layer for AI agents**: an AI agent must prove a verifiable
+AttestoMCP is the **consent layer for AI agents**: an AI agent must prove a verifiable
 credential from the user's phone wallet before a consequential action — a payment, an
 age gate, an access grant — completes. **Identity leads; payments is one application.**
 
@@ -28,7 +28,7 @@ age gate, an access grant — completes. **Identity leads; payments is one appli
 
 ```ts
 import {
-  AttestoMcp,
+  AttestoMCP,
   age, membership, payment,
   required, optional,
   defineCredential, dcql, gate, discount, authorize,
@@ -36,16 +36,16 @@ import {
 } from "@openmobilehub/attestomcp-gate";
 ```
 
-### `class AttestoMcp`
+### `class AttestoMCP`
 
 The configure-once client. Construct with your wallet origin (or zero-config for local
 dev), then make declarative calls.
 
 ```ts
-new AttestoMcp(opts?: AttestoMcpOptions)
+new AttestoMCP(opts?: AttestoMCPOptions)
 ```
 
-| Field (`AttestoMcpOptions`) | Type | Default | Meaning |
+| Field (`AttestoMCPOptions`) | Type | Default | Meaning |
 | :-- | :-- | :-- | :-- |
 | `walletOrigin` | `string` | `http://localhost:${PORT ?? 3000}` | Absolute origin the wallet ceremony binds to (e.g. `https://shop.example`). Wallet ceremonies (OpenID4VP / WebAuthn) are origin-bound. A scheme-less value or a localhost origin **in production** logs a warning (never throws) and falls back to the localhost default. |
 | `store` | `VerificationStore` | `new MemoryVerificationStore()` | Per-order verification state. Pluggable (e.g. Redis) for serverless. |
@@ -54,8 +54,8 @@ Read-only properties after construction: `attestomcp.walletOrigin` (string, trai
 slash stripped) and `attestomcp.store` (the resolved `VerificationStore`).
 
 ```ts
-const attestomcp = new AttestoMcp();                                  // local dev — zero config
-const attestomcp = new AttestoMcp({ walletOrigin: "https://shop.example" });  // deployed
+const attestomcp = new AttestoMCP();                                  // local dev — zero config
+const attestomcp = new AttestoMCP({ walletOrigin: "https://shop.example" });  // deployed
 ```
 
 #### `attestomcp.requirements(order, policy)` — Context 1
@@ -93,7 +93,7 @@ mount(app: ExpressApp, ceremony?: MountCeremony): void
 
 Wires the verification ceremony's `/attestomcp/*` rails onto your Express app. `ExpressApp`
 is a minimal structural type (`{ locals: Record<string, unknown> }`) — the package keeps
-itself dependency-free and never imports `express`. AttestoMcp injects **its own** per-order
+itself dependency-free and never imports `express`. AttestoMCP injects **its own** per-order
 `verificationStore` (keyed by order id, never process-global), so you never pass it.
 
 Three modes:
@@ -107,14 +107,14 @@ Three modes:
    host's own `verificationStore` when it supplied one.
 3. **Legacy (no seams, none on `app.locals`)** — exposes the per-order store on
    `app.locals.attestomcp` so a host's existing fail-closed routes resolve verification
-   *through* AttestoMcp. Attaches no new routes.
+   *through* AttestoMCP. Attaches no new routes.
 
 Once rails are mounted, subsequent `requirements()` calls emit approve links that
 resolve to the mounted `/attestomcp/*` routes.
 
 ```ts
 const store = createStorefront();
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app);    // zero-arg compose — reads store.app.locals.attestomcp
 ```
 
@@ -269,7 +269,7 @@ clear(orderId: string): void
 
 ```ts
 import type {
-  AttestoMcpOptions, GateOrder, OrderLine, Credential, Step, Effect,
+  AttestoMCPOptions, GateOrder, OrderLine, Credential, Step, Effect,
   VerificationManifestEntry, VerificationStore, VerificationRecord,
   TrustLevel, DcqlQuery, DcqlClaim, DcqlCredentialOption,
 } from "@openmobilehub/attestomcp-gate";
@@ -452,7 +452,7 @@ createStorefront(opts?: StorefrontOptions): Storefront
 Stands up the real MCP storefront over HTTP at `/mcp` around an injected catalog. The
 `checkout` tool is **ungated by default**; call `store.gate(resolve)` to have it surface a
 `requires` manifest. It pre-binds the gate's `completeOrder` over its own stores + catalog
-and publishes the ceremony seams on `store.app.locals.attestomcp`, so `new AttestoMcp().mount(store.app)`
+and publishes the ceremony seams on `store.app.locals.attestomcp`, so `new AttestoMCP().mount(store.app)`
 wires the `/attestomcp/*` rails with zero glue.
 
 #### `StorefrontOptions`
@@ -498,7 +498,7 @@ type GateResolver = (order: Order) => unknown[] | undefined;  // requires manife
 
 ```ts
 const store = createStorefront();
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app);
 store.gate((order) =>
   attestomcp.requirements(order, [

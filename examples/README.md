@@ -1,18 +1,18 @@
-# AttestoMcp examples
+# AttestoMCP examples
 
 ## `storefront.mjs` — a credential-gated storefront in ~8 lines
 
 A minimal, runnable agentic storefront you add to **Goose** (or any MCP host) as an HTTP connector and
 watch the gate fire. The storefront is a one-line black box — `createStorefront()` ships the catalog +
-`browse-products` / `checkout` / `get-order-status` tools over HTTP — and **AttestoMcp mounts onto it**:
+`browse-products` / `checkout` / `get-order-status` tools over HTTP — and **AttestoMCP mounts onto it**:
 
 ```ts
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 const store = createStorefront();                 // the whole storefront — nothing to configure
-const attestomcp = new AttestoMcp();
-attestomcp.mount(store.app);                          // AttestoMcp mounts onto it
+const attestomcp = new AttestoMCP();
+attestomcp.mount(store.app);                          // AttestoMCP mounts onto it
 store.gate((order) => attestomcp.requirements(order, [
   required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
   optional(membership.discount(10)),

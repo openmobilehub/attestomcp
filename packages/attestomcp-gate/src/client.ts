@@ -2,13 +2,13 @@
 // then declarative calls. `requirements(order, policy)` resolves a policy to the
 // serializable manifest (Context 1); `mount(app)` is the Context-2 seam.
 
-import type { AttestoMcpOptions, GateOrder, Step, VerificationManifestEntry, VerificationStore } from "./types.js";
+import type { AttestoMCPOptions, GateOrder, Step, VerificationManifestEntry, VerificationStore } from "./types.js";
 import { resolveRequirements } from "./manifest.js";
 import { MemoryVerificationStore } from "./store.js";
 import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/mount.js";
 
 /** The ceremony seams the host supplies to `mount()`; the per-order
- *  verification store is AttestoMcp's own, so the host never passes it here. */
+ *  verification store is AttestoMCP's own, so the host never passes it here. */
 export type MountCeremony = Omit<Partial<CeremonySeams>, "verificationStore">;
 
 /**
@@ -19,10 +19,10 @@ export interface ExpressApp {
   locals: Record<string, unknown>;
 }
 
-/** Zero-config default so `new AttestoMcp()` works for local dev. */
+/** Zero-config default so `new AttestoMCP()` works for local dev. */
 const DEFAULT_WALLET_ORIGIN = `http://localhost:${process.env.PORT ?? 3000}`;
 
-export class AttestoMcp {
+export class AttestoMCP {
   readonly walletOrigin: string;
   readonly store: VerificationStore;
   // True once the ceremony rails are wired onto a host app (so `/attestomcp/*` routes
@@ -30,7 +30,7 @@ export class AttestoMcp {
   // to those mounted routes rather than the legacy `/credential-gate/*` shape.
   private mountedRoutes = false;
 
-  constructor(opts: AttestoMcpOptions = {}) {
+  constructor(opts: AttestoMCPOptions = {}) {
     let origin = opts.walletOrigin?.trim();
     if (!origin) {
       // Zero-config: default to localhost so the getting-started example just runs.
@@ -70,13 +70,13 @@ export class AttestoMcp {
    *
    * Pass the ceremony seams (`{ orderStore, catalog, completion, signingKey, … }`)
    * to register the gate's routes through `mountCeremony`: it validates the seams,
-   * FAILS FAST on a missing required one (CT2), and attaches each rail. AttestoMcp's
+   * FAILS FAST on a missing required one (CT2), and attaches each rail. AttestoMCP's
    * own per-order store is injected as the `verificationStore` (keyed by order id,
    * never process-global — Security invariant 4), so the host never passes it.
    *
    * Called WITHOUT seams it keeps the v0.1 behavior: expose the per-order store
    * via `app.locals.attestomcp` so a host's existing fail-closed `/credential-gate/*`
-   * routes resolve verification state THROUGH AttestoMcp. The rails register only
+   * routes resolve verification state THROUGH AttestoMCP. The rails register only
    * when seams are supplied; with none extracted yet, that path attaches no routes.
    */
   mount(app: ExpressApp, ceremony?: MountCeremony): void {
@@ -89,7 +89,7 @@ export class AttestoMcp {
     // already populated the ceremony seams on `app.locals.attestomcp`. Wire the rails
     // straight from those seams — including the host's OWN verificationStore when it
     // supplied one, so its `completion` seam shares the exact per-order state the
-    // rails write (invariant 4). Falls back to AttestoMcp's own store otherwise.
+    // rails write (invariant 4). Falls back to AttestoMCP's own store otherwise.
     const locals = (app.locals.attestomcp ?? {}) as Partial<CeremonySeams>;
     if (locals.orderStore && locals.catalog && locals.completion) {
       mountCeremony(app as CeremonyApp, locals.verificationStore ? {} : { verificationStore: this.store });
@@ -97,7 +97,7 @@ export class AttestoMcp {
       return;
     }
     // Legacy (no seams): expose the per-order store so a host's existing
-    // fail-closed routes resolve verification THROUGH AttestoMcp.
+    // fail-closed routes resolve verification THROUGH AttestoMCP.
     const existing = app.locals.attestomcp as { store?: VerificationStore } | undefined;
     if (existing?.store === this.store) return; // idempotent
     app.locals.attestomcp = { store: this.store, walletOrigin: this.walletOrigin };

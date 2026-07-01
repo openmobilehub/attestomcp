@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "AttestoMcp — the consent layer for AI agents (@openmobilehub/attestomcp-* packages)",
+  "description": "AttestoMCP — the consent layer for AI agents (@openmobilehub/attestomcp-* packages)",
   "license": "Apache-2.0",
   "homepage": "https://github.com/openmobilehub/attestomcp",
   "repository": { "type": "git", "url": "https://github.com/openmobilehub/attestomcp.git" },

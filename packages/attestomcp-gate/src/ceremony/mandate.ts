@@ -19,7 +19,7 @@ function round2(n: number): number {
 // The demo's whole-cart loyalty discount; the host can override via runGates opts.
 export const DEFAULT_LOYALTY_DISCOUNT_PCT = 10;
 const DEFAULT_ISSUER = "did:web:attestomcp.local";
-const DEFAULT_PAYEE_NAME = "AttestoMcp Gate Demo";
+const DEFAULT_PAYEE_NAME = "AttestoMCP Gate Demo";
 
 export interface BindingFields {
   amount: number;

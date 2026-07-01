@@ -1,6 +1,6 @@
 # Getting started
 
-AttestoMcp is **the consent layer for AI agents**: before a consequential MCP tool
+AttestoMCP is **the consent layer for AI agents**: before a consequential MCP tool
 completes — a payment, an age gate, an access grant — the agent must prove a
 **verifiable credential** from the user's phone wallet. Identity leads; payments
 is just one application. `age.over(21)`, a loyalty membership, a prescription, and
@@ -10,7 +10,7 @@ This page stands up a credential-gated agentic storefront in about ten lines and
 connects it to an MCP host. Two npm packages compose with zero glue:
 
 - **[`@openmobilehub/attestomcp-gate`](https://www.npmjs.com/package/@openmobilehub/attestomcp-gate)** — the Gate.
-  `new AttestoMcp()`, `attestomcp.mount(app)`, the policy builders (`age` / `membership` /
+  `new AttestoMCP()`, `attestomcp.mount(app)`, the policy builders (`age` / `membership` /
   `payment` / `defineCredential`), and the real `/attestomcp/*` ceremony rails.
 - **[`@openmobilehub/attestomcp-storefront`](https://www.npmjs.com/package/@openmobilehub/attestomcp-storefront)** — a runnable
   MCP shopping server, catalog-injected. `createStorefront()` ships the cart →
@@ -43,16 +43,16 @@ entry points: `.` (the pure pricing/order model, dependency-light) and `./server
 
 `createStorefront()` stands up the real MCP server (the shopping tools, a widget
 resource, a checkout page) over HTTP at `/mcp`, and publishes ceremony seams on
-`store.app.locals.attestomcp`. `new AttestoMcp().mount(store.app)` reads those seams and
+`store.app.locals.attestomcp`. `new AttestoMCP().mount(store.app)` reads those seams and
 wires the real `/attestomcp/*` ceremony rails onto the same server. `store.gate()`
 resolves your policy on every `checkout` call.
 
 ```ts
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 const store = createStorefront();                  // the whole storefront — one line
-const attestomcp = new AttestoMcp();                     // zero-config (defaults to http://localhost:3000)
+const attestomcp = new AttestoMCP();                     // zero-config (defaults to http://localhost:3000)
 attestomcp.mount(store.app);                          // wires the real /attestomcp/* ceremony rails
 
 store.gate((order) =>                              // resolved on every checkout (payment settles LAST)
@@ -64,7 +64,7 @@ store.gate((order) =>                              // resolved on every checkout
 );
 
 const { url } = await store.listen(3005);          // → http://localhost:3005/mcp
-console.log(`AttestoMcp-gated storefront running → ${url}`);
+console.log(`AttestoMCP-gated storefront running → ${url}`);
 ```
 
 What each line does:
@@ -72,8 +72,8 @@ What each line does:
 - `createStorefront()` — the storefront, catalog-injected. With no `catalog` passed
   it serves a built-in `SAMPLE_CATALOG` that includes one 21+ item (whiskey) so it
   demos itself. The return value is `{ app, catalog, gate, listen, mcpServer }`.
-- `new AttestoMcp()` — the Gate client, zero-config. For a deployment, pass your public
-  origin: `new AttestoMcp({ walletOrigin: "https://shop.example" })`.
+- `new AttestoMCP()` — the Gate client, zero-config. For a deployment, pass your public
+  origin: `new AttestoMCP({ walletOrigin: "https://shop.example" })`.
 - `attestomcp.mount(store.app)` — wires the `/attestomcp/*` ceremony routes (passkey,
   credential, dc-payment) onto the storefront's Express app.
 - `store.gate((order) => …)` — registers your policy resolver. It runs on every
@@ -120,7 +120,7 @@ Add that URL as a remote MCP connector in any host:
   HTTP)** → URL `http://localhost:3005/mcp`.
 - **Claude / ChatGPT** — add it as a remote MCP / custom connector pointing at
   `http://localhost:3005/mcp`. (For hosts that only accept a public HTTPS endpoint,
-  deploy the server and pass your origin to `new AttestoMcp({ walletOrigin: "https://…" })`.)
+  deploy the server and pass your origin to `new AttestoMCP({ walletOrigin: "https://…" })`.)
 
 Then drive the flow from chat:
 
@@ -136,7 +136,7 @@ prove age → present membership → authorize payment — recorded so the agent
 
 ## How the flow is split (the three execution contexts)
 
-The split is load-bearing — AttestoMcp enforces it, and conflating the contexts is the
+The split is load-bearing — AttestoMCP enforces it, and conflating the contexts is the
 documented root cause of confusion. v0.1 is consolidated **Mode A**:
 
 1. **Tool — mints the link + reports requirements.** Your `checkout` handler runs once

@@ -4,7 +4,7 @@
 // consequential MCP tool completes. Identity leads; payments is one application.
 //
 // The v0.1 surface (consolidated Mode A):
-//   • new AttestoMcp({ walletOrigin })            — configure once
+//   • new AttestoMCP({ walletOrigin })            — configure once
 //   • attestomcp.requirements(order, policy)      — Context 1: policy → serializable manifest
 //   • attestomcp.mount(app)                       — Context 2: ceremony seam
 //   • required/optional over age/membership/payment builders, .when() conditional
@@ -13,7 +13,7 @@
 // roadmap blocking primitive (page-less tools); see ROADMAP.
 
 // ── Client ───────────────────────────────────────────────────────────────
-export { AttestoMcp } from "./client.js";
+export { AttestoMCP } from "./client.js";
 export type { ExpressApp } from "./client.js";
 
 // ── Policy builders + extensibility ────────────────────────────────────────
@@ -85,7 +85,7 @@ export type {
 
 // ── Public types ───────────────────────────────────────────────────────────
 export type {
-  AttestoMcpOptions,
+  AttestoMCPOptions,
   GateOrder,
   OrderLine,
   Credential,

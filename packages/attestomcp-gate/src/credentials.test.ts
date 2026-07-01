@@ -3,11 +3,11 @@
 // "gate ANY credential" promise (Principle V), not just the three built-ins.
 
 import { describe, it, expect } from "vitest";
-import { AttestoMcp } from "./client.js";
+import { AttestoMCP } from "./client.js";
 import { defineCredential, dcql, gate, required } from "./credentials.js";
 import type { GateOrder } from "./types.js";
 
-const attestomcp = new AttestoMcp({ walletOrigin: "https://shop.example" });
+const attestomcp = new AttestoMCP({ walletOrigin: "https://shop.example" });
 
 const prescription = defineCredential({
   id: "prescription",

@@ -8,7 +8,7 @@ import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createStorefront, originFromRequest, type Storefront } from "./server.js";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 import type { Request } from "express";
 
 const mockReq = (headers: Record<string, string>, protocol = "http"): Request =>
@@ -120,7 +120,7 @@ describe("checkout completion round-trip — the HTTP form post the widget poll 
 describe("GET /checkout — the shared three-gate page (renderRequirements)", () => {
   function gatedStore(): Storefront {
     const store = createStorefront();
-    const attestomcp = new AttestoMcp();
+    const attestomcp = new AttestoMCP();
     attestomcp.mount(store.app);
     store.gate((order) =>
       attestomcp.requirements(order, [

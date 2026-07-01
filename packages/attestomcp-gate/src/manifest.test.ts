@@ -3,11 +3,11 @@
 // conditional drop, payment-last, required/optional, and the honesty axes.
 
 import { describe, it, expect } from "vitest";
-import { AttestoMcp } from "./client.js";
+import { AttestoMCP } from "./client.js";
 import { age, membership, payment, required, optional } from "./credentials.js";
 import type { GateOrder } from "./types.js";
 
-const attestomcp = new AttestoMcp({ walletOrigin: "https://shop.example" });
+const attestomcp = new AttestoMCP({ walletOrigin: "https://shop.example" });
 
 const alcoholOrder: GateOrder = {
   id: "ORD-1",

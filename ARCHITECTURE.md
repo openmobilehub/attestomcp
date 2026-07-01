@@ -1,6 +1,6 @@
 # Architecture
 
-How AttestoMcp is put together, for contributors. AttestoMcp is **the consent layer for AI
+How AttestoMCP is put together, for contributors. AttestoMCP is **the consent layer for AI
 agents**: an AI agent must prove a verifiable credential from the user's phone wallet
 before a consequential action — a payment, an age gate, an access grant — completes.
 **Identity leads; payments is one application** of the same gate.
@@ -9,7 +9,7 @@ This repo is two npm packages:
 
 | Package | What it is | Public surface |
 | :-- | :-- | :-- |
-| [`@openmobilehub/attestomcp-gate`](../../packages/attestomcp-gate) | The Gate — the policy DSL, the `requirements()` resolver, and the `mount()` ceremony that serves the `/attestomcp/*` verification rails. | `new AttestoMcp()`, `attestomcp.requirements(order, policy)`, `attestomcp.mount(app)` |
+| [`@openmobilehub/attestomcp-gate`](../../packages/attestomcp-gate) | The Gate — the policy DSL, the `requirements()` resolver, and the `mount()` ceremony that serves the `/attestomcp/*` verification rails. | `new AttestoMCP()`, `attestomcp.requirements(order, policy)`, `attestomcp.mount(app)` |
 | [`@openmobilehub/attestomcp-storefront`](../../packages/attestomcp-storefront) | The agentic storefront core — a runnable MCP shopping server (cart → priced cart → order, nine tools, a widget, a checkout page), catalog-injected. | `createStorefront()` |
 
 The reference DEMO that runs both packages on every surface (Claude, ChatGPT, Goose,
@@ -37,7 +37,7 @@ doesn't even do that. They meet at exactly one place: `app.locals.attestomcp`.
 
 ```ts
 const store = createStorefront();   // stands up the MCP server; PUBLISHES seams on store.app.locals.attestomcp
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app);           // READS those seams off app.locals.attestomcp and wires /attestomcp/* — zero args
 store.gate((order) =>               // resolved on every checkout call (payment settles LAST)
   attestomcp.requirements(order, [
@@ -64,13 +64,13 @@ app.locals.attestomcp = {
 };
 ```
 
-Then `new AttestoMcp().mount(store.app)`, called with **no** ceremony argument, takes the
+Then `new AttestoMCP().mount(store.app)`, called with **no** ceremony argument, takes the
 "zero-arg compose" path
-([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts), `AttestoMcp.mount`): it sees
+([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts), `AttestoMCP.mount`): it sees
 `orderStore`, `catalog`, and `completion` already on `app.locals.attestomcp`, hands them to
 `mountCeremony`, and — because the host already supplied its own `verificationStore` — uses
 *that* store so the rails write the exact per-order state the host's `completion` seam reads
-back (Security invariant 4). `AttestoMcp` injects its own per-order store *only* when the host
+back (Security invariant 4). `AttestoMCP` injects its own per-order store *only* when the host
 didn't supply one.
 
 The relationship is intentionally one-directional and optional: `attestomcp-gate` is a pairing
@@ -85,7 +85,7 @@ the storefront *can* mount, not a dependency the pricing core carries.
 seams the host provides — from `options` **or** from `app.locals.attestomcp`, options winning —
 **fails fast** when a load-bearing one is missing (never silently degrades), resolves a
 `CeremonyContext`, re-exposes the resolved seams back onto `app.locals.attestomcp` (so a re-mount
-is idempotent and the storefront's own routes resolve verification *through* AttestoMcp), and
+is idempotent and the storefront's own routes resolve verification *through* AttestoMCP), and
 registers each rail's routes.
 
 ### `CeremonySeams` — what the host injects
