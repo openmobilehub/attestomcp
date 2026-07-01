@@ -18,7 +18,7 @@ import { issueChallenge, verifyChallenge } from "../challengeToken.js";
 import type { Origin } from "../origin.js";
 import type { VerifiedAuthenticator } from "../mandate.js";
 
-const RP_NAME = "AttestoMcp Gate";
+const RP_NAME = "AttestoMCP Gate";
 
 // Build registration options + a signed challenge token. userID is ephemeral —
 // we never persist the credential, so a fresh random user each time is fine.

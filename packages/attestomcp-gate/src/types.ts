@@ -151,7 +151,7 @@ export interface VerificationStore {
   clear(orderId: string): void | Promise<void>;
 }
 
-export interface AttestoMcpOptions {
+export interface AttestoMCPOptions {
   /**
    * Absolute origin the wallet ceremony binds to (e.g. `https://shop.example`).
    * Optional — defaults to `http://localhost:<PORT|3000>` so zero-config local

@@ -17,7 +17,7 @@
 // per order, settled through the blocky402 facilitator on Hedera testnet).
 
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 // ── the settlement seam ──────────────────────────────────────────────────────
 // Return any record with at least { network, txId, status }; the receipt renders
@@ -48,7 +48,7 @@ const settle = async (order) => {
 //   const settle = hedera ? (order) => settleOrder(order, hedera) : undefined;
 
 const store = createStorefront({ settle, signingKey: process.env.GATE_SECRET });
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app); // wires the /attestomcp/* ceremony rails; payment completes through completeOrder → settle
 
 const hasAlcohol = (order) => order.lines.some((l) => l.minimumAge != null);
@@ -61,6 +61,6 @@ store.gate((order) =>
 );
 
 const { url } = await store.listen(Number(process.env.PORT ?? 3007));
-console.log(`\n  ✓ AttestoMcp storefront with x402 settlement → ${url}`);
+console.log(`\n  ✓ AttestoMCP storefront with x402 settlement → ${url}`);
 console.log(`  Buy the whiskey → prove age → authorize payment; the receipt shows the on-chain settlement record.`);
 console.log(`  (Throw inside settle() to see fail-closed completion: nothing is recorded, the cart stays intact.)\n`);

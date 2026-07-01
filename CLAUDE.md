@@ -6,7 +6,7 @@ us before.
 
 ## What this is
 
-**AttestoMcp — the consent layer for AI agents.** An AI agent must prove a **verifiable
+**AttestoMCP — the consent layer for AI agents.** An AI agent must prove a **verifiable
 credential** from the user's phone wallet before a consequential action — a payment, an
 age gate, an access grant — completes. **Identity leads; payments is one application:**
 `age.over(21)`, a loyalty membership, a prescription, and `payment.in("usd")` are all
@@ -15,7 +15,7 @@ just credentials in the same policy.
 This repo (`openmobilehub/attestomcp`) is the **library**: two npm workspaces under
 `packages/`.
 
-- **`@openmobilehub/attestomcp-gate`** — the Gate. `new AttestoMcp()`, `attestomcp.mount(app)`,
+- **`@openmobilehub/attestomcp-gate`** — the Gate. `new AttestoMCP()`, `attestomcp.mount(app)`,
   the policy builders (`age`/`membership`/`payment`/`defineCredential`), and the
   `/attestomcp/*` ceremony rails (passkey, credential, dc-payment). TypeScript/Node, ESM.
 - **`@openmobilehub/attestomcp-storefront`** — `createStorefront()`: a runnable,
@@ -43,7 +43,7 @@ blocked on me" — that's what this file answers.)
 The gate is the security surface; the storefront is a reference consumer.
 
 - `packages/attestomcp-gate/src/`
-  - `client.ts` — `AttestoMcp` (`requirements()` for the tool context, `mount()` for the
+  - `client.ts` — `AttestoMCP` (`requirements()` for the tool context, `mount()` for the
     page context).
   - `credentials.ts` — the `age` / `membership` / `payment` builders, `defineCredential`,
     `dcql`, and the `gate()` / `discount()` / `authorize()` effects.

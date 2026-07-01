@@ -3,7 +3,7 @@ import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createStorefront, type Storefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 // Guards the quickstart showcase (examples/storefront.mjs): the two packages
 // compose with ZERO glue — a priced storefront Order feeds attestomcp.requirements()
@@ -15,7 +15,7 @@ const hasAlcohol = (order: { lines: { minimumAge?: number }[] }) =>
 
 function gatedStore(): Storefront {
   const store = createStorefront();
-  const attestomcp = new AttestoMcp();
+  const attestomcp = new AttestoMCP();
   attestomcp.mount(store.app);
   store.gate((order) =>
     attestomcp.requirements(order, [

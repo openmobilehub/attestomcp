@@ -1,6 +1,6 @@
 # The trust model
 
-This is the honesty document. AttestoMcp is **"the consent layer for AI agents"** — an
+This is the honesty document. AttestoMCP is **"the consent layer for AI agents"** — an
 agent must prove a verifiable credential from the user's phone wallet before a
 consequential action completes. That promise is only worth as much as the truth about
 what the gate actually verifies today. This page states that truth precisely, per rail,
@@ -17,12 +17,12 @@ That sentence is not marketing copy; it is the literal trust footer shown on eve
 ceremony page (`src/ceremony/theme.ts`):
 
 ```
-🔒 presence-only-demo · secured by AttestoMcp · the wire crypto is real; issuer trust anchor is not
+🔒 presence-only-demo · secured by AttestoMCP · the wire crypto is real; issuer trust anchor is not
 ```
 
 ## Honesty lives in the types, not in prose
 
-AttestoMcp's constitution (Principle VII, `.specify/memory/constitution.md`) requires the
+AttestoMCP's constitution (Principle VII, `.specify/memory/constitution.md`) requires the
 status to be carried in the type system so it cannot be quietly dropped from a slide or a
 README. Two axes do that work; both are public types and both ride on every manifest
 entry and every mandate.

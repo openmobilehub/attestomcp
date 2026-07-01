@@ -1,7 +1,7 @@
 // gated() — the v0-overnight blocking wrapper, kept as a DEPRECATED shim.
 //
 // v0.1 is consolidated Mode A: the checkout tool mints the link + surfaces a
-// `requires` manifest (see AttestoMcp.requirements), and the page runs the gates.
+// `requires` manifest (see AttestoMCP.requirements), and the page runs the gates.
 // gated() is the Mode-B blocking shape — it withholds completion and returns a
 // `verification_required` envelope. Retained for page-less tools / one minor
 // version; prefer `requirements()` for checkout. Will be removed after v0.2.
@@ -39,7 +39,7 @@ export interface GateDeps<A, O extends GateOrder> {
 
 /**
  * @deprecated v0.1 uses consolidated Mode A — wrap your checkout tool with
- * `AttestoMcp.requirements(order, policy)` instead. `gated()` is the Mode-B
+ * `AttestoMCP.requirements(order, policy)` instead. `gated()` is the Mode-B
  * blocking shim, kept for page-less tools / one minor version.
  *
  * Wrap an MCP tool handler so it returns a `verification_required` envelope when

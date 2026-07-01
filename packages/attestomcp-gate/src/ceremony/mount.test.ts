@@ -5,7 +5,7 @@
 // the inbound order (CT3). Each test FAILS if its control is removed.
 
 import { describe, it, expect } from "vitest";
-import { AttestoMcp } from "../client.js";
+import { AttestoMCP } from "../client.js";
 import { MemoryVerificationStore } from "../store.js";
 import { mountCeremony, resolveOrder, type CeremonyApp, type CeremonyContext, type CeremonySeams } from "./mount.js";
 import { issueChallenge, verifyChallenge } from "./challengeToken.js";
@@ -82,24 +82,24 @@ describe("mountCeremony — fail fast on missing seams (CT2)", () => {
   });
 });
 
-describe("AttestoMcp.mount — back-compat + ceremony delegation (T008)", () => {
+describe("AttestoMCP.mount — back-compat + ceremony delegation (T008)", () => {
   it("without ceremony seams: exposes the per-order store, never throws (002 storefront compose)", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://shop.example" });
+    const a = new AttestoMCP({ walletOrigin: "https://shop.example" });
     const app = { locals: {} as Record<string, unknown> };
     a.mount(app);
     a.mount(app); // idempotent
     expect((app.locals.attestomcp as { store?: unknown }).store).toBe(a.store);
   });
 
-  it("with ceremony seams: validates + injects AttestoMcp's own store as the verificationStore", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://shop.example" });
+  it("with ceremony seams: validates + injects AttestoMCP's own store as the verificationStore", () => {
+    const a = new AttestoMCP({ walletOrigin: "https://shop.example" });
     const app = { locals: {} as Record<string, unknown> };
     a.mount(app, { orderStore: { read: async () => null }, catalog, completion: async () => ({ completed: true }), signingKey: "k" });
     expect((app.locals.attestomcp as { store?: unknown }).store).toBe(a.store);
   });
 
-  it("with ceremony seams but a missing signingKey: the fail-fast flows through AttestoMcp.mount", () => {
-    const a = new AttestoMcp();
+  it("with ceremony seams but a missing signingKey: the fail-fast flows through AttestoMCP.mount", () => {
+    const a = new AttestoMCP();
     const app = { locals: {} as Record<string, unknown> };
     expect(() => a.mount(app, { orderStore: { read: async () => null }, catalog, completion: async () => ({ completed: true }) })).toThrow(/signingKey/);
   });

@@ -1,14 +1,14 @@
 # The three execution contexts
 
 A credential is proven on the user's **phone** — never inside an MCP tool call. That
-one physical fact splits an AttestoMcp-gated flow into **three contexts that run at
+one physical fact splits an AttestoMCP-gated flow into **three contexts that run at
 different times, in different places**. Respecting the split is load-bearing:
 conflating the contexts is the **documented root cause of confusion** in every earlier
 draft of this design ([constitution, Principle II](../../.specify/memory/constitution.md);
 [spec §0](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md)),
 and it is forbidden by the constitution.
 
-Read this page before wiring a gate. Every example in the AttestoMcp docs assumes it.
+Read this page before wiring a gate. Every example in the AttestoMCP docs assumes it.
 
 ```
 ┌─ CONTEXT 1 · the MCP tool handler (your Node server) — runs ONCE, when checkout is requested ─┐
@@ -51,7 +51,7 @@ requirements; it does not *perform* them. The single call that does this is:
 requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[]
 ```
 
-([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts) `AttestoMcp.requirements`).
+([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts) `AttestoMCP.requirements`).
 You hand it the server-priced `order` and your ordered policy array; it resolves the
 policy and hands back the flat `requires` manifest your tool surfaces to the agent and
 the widget:
@@ -83,7 +83,7 @@ membership discount) → pay → settle — on the `/attestomcp/*` routes that
 mount(app: ExpressApp, ceremony?: MountCeremony): void
 ```
 
-([`AttestoMcp.mount`](../../packages/attestomcp-gate/src/client.ts)) wires onto your
+([`AttestoMCP.mount`](../../packages/attestomcp-gate/src/client.ts)) wires onto your
 Express-shaped host. These are **separate HTTP routes, not the Context-1 handler** —
 they are where the phone enters the loop and where the actual cryptographic ceremonies
 happen (WebAuthn on the passkey rail; OpenID4VP on the credential and dc-payment rails).
@@ -105,7 +105,7 @@ confirmation (total, gates cleared, settlement).
 
 ## Why the split is sacred
 
-| Context | Where it runs | When | Does it run a ceremony? | AttestoMcp call |
+| Context | Where it runs | When | Does it run a ceremony? | AttestoMCP call |
 | :-- | :-- | :-- | :-- | :-- |
 | **1 · Tool** | your Node server | once, at checkout request | **No** — no phone in the loop | `requirements(order, policy)` |
 | **2 · Page** | browser + phone | when the buyer opens the link | **Yes** — this is the only place gates run | `mount(app)` |

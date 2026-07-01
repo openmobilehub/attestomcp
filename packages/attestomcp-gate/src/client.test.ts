@@ -1,8 +1,8 @@
-// The AttestoMcp client — construction guards (origin binding is security-relevant)
+// The AttestoMCP client — construction guards (origin binding is security-relevant)
 // and the mount() store seam (per-order, never process-global).
 
 import { describe, it, expect, vi } from "vitest";
-import { AttestoMcp } from "./client.js";
+import { AttestoMCP } from "./client.js";
 import { age, required } from "./credentials.js";
 import type { GateOrder } from "./types.js";
 
@@ -13,17 +13,17 @@ const order: GateOrder = {
   lines: [{ id: "oak-whiskey", quantity: 1, unitPrice: 12400, minimumAge: 21 }],
 };
 
-describe("AttestoMcp constructor", () => {
+describe("AttestoMCP constructor", () => {
   it("works with no config — defaults walletOrigin to localhost", () => {
-    const a = new AttestoMcp();
+    const a = new AttestoMCP();
     expect(a.walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
     // empty string is treated as unset → same default
-    expect(new AttestoMcp({ walletOrigin: "" }).walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
+    expect(new AttestoMCP({ walletOrigin: "" }).walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
   });
 
   it("warns (does NOT throw) on a non-absolute walletOrigin and falls back to the default", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const a = new AttestoMcp({ walletOrigin: "shop.example" }); // missing scheme
+    const a = new AttestoMCP({ walletOrigin: "shop.example" }); // missing scheme
     expect(warn).toHaveBeenCalled();
     expect(a.walletOrigin).toMatch(/^http:\/\/localhost:\d+$/);
     warn.mockRestore();
@@ -34,7 +34,7 @@ describe("AttestoMcp constructor", () => {
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     try {
-      const a = new AttestoMcp({ walletOrigin: "http://localhost:3001" });
+      const a = new AttestoMCP({ walletOrigin: "http://localhost:3001" });
       expect(a.walletOrigin).toBe("http://localhost:3001");
       expect(warn).toHaveBeenCalled();
     } finally {
@@ -44,12 +44,12 @@ describe("AttestoMcp constructor", () => {
   });
 
   it("accepts an absolute origin and trims a trailing slash", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://shop.example/" });
+    const a = new AttestoMCP({ walletOrigin: "https://shop.example/" });
     expect(a.walletOrigin).toBe("https://shop.example");
   });
 
   it("delegates requirements() to the resolver (bound to its walletOrigin)", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://shop.example" });
+    const a = new AttestoMCP({ walletOrigin: "https://shop.example" });
     const m = a.requirements(order, [required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null)))]);
     const ageEntry = m.find((e) => e.credential === "age");
     expect(ageEntry?.approveUrl).toContain("https://shop.example/credential-gate/age");
@@ -57,9 +57,9 @@ describe("AttestoMcp constructor", () => {
   });
 });
 
-describe("AttestoMcp.mount", () => {
+describe("AttestoMCP.mount", () => {
   it("exposes the per-order store on app.locals and is idempotent", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://shop.example" });
+    const a = new AttestoMCP({ walletOrigin: "https://shop.example" });
     const app = { locals: {} as Record<string, unknown> };
     a.mount(app);
     a.mount(app); // idempotent — no throw, same store
@@ -67,8 +67,8 @@ describe("AttestoMcp.mount", () => {
   });
 
   it("two clients keep distinct stores (no cross-instance bleed)", () => {
-    const a = new AttestoMcp({ walletOrigin: "https://a.example" });
-    const b = new AttestoMcp({ walletOrigin: "https://b.example" });
+    const a = new AttestoMCP({ walletOrigin: "https://a.example" });
+    const b = new AttestoMCP({ walletOrigin: "https://b.example" });
     expect(a.store).not.toBe(b.store);
   });
 });

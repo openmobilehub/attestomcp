@@ -1,4 +1,4 @@
-# Naming clearance — "AttestoMcp" (2026-06-28)
+# Naming clearance — "AttestoMCP" (2026-06-28)
 
 A web clearance sweep (signals only — **not** a legal clearance; a professional USPTO + EUIPO
 knockout search is still required before committing the name). Two exact-name hits were
@@ -9,14 +9,14 @@ independently verified by fetching the live pages.
 **Good word, contested name.** The semantic fit (attestation ↔ verifiable credentials) is real and
 lands for the EU-wallet / GDC audience, and the `@openmobilehub/attestomcp` npm handle is free. But the
 literal name is in active commercial use by multiple players — two of them inside or adjacent to
-AttestoMcp's own identity/security space — and `.com` / `.dev` / `.app` are all taken.
+AttestoMCP's own identity/security space — and `.com` / `.dev` / `.app` are all taken.
 
 ## Exact-name collisions (verified live)
 
-- **attestomcp.com — AttestoMcp Inc.** (US, founded 2023). AI hiring platform; Sept-2025 "Trust Layer" does
+- **attestomcp.com — AttestoMCP Inc.** (US, founded 2023). AI hiring platform; Sept-2025 "Trust Layer" does
   **identity-fraud detection / identity confirmation** (claims ~95% of application fraud). Owns the `.com`,
-  LinkedIn, G2, press. ToS asserts trademark/trade-dress in "AttestoMcp." _Identity-adjacent; high._
-- **attestomcp.dev — "AttestoMcp" by Dimenfinity** (© 2026). **Hardware-signed privileged-access** security
+  LinkedIn, G2, press. ToS asserts trademark/trade-dress in "AttestoMCP." _Identity-adjacent; high._
+- **attestomcp.dev — "AttestoMCP" by Dimenfinity** (© 2026). **Hardware-signed privileged-access** security
   product — Secure Enclave, biometric, hardware attestation, tamper-evident audit; for SRE/Security teams.
   **Same category as the library, and holds the `.dev` a dev library wants.** _Worst collision._
 - **attestomcp.app** — UK compliance "staff attestation" SaaS (policy sign-offs, audit logs). _Adjacent; high._
@@ -24,7 +24,7 @@ AttestoMcp's own identity/security space — and `.com` / `.dev` / `.app` are al
 ## Near-names in the space
 
 - **"Attesso"** (one letter off, near-homophone) — *"payment infrastructure for AI agents — mandates,
-  ephemeral cards, SDK"* (api.attesso.com, github.com/Attesso). **Squarely AttestoMcp's lane.** _High confusability._
+  ephemeral cards, SDK"* (api.attesso.com, github.com/Attesso). **Squarely AttestoMCP's lane.** _High confusability._
 - **Attestiv** (~$9.2M, AI media-forensics / fraud). **Ethereum Attestation Service / EAS** (attest.org — the
   best-known VC attestation primitive). **Attest** (askattest.com, ~$79M, market research — owns the "Attest"
   root). **OpenAttestation** (GovTech SG, `@govtechsg/open-attestation`). Plus small same-lane SDKs
@@ -35,15 +35,15 @@ AttestoMcp's own identity/security space — and `.com` / `.dev` / `.app` are al
 - **ATTEST®** — LIVE USPTO reg. 6077675 (Attest Technologies Ltd.), software classes 9/35/42, field =
   market/behavioral research (not identity). Adjacent class, different field → _medium_.
 - **No confirmed registered or pending "ATTESTOMCP" mark** surfaced (USPTO/Justia/Trademarkia/EUIPO) — so no
-  confirmed registration blocker, but AttestoMcp Inc. has common-law use + an explicit mark claim. EUIPO/TMview
+  confirmed registration blocker, but AttestoMCP Inc. has common-law use + an explicit mark claim. EUIPO/TMview
   could not be queried at record level → **a professional EU + US search is the required next step.**
 
 ## Term-confusion risk (developer audience)
 
 For *general* devs, "attestation" now skews **software supply-chain provenance** — Sigstore, SLSA, in-toto,
-GitHub Artifact Attestations, and especially **npm provenance attestations** (the registry AttestoMcp ships on
-has a fixed official meaning for the word). Risk: a dev miscategorizes "AttestoMcp" as a build-provenance tool.
-For AttestoMcp's bullseye (EUDI / wallet / VC devs) the word lands correctly. Mitigation if kept: always pair the
+GitHub Artifact Attestations, and especially **npm provenance attestations** (the registry AttestoMCP ships on
+has a fixed official meaning for the word). Risk: a dev miscategorizes "AttestoMCP" as a build-provenance tool.
+For AttestoMCP's bullseye (EUDI / wallet / VC devs) the word lands correctly. Mitigation if kept: always pair the
 name with an identity/consent qualifier ("credential consent for AI agents"), never lead with "attestation."
 
 ## Domains (live-site observation only — not registrar availability)
@@ -58,14 +58,14 @@ name with an identity/consent qualifier ("credential consent for AI agents"), ne
 Decide **before** publishing `0.1.0` and before the repo split (both cement the name). Get a professional
 USPTO + EUIPO knockout search; weight the **attestomcp.dev** same-category collision heavily.
 
-**Decision (2026-06-28):** proceed as **AttestoMcp** for now; a rename is a deferred, accepted-cost find-replace.
+**Decision (2026-06-28):** proceed as **AttestoMCP** for now; a rename is a deferred, accepted-cost find-replace.
 The vetted alternatives below are kept as reference IF the rename trigger is ever pulled.
 
 ## Alternatives shortlist (reference — generated + cleared 2026-06-28)
 
 Search-signal clearance only (medium confidence — TMview/USPTO were rate-limited; any final pick needs a
 counsel-run TMview/USPTO/EUIPO clearance in classes 9/36/42). A second sweep also surfaced a **third** exact-name
-AttestoMcp collision — **attestomcp.ai** (verifiable-compliance) — alongside `.dev`/`.com` and the `Attesso` homophone.
+AttestoMCP collision — **attestomcp.ai** (verifiable-compliance) — alongside `.dev`/`.com` and the `Attesso` homophone.
 
 | Candidate | Signal | Fit | Top risk |
 | :-- | :-- | :-- | :-- |
@@ -79,4 +79,4 @@ AttestoMcp collision — **attestomcp.ai** (verifiable-compliance) — alongside
 **If switching:** the analysis recommended **Heralda** (if the Hedera echo is tolerable when said aloud next to
 the settlement rail at GDC) → else **Warrend** (maximally safe) → else **Avowa** (if "consent-first" is paramount).
 
-Tracked as resolved **D0** in `STATUS.md` (proceeding as AttestoMcp; this shortlist is the rename fallback).
+Tracked as resolved **D0** in `STATUS.md` (proceeding as AttestoMCP; this shortlist is the rename fallback).

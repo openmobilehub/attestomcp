@@ -5,14 +5,14 @@ These six controls are **load-bearing**. A change that breaks one is **blocking 
 demo code** — and it must be reverted or fixed before merge. They are also the standing
 review rubric: the automated Claude review and every human reviewer check a diff against
 this list, and they mirror Principle 8 (Security Requirements) of the
-[AttestoMcp SDK constitution](../../.specify/memory/constitution.md).
+[AttestoMCP SDK constitution](../../.specify/memory/constitution.md).
 
 These are not aspirational. Every invariant below is enforced in real code in this package
 and pinned by a **bypass test** — a test that POSTs the attack and asserts it is refused. A
 test that would still pass with the security control removed is not a useful test, so the
 bypass test must fail if you delete the control it guards.
 
-> **Honesty boundary.** AttestoMcp v0.1 is `trust_level: "presence-only-demo"`. The *wire
+> **Honesty boundary.** AttestoMCP v0.1 is `trust_level: "presence-only-demo"`. The *wire
 > crypto* is real — WebAuthn assertion verification, OpenID4VP JWE/ECDH-ES decryption with
 > nonce binding, HPKE-decrypt of the iOS `org-iso-mdoc` path, and ISO 18013-5 mdoc parsing
 > all run for real. What is **not** yet real is the **issuer / device-signature trust
@@ -172,7 +172,7 @@ The credential-gate verify handler persists success scoped to *this* order
 (`recordVerified(ctx, order.id, …)`), and `completeOrder()` reads, refuses, and clears
 strictly by `input.order.id`
 ([`routes.ts`](../../packages/attestomcp-gate/src/ceremony/credential-gate/routes.ts),
-[`completion.ts`](../../packages/attestomcp-gate/src/ceremony/completion.ts)). Two `AttestoMcp`
+[`completion.ts`](../../packages/attestomcp-gate/src/ceremony/completion.ts)). Two `AttestoMCP`
 clients keep distinct stores — there is no shared static. For serverless, swap in a Redis
 (Upstash) implementation of `VerificationStore`; the per-key contract is unchanged.
 

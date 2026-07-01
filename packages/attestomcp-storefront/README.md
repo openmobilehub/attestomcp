@@ -26,17 +26,17 @@ Apache-2.0, ESM. Two entry points: `.` (the pure pricing model, dependency-light
 
 `createStorefront()` stands up the real MCP server (nine tools, a widget resource, a checkout
 page) over HTTP at `/mcp`. It publishes the ceremony seams on `store.app.locals.attestomcp`, so
-`new AttestoMcp().mount(store.app)` wires the real `/attestomcp/*` ceremony rails with zero glue, and
+`new AttestoMCP().mount(store.app)` wires the real `/attestomcp/*` ceremony rails with zero glue, and
 `store.gate()` resolves your policy on every `checkout` call (copied from
 [`examples/storefront.mjs`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/examples/storefront.mjs) /
 [`storefront-gate.test.ts`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/storefront-gate.test.ts)):
 
 ```ts
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 const store = createStorefront();                  // the whole storefront — one line
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app);                          // wires the real /attestomcp/* ceremony rails
 
 store.gate((order) =>                              // resolved on every checkout (payment settles LAST)

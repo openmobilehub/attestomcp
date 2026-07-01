@@ -15,10 +15,10 @@
 // server uses an ephemeral per-process key otherwise).
 
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 const store = createStorefront({ signingKey: process.env.GATE_SECRET }); // the whole storefront — one line
-const attestomcp = new AttestoMcp();
+const attestomcp = new AttestoMCP();
 attestomcp.mount(store.app);                          // …reads the seams + wires the /attestomcp/* ceremony rails
 
 const hasAlcohol = (order) => order.lines.some((l) => l.minimumAge != null);
@@ -31,5 +31,5 @@ store.gate((order) =>                              // …and gates the checkout 
 );
 
 const { url } = await store.listen(Number(process.env.PORT ?? 3005));
-console.log(`\n  ✓ AttestoMcp-gated storefront running → ${url}`);
+console.log(`\n  ✓ AttestoMCP-gated storefront running → ${url}`);
 console.log(`  Add it to Goose as a Streamable HTTP connector, then ask it to buy the whiskey.\n`);

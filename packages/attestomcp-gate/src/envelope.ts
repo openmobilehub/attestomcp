@@ -1,4 +1,4 @@
-// The `verification_required` envelope — AttestoMcp's Mode-B / roadmap primitive.
+// The `verification_required` envelope — AttestoMCP's Mode-B / roadmap primitive.
 //
 // Mode A (consolidated checkout) is the v0.1 default: the tool mints the link +
 // surfaces a `requires` manifest, and the page runs the gates. This envelope is

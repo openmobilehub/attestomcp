@@ -131,7 +131,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
   };
 
   // Re-expose the resolved seams on app.locals so the storefront's gate routes
-  // resolve verification THROUGH AttestoMcp (and a re-mount is idempotent).
+  // resolve verification THROUGH AttestoMCP (and a re-mount is idempotent).
   app.locals.attestomcp = { ...(app.locals.attestomcp as Record<string, unknown> | undefined), store: ctx.verificationStore, ...ctx };
 
   for (const register of RAILS) register(app, ctx);

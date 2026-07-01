@@ -5,7 +5,7 @@ from the user's phone wallet before a consequential MCP tool completes. **Identi
 leads; payments is one application** — `age.over(21)`, a loyalty membership, a
 prescription, and `payment.in("usd")` are all just credentials in the same policy.
 
-> **Design preview / v0.1.** This package is real and tested, but the broader AttestoMcp
+> **Design preview / v0.1.** This package is real and tested, but the broader AttestoMCP
 > SDK is still being extracted from the reference server
 > ([mcp-apps-shopping-demo](https://github.com/openmobilehub/mcp-apps-shopping-demo)).
 > See the repo's `ROADMAP.md` for what's shipping vs. next.
@@ -23,17 +23,17 @@ Express-shaped host.
 ## Quickstart
 
 The whole flow in ≤ 10 lines — a credential-gated agentic storefront. `createStorefront()`
-publishes the ceremony seams; `new AttestoMcp().mount(store.app)` wires the real `/attestomcp/*`
+publishes the ceremony seams; `new AttestoMCP().mount(store.app)` wires the real `/attestomcp/*`
 ceremony rails; `store.gate()` resolves your policy on every `checkout` call (copied from
 [`examples/storefront.mjs`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/examples/storefront.mjs) /
 [`storefront-gate.test.ts`](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/storefront-gate.test.ts)):
 
 ```ts
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMcp, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
 
 const store = createStorefront();                  // the storefront — one line
-const attestomcp = new AttestoMcp();                     // zero-config (defaults to http://localhost:3000)
+const attestomcp = new AttestoMCP();                     // zero-config (defaults to http://localhost:3000)
 attestomcp.mount(store.app);                          // wires the real /attestomcp/* ceremony rails
 
 store.gate((order) =>                              // resolved on every checkout (payment settles LAST)
@@ -54,7 +54,7 @@ the widget shows the confirmation. Add the headphones instead and the age gate d
 
 > `.when((order) => …)` takes the **whole `GateOrder`** (id, total, currency, lines), so a
 > predicate keys off the cart's lines — e.g. `order.lines.some((l) => l.minimumAge != null)`.
-> For a deployment pass your public origin: `new AttestoMcp({ walletOrigin: "https://shop.example" })`.
+> For a deployment pass your public origin: `new AttestoMCP({ walletOrigin: "https://shop.example" })`.
 
 ## The three execution contexts
 
@@ -140,7 +140,7 @@ cryptography. The mandate is AP2-shaped and dev-signed (integrity hash), not key
 
 ```ts
 // Client (configure once, then declarative calls)
-class AttestoMcp {
+class AttestoMCP {
   constructor(opts?: { walletOrigin?: string; store?: VerificationStore });
   requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[];   // Context 1
   mount(app: ExpressApp, ceremony?: MountCeremony): void;                        // Context 2
@@ -159,7 +159,7 @@ MemoryVerificationStore  ·  completeOrder(input, ctx)
 gated()  ·  buildVerificationRequired()  ·  isVerificationRequired()  ·  envelopeInstruction()
 ageDcql()  ·  ENVELOPE_VERSION  ·  ENVELOPE_SENTINEL
 
-// Types: AttestoMcpOptions, GateOrder, OrderLine, Credential, Step, Effect,
+// Types: AttestoMCPOptions, GateOrder, OrderLine, Credential, Step, Effect,
 //        VerificationManifestEntry, VerificationStore, VerificationRecord,
 //        TrustLevel, DcqlQuery, DcqlClaim, DcqlCredentialOption, ExpressApp,
 //        CompletionSeam / SettlementSeam / CeremonyOrder (host composition)

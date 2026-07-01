@@ -7,7 +7,7 @@
 // which is exactly where @openmobilehub/attestomcp-gate mounts on:
 //
 //   const store = createStorefront();
-//   const attestomcp = new AttestoMcp();
+//   const attestomcp = new AttestoMCP();
 //   attestomcp.mount(store.app);
 //   store.gate((order) => attestomcp.requirements(order, [ required(age.over(21).when(hasAlcohol)) ]));
 //   const { url } = await store.listen(3005);   // → add http://localhost:3005/mcp to Claude / ChatGPT
@@ -39,7 +39,7 @@ import { MemoryCartStore, MemoryOrderStore } from "./state.js";
 import type { CartStore, OrderStore } from "./state.js";
 // Composition with @openmobilehub/attestomcp-gate (Context 2): the storefront pre-binds
 // the gate's shared `completeOrder` over ITS OWN stores + catalog and publishes the
-// ceremony seams on `app.locals.attestomcp`, so `new AttestoMcp().mount(store.app)` wires
+// ceremony seams on `app.locals.attestomcp`, so `new AttestoMCP().mount(store.app)` wires
 // the `/attestomcp/*` rails with zero explicit args (the quickstart). The gate stays an
 // optional pairing — only this server module imports it; the pure pricing core
 // (`./index.js`) does not.
@@ -231,8 +231,8 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // is undefined and completion is never recorded.
   app.use(express.urlencoded({ extended: false }));
 
-  // ── AttestoMcp ceremony seams (Context 2) ──────────────────────────────────────
-  // Pre-bound so `new AttestoMcp().mount(store.app)` wires the `/attestomcp/*` rails with
+  // ── AttestoMCP ceremony seams (Context 2) ──────────────────────────────────────
+  // Pre-bound so `new AttestoMCP().mount(store.app)` wires the `/attestomcp/*` rails with
   // ZERO explicit args — it reads these off `app.locals.attestomcp` (see the quickstart).
   // The catalog re-prices server-side (the amount source of truth — invariant 2); the
   // completion seam is the gate's shared `completeOrder` bound over THIS server's
@@ -373,7 +373,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         const order = createOrder(entries, `ORD-${Math.random().toString(36).slice(2, 8)}`, catalog);
         await createdOrderStore.write(order.id, order);
         const checkoutUrl = `${baseUrl}/checkout?order=${order.id}`;
-        // ← where AttestoMcp mounts on. Re-home any /attestomcp/* approve link onto this
+        // ← where AttestoMCP mounts on. Re-home any /attestomcp/* approve link onto this
         // server's origin, so the gate links share the checkout link's base.
         const rawRequires = resolveGate?.(order);
         const requires = rawRequires ? homeRequires(rawRequires, baseUrl) : undefined;
