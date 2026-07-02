@@ -221,7 +221,20 @@ module.exports = async (req, res) => {
 
   if (path === "/mcp") {
     if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
-    if (req.method === "GET" || req.method === "DELETE") { res.statusCode = 405; res.setHeader("allow", "POST"); return res.end(); }
+    if (req.method === "GET" || req.method === "DELETE") {
+      // A human in a browser gets the info page; an MCP client (Accept: text/event-stream)
+      // gets the spec-required 405 (no server-initiated stream on this stateless server).
+      const accept = req.headers.accept || "";
+      if (req.method === "GET" && accept.includes("text/html") && !accept.includes("text/event-stream"))
+        return html(res, 200,
+          `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:34rem;margin:4rem auto">
+           <h1 style="font-size:1.3rem">headless-auth spike — MCP endpoint ✓</h1>
+           <p>This URL is alive. It speaks MCP over <b>POST</b> (JSON-RPC), so browsers can't drive it —
+           add it as a custom connector in Claude instead:</p>
+           <p><code>${base}/mcp</code></p>
+           <p>Setup steps: <code>spike/headless-auth/README.md</code> (branch <code>005-human-not-present</code>).</p></body>`);
+      res.statusCode = 405; res.setHeader("allow", "POST"); return res.end();
+    }
     const auth = req.headers.authorization || "";
     const tok = auth.startsWith("Bearer ") ? verify(auth.slice(7)) : null;
     if (!tok || tok.t !== "at") {
