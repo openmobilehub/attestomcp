@@ -11,14 +11,23 @@ _Updated **2026-07-05** · `main` · CI green._
 
 ## ⏳ Decisions for you
 
-- [ ] **Publish `0.2.0`** (bumped from the never-published `0.1.0` for the `AttestoMCP` rename below — an
-      exported class rename). Add the **`NPM_TOKEN`** secret (publish rights to the `@openmobilehub` scope),
-      then cut a **GitHub Release** → `.github/workflows/publish.yml` publishes **gate first, then
-      storefront** (with provenance). Or publish manually in that order. See `docs/PUBLISHING.md`.
+- [ ] **Publish `0.2.0` — ON HOLD pending the rename decision below (2026-07-02).** Publishing would cement
+      the `attestomcp` package names counsel just ruled non-compliant. Once renamed: add the **`NPM_TOKEN`**
+      secret (publish rights to the `@openmobilehub` scope), then cut a **GitHub Release** →
+      `.github/workflows/publish.yml` publishes **gate first, then storefront** (with provenance). Or publish
+      manually in that order. See `docs/PUBLISHING.md`.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **GDC front-door timing / optional rename.** "AttestoMCP" is contested but chosen for now
-      (`docs/naming-clearance.md` has a vetted rename fallback). Confirm before the public GDC push.
+- [ ] **Rename — no longer optional (2026-07-02).** LF brand counsel (Daniel Scales, via the Saurabh/Mike
+      Woster thread) ruled that "MCP" in the name suggests the project is run by the MCP project (AgenticAI
+      Foundation trademark) and violates the [LF trademark policy](https://lfprojects.org/policies/trademark-policy/)
+      unless used **descriptively** — "X for MCP" is fine, a fused "XMCP" is not. Decide the new name **before**
+      adding `NPM_TOKEN` / publishing `0.2.0` (nothing is cemented: `0.2.0` unpublished, GDC not public).
+      Wrinkle: plain "Attesto" was itself rated *contested* commercially (`docs/naming-clearance.md` — note that
+      doc's history was mangled by the #8 bulk rename; its collision analysis reads "AttestoMCP" but is about
+      "Attesto"). Vetted coined shortlist: **Heralda / Warrend / Avowa**. Suggested path: confirm the acceptable
+      descriptive pattern with counsel (e.g. "Attesto — a consent gate for MCP agents"), then pick and do the
+      known-size find-replace (~171 sites, same job as #8/#30).
 - [ ] **005 sequencing fork.** Ship merchant-side v0.1 (server-HMAC grants) first as the smallest
       increment, or re-scope 005 to the wallet-custody connector architecture directly? Recommendation:
       decide after the on-device spike (`specs/005-human-not-present/connector-architecture-design.md`
@@ -56,6 +65,13 @@ _Updated **2026-07-05** · `main` · CI green._
   choreography was undefined), the **redemption choreography draft** answering it
   (`redemption-choreography-draft.md` — six-call sequence, pspTransactionId rename, enforcer/retryable
   refusals), the AP2+TS12 **bounds schema draft**, and a **talk outline draft**.
+- **HNP §12.2 headless-auth spike — LIVE (2026-07-02).** `spike/headless-auth/` deployed to
+  `https://headless-auth-coral.vercel.app/mcp`; connector added to claude.ai and verified server-side
+  (DCR → consent → token gen=1 → heartbeat 200 in the Vercel logs; claude.ai registered two DCR clients,
+  confirming the predicted proliferation). Daily scheduled task created 2026-07-02; **read out
+  ~2026-07-05** per the README rubric (rising tokenGeneration + no re-auth = PASS → routines can carry
+  the unattended demo leg). Rename decision consciously deferred by the maintainer (2026-07-02); publish
+  remains on hold behind it.
 
 ---
 
