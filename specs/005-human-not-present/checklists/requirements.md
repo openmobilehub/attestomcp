@@ -31,8 +31,12 @@
 
 ## Notes
 
-- **Maintainer confirmation pending** on the Group-A honesty decisions (1–3) — surfaced in the spec's top callout.
-  These are recommendations from the research, not settled; confirm/override before `/speckit-plan`.
+- **Maintainer confirmation still pending** on the Group-A honesty decisions (1–3). They were discussed on
+  2026-07-01 and a **tentative direction** was noted — D3: two v0.2 user-signing ceremonies, WebAuthn (passkey
+  over hash-of-bounds) and an on-device DPC via Multipaz (DC API / OpenID4VP), **explicitly NOT
+  trust-equivalent until v0.3** (passkey = registration-rooted, live at v0.2; DPC = issuer-chain-rooted,
+  unanchored until the v0.3 trust anchor; see FR-002) — but the maintainer is still building understanding of
+  the key architecture; **do not treat as settled**. Decisions 4–12 stand as baked-in recommendations.
 - **Governance dependency (Decision 13):** a narrow MINOR constitution amendment (Principles II/III) is a
   prerequisite for `/speckit-implement`; it is a separate `/speckit-constitution` step, not part of this spec.
 - **Adversarial review applied (2026-06-29):** a 4-lens review (invariants / honesty / faithfulness /
@@ -43,5 +47,6 @@
   server-issued-demo`, never reusing `presence-only-demo`); age **always steps up**; single-use uses an
   **atomic** consume; the grant is disclosed as a **bearer** token (invariant 6 only partial); `RevocationStore`
   needs **real** seam glue; honesty expressed as machine-checkable positives.
-- The spec is ready for `/speckit-plan` once the maintainer **confirms the baked-in decisions** (esp. the
-  Group-A honesty calls and the Decision-13 constitution amendment).
+- The spec is ready for `/speckit-plan` **once the maintainer confirms the baked-in decisions** (esp. the
+  Group-A honesty calls — tentative as of 2026-07-01). The **Decision-13 constitution amendment** remains the
+  prerequisite for `/speckit-implement`, not for planning.
