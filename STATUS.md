@@ -19,6 +19,12 @@ _Updated **2026-07-05** · `main` · CI green._
       automated PR review (the org-managed review also covers it).
 - [ ] **GDC front-door timing / optional rename.** "AttestoMCP" is contested but chosen for now
       (`docs/naming-clearance.md` has a vetted rename fallback). Confirm before the public GDC push.
+- [ ] **005 sequencing fork.** Ship merchant-side v0.1 (server-HMAC grants) first as the smallest
+      increment, or re-scope 005 to the wallet-custody connector architecture directly? Recommendation:
+      decide after the on-device spike (`specs/005-human-not-present/connector-architecture-design.md`
+      §10/§12). Note: 005 builds on 004, which builds after publish — sequence against the demo timeline.
+- [ ] **Confirm the 005 Group-A decisions** (D1–D3, still *tentative* per the 2026-07-01 discussion) + the
+      Decision-13 constitution amendment — both gate `/speckit-plan` → `/speckit-implement` for 005.
 
 ---
 
@@ -36,14 +42,15 @@ _Updated **2026-07-05** · `main` · CI green._
   in-memory stays the zero-config default, explicit per-slot injection still wins, per-order keying + namespace
   isolation, fail-closed. Storefront suite green (+12 tests). **Pending:** commit (DCO) + PR; demo slim-down
   (scope A) tracked in `mcp-apps-shopping-demo`.
-- **Storefront dynamic catalog (006)** — [#28](https://github.com/openmobilehub/attestomcp/issues/28) (epic #29).
-  Spec-kit set in `specs/006-storefront-catalog-source/`. `createStorefront({ catalog: firestoreCatalog(…) })`:
-  `catalog` now accepts `Product[] | CatalogSource`; `firestoreCatalog` (subpath `./firestore`) loads from
-  Firestore with a TTL cache, fail-closed cold/empty, last-known-good on a refresh blip, malformed/negative
-  rejection. `firebase-admin` is an optional lazy peer dep; the static array stays the zero-config default.
-  Async source feeds the gate's **synchronous** ceremony re-price via a `load()` + `current()` split + a
-  request-priming middleware — **no gate change**. Storefront suite green (+16 tests); gate unchanged (160).
-  **Pending:** review + merge; demo slim-down (scope A) tracked in `mcp-apps-shopping-demo`.
+- **HNP (005)** — big design day 2026-07-01 (branch `005-human-not-present`, pushed; no PR yet): the
+  **connector-architecture design** (wallet-custody over MCP: stock Multipaz Wallet seals the Intent
+  Mandate, a new wallet server signs bounded draws, a UPay-style verifier settles, Claude orchestrates
+  holding nothing) + a delegation walkthrough + overnight desk-verification (key find: **EUDI SCA TS12's
+  `PaymentTransaction` natively expresses our bounds** — `max_amount`, cumulative `total_amount`, window,
+  payee — no custom transaction type needed; consent sheet renders only "• Payment", so the approve page
+  carries the terms) + an AP2 field mapping + a DRAFT (unsent) Multipaz upstream proposal. Everything
+  **tentative** pending the decisions above. Next concrete step: the on-device confirmatory spike
+  (design doc §12).
 
 ---
 
