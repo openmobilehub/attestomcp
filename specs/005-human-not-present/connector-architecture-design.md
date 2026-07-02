@@ -28,6 +28,21 @@ A power of attorney, expressed in digital signatures (no cryptocurrency anywhere
 ledger): the phone signs *authority once*; the server signs *payments many times*; the verifier checks the
 second is inside the first.
 
+```
+What the hardware key signs (ONCE, biometric):
+┌──────────────────────────────────────────────┐
+│  "I authorize the holder of PUBLIC KEY K_s   │    K_s = the wallet server's key
+│   to sign payments on my behalf,             │
+│   ≤ $120 · Ghost 17 sz 10 · until Jul 31"    │
+└──────────────── signed: phone DeviceKey ─────┘
+
+What the server signs (each draw, no human):
+┌──────────────────────────────────────────────┐
+│  "Pay runfast.com exactly $114.95            │
+│   under intent #123 (attached)"              │
+└──────────────── signed: K_s ─────────────────┘
+```
+
 ## 2. Goals and success bars
 
 **Personas** (from the brainstorm's clarifying questions): the **merchant developer** (integrates the gate)
@@ -55,10 +70,11 @@ connectors are their whole interface.
         │             Marketplace)
    ┌────┴─────────┐        │
    ▼              ▼        ▼
- Wallet SERVER   Multipaz  attestomcp-gate ── UPay-style verifier ── Bank of Utopia
- policy engine   WALLET    (merchant envelope,  (opens the doll,      (fictitious
- signs draws     (stock,    completeOrder)       settles)              ledger)
- (new, ours)     phone)
+ Wallet SERVER   Multipaz WALLET       attestomcp-gate ── UPay-style verifier ── Bank of Utopia
+ always-on       (stock app, phone)    (merchant envelope,  (opens the doll,      (fictitious
+ policy engine   master key+biometric   completeOrder)       settles)              ledger)
+ signs draws     approves · revokes
+ (new, ours)     · audits
 ```
 
 | Component | Operated by (trust domain) | Code | Status |
@@ -155,6 +171,22 @@ Findings from reading `multipaz-utopia/organizations/upay/backend` (2 files, ~23
   (working name `DelegatedTransactionProcessor`) that accepts `draw + intent` instead of a live presentment,
   walks the chain (§4), and calls the same `commitTransaction`. The draw is signed over UPay's fresh
   `transaction_id`, preserving UPay's existing replay discipline exactly.
+
+  ```
+  The doll, as UPay opens it (outside-in):
+
+  ┌─ OUTER: the draw — signed by wallet-server key K_s ─────────┐
+  │  "pay runfast.com exactly $114.95 · transaction_id: tx_789" │
+  │  ┌─ INNER: the intent — the recorded DPC presentment ─────┐ │
+  │  │  bounds in transaction_data: "≤$120 · Ghost 17 ·       │ │
+  │  │  Jul 31" · names K_s                                   │ │
+  │  │  signed: phone DeviceKey (biometric, days ago)         │ │
+  │  │  card's issuer chain → Utopia CA ✓                     │ │
+  │  └─────────────────────────────────────────────────────────┘ │
+  └───────────────────────────────────────────────────────────────┘
+  1 draw sig fresh under K_s → 2 K_s named in intent → 3 device sig ✓
+  issuer chain ✓ → 4 draw ⊆ bounds → 5 commitTransaction($114.95)
+  ```
 - **The PSP becomes a second budget enforcer for free**: every draw against `int_9f2c7a` settles through it,
   so it can keep a per-intent tally and refuse over-budget draws *independently* of the wallet's policy
   engine. Three independent enforcers total (wallet policy, merchant envelope, PSP tally).
