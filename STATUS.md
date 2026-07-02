@@ -50,7 +50,12 @@ _Updated **2026-07-05** · `main` · CI green._
   payee — no custom transaction type needed; consent sheet renders only "• Payment", so the approve page
   carries the terms) + an AP2 field mapping + a DRAFT (unsent) Multipaz upstream proposal. Everything
   **tentative** pending the decisions above. Next concrete step: the on-device confirmatory spike
-  (design doc §12).
+  (design doc §12). **Goal-directed overnight batch 2**: wallet-server build guide (hosted Utopia
+  endpoints found; ceremony = stock SDK; OAuth is the work item; confidence 70→85%), a **six-persona DX
+  council review** (`dx-council-review.md` — verdict: ready to build toward; finding #1: the redemption
+  choreography was undefined), the **redemption choreography draft** answering it
+  (`redemption-choreography-draft.md` — six-call sequence, pspTransactionId rename, enforcer/retryable
+  refusals), the AP2+TS12 **bounds schema draft**, and a **talk outline draft**.
 
 ---
 
