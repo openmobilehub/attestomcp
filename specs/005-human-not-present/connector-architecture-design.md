@@ -138,7 +138,11 @@ Design details locked in during the brainstorm:
 
 ## 5. Multipaz usage (stock wallet, no permission needed)
 
-Multipaz is Apache-2.0; we build **on** it, not **in** it:
+Multipaz is Apache-2.0; we build **on** it, not **in** it. **Hard constraint (2026-07-01): the phone side is
+the published Multipaz Wallet APK from <https://apps.multipaz.org/>** (production flavor; Dev flavor for
+unlocked bootloaders) — the demo claim is "works with the wallet anyone can download," so a custom wallet
+build is off the table; wallet-side changes only arrive via upstream contributions shipped in a released
+APK.
 
 - **The phone side is stock Multipaz Wallet.** The delegation ceremony is a normal OpenID4VP / Digital
   Credentials API presentment of a DPC (the DigitalPaymentCredential the wallet already holds, issued by our
@@ -329,8 +333,14 @@ into this same re-scope decision.
 
 ## 12. Open questions / verification items
 
-1. **Multipaz wallet rendering of custom transaction_data types** — verify behavior on stock wallet before
-   committing to day-one UX (fallback: known PaymentTransaction type with the bounds in `description`).
+1. **Multipaz wallet rendering of custom transaction_data types** — verify against the **published APK from
+   apps.multipaz.org** (the §5 hard constraint), not a local build (fallback: known PaymentTransaction type
+   with the bounds in `description`). If the polished wording needs a custom type, the upstream Multipaz
+   conversation moves **before** the demo, not after.
+1b. **Published-wallet provisioning from our issuer** — verify the apps.multipaz.org APK can provision a
+   DPC from *our* OpenID4VCI issuance server (vs. only `*.multipaz.org` issuers). If not, our issuer needs
+   onto its trust surface or the issuance plan changes. The Utopia org backends (UPay, bank, brewery) are
+   NOT hosted on apps.multipaz.org — they come from the `multipaz-utopia` docker deployment.
 2. **Scheduled-run connector auth** on claude.ai (durable OAuth grants for routines) — verify. ChatGPT:
    the June-2026 scheduled-tasks update indicates connected apps ARE usable in tasks on paid plans —
    verify in rehearsal. Cross-platform note: the mandate is keyed to the user at the wallet, not to the
