@@ -331,8 +331,11 @@ into this same re-scope decision.
 
 1. **Multipaz wallet rendering of custom transaction_data types** — verify behavior on stock wallet before
    committing to day-one UX (fallback: known PaymentTransaction type with the bounds in `description`).
-2. **Scheduled-run connector auth** on claude.ai (durable OAuth grants for routines) — verify; ChatGPT
-   scheduled tasks + custom connector tools even more so.
+2. **Scheduled-run connector auth** on claude.ai (durable OAuth grants for routines) — verify. ChatGPT:
+   the June-2026 scheduled-tasks update indicates connected apps ARE usable in tasks on paid plans —
+   verify in rehearsal. Cross-platform note: the mandate is keyed to the user at the wallet, not to the
+   platform, so the same intent is orchestrator-portable (delegate in ChatGPT, redeem from a Claude
+   routine, or vice versa) — a strong neutrality demo beat.
 3. **Merchant trust of the wallet server** — single-entry trust list for the demo; the ecosystem answer
    (trust lists / payment networks) is out of scope and disclosed.
 4. **Where the wallet server code lives** — new workspace in this repo vs. sibling repo (it's Kotlin/JVM on
