@@ -147,11 +147,16 @@ APK.
 - **The phone side is stock Multipaz Wallet.** The delegation ceremony is a normal OpenID4VP / Digital
   Credentials API presentment of a DPC (the DigitalPaymentCredential the wallet already holds, issued by our
   wallet server via OpenID4VCI at setup).
-- **`transaction_data` is the consent-screen fix.** UPay's own code binds `{payee, amount}` into what the
-  wallet signs, and the wallet renders it natively on the biometric sheet. We put the **intent bounds**
-  (`intentId`, cap, scope, window, `K_s`) in a `transaction_data` payload → the user *sees the terms they're
-  signing* on the Face ID sheet, and the DeviceKey signature covers them. This resolves the
-  screen-vs-fingerprint weak point identified in the walkthrough.
+- **`transaction_data` SEALS the bounds — but does NOT render them today** *(corrected 2026-07-01 by desk
+  verification — see `docs/superpowers/research/2026-07-01-multipaz-wallet-desk-verification.md`)*. The
+  DeviceKey signature covers the transaction_data hashes (real sealing), but the consent sheet renders only
+  the type's displayName ("• Payment"), not amount/payee. The **approve page we control carries the terms
+  display**; richer consent-sheet rendering is the upstream ask. Better still: the registered
+  `PaymentTransaction` type is **EUDI SCA TS12** and natively expresses our bounds — per-draw cap
+  (`recurrence.mit_options.max_amount`), **cumulative cap** (`total_amount`), window
+  (`recurrence.start_date/end_date`), payee — so **no custom transaction type is needed**; product scope
+  binds via `transaction_id = intentId` committing to the full bounds doc (same pattern as AP2's
+  `cart_hash`). The required credential docType (`org.multipaz.payment.sca.1`) IS the Utopia DPC.
 - **The wallet server uses Multipaz server-side libraries** for the OpenID4VP verifier role (the same
   `configureVerifier` / `VerifierAssistant` machinery UPay uses).
 - **The one small upstream candidate** (later, show-don't-ask): registering an *Intent-Mandate
@@ -333,14 +338,20 @@ into this same re-scope decision.
 
 ## 12. Open questions / verification items
 
-1. **Multipaz wallet rendering of custom transaction_data types** — verify against the **published APK from
-   apps.multipaz.org** (the §5 hard constraint), not a local build (fallback: known PaymentTransaction type
-   with the bounds in `description`). If the polished wording needs a custom type, the upstream Multipaz
-   conversation moves **before** the demo, not after.
-1b. **Published-wallet provisioning from our issuer** — verify the apps.multipaz.org APK can provision a
-   DPC from *our* OpenID4VCI issuance server (vs. only `*.multipaz.org` issuers). If not, our issuer needs
-   onto its trust surface or the issuance plan changes. The Utopia org backends (UPay, bank, brewery) are
-   NOT hosted on apps.multipaz.org — they come from the `multipaz-utopia` docker deployment.
+1. **~~Custom transaction_data types~~ — DESK-VERIFIED 2026-07-01** (see
+   `docs/superpowers/research/2026-07-01-multipaz-wallet-desk-verification.md`): unknown types are
+   **rejected outright** (spec-compliant), and even registered types render only their displayName on the
+   consent sheet — the bounds are *sealed* (DeviceKey covers the hashes) but *not shown* by the wallet.
+   Plan: use the registered **EUDI SCA TS12 `PaymentTransaction`** type (it expresses cap, cumulative cap,
+   window, payee natively via `recurrence.mit_options`); terms display lives on the approve page; the
+   upstream ask becomes "render TS12 payload fields on the consent sheet." Remaining on-device spike is
+   confirmatory: TS12 presentment succeeds against the published APK + note the unknown-verifier warning UX.
+1b. **~~Provisioning from our issuer~~ — DESK-VERIFIED 2026-07-01**: the published wallet provisions only
+   from its backend's issuer list (arbitrary URLs are dev-mode-only). **Resolution: our wallet server is
+   NOT an issuer** — reuse the Multipaz-hosted DPC issuance (user adds their Utopia payment card via the
+   standard flow); our wallet server is verifier + policy engine + draw signer + MCP connector only. The
+   Utopia org backends (UPay, bank, brewery) are NOT hosted on apps.multipaz.org — they come from the
+   `multipaz-utopia` docker deployment. On-device confirmation of the hosted issuance flow remains.
 2. **Scheduled-run connector auth** on claude.ai (durable OAuth grants for routines) — verify. ChatGPT:
    the June-2026 scheduled-tasks update indicates connected apps ARE usable in tasks on paid plans —
    verify in rehearsal. Cross-platform note: the mandate is keyed to the user at the wallet, not to the
@@ -353,8 +364,11 @@ into this same re-scope decision.
 5. **Multipaz team conversation** — deferred by choice: build on stock components first, show a working
    demo, then propose the transaction-data type upstream ("show, don't ask").
 6. **`attestomcp-agent` priority** — nice-to-have for local agents; may trail the connector work.
-7. **Cumulative caps** — the wallet-custody model makes them enforceable (single choke point); explicitly
-   still out of scope for the first increment (mirrors spec.md's exclusion).
+7. **Cumulative caps** — the wallet-custody model makes them enforceable (single choke point), and
+   desk-verification found they are **standards-expressible today**: EUDI SCA TS12's
+   `recurrence.mit_options.total_amount` ("total amount of all payments") is the cumulative cap, in the
+   transaction type the published wallet already registers. Still a policy-engine build item; no longer a
+   modeling invention. First-increment scope remains the maintainer's call.
 
 ## 13. Testing expectations (inherited discipline)
 
