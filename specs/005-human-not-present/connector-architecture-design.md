@@ -393,3 +393,52 @@ Beats, in demo order:
 Practicalities: each merchant is a separate connector added to Claude (3–4 is fine and makes the
 multi-vendor point visceral); one UPay verifier + one ledger serve all of them, so per-vendor cost is a
 catalog + a connector URL + a payee account.
+
+## 16. Beyond payment: the credential family (identity leads)
+
+Payment is one credential among many (the project thesis). The Multipaz wallet already holds the rest —
+age, memberships, discounts/entitlements, diplomas/licenses, prescriptions — so under wallet-custody the
+delegation question becomes **per-credential policy, not per-credential architecture**: the intent's bounds
+gain a `mayPresent` clause, and a draw becomes a *bundle of presentments* (payment + membership + …) under
+one authority.
+
+Three axes decide delegability per credential family:
+
+| Credential | Claim stable? | Per-use harm | Regulated human moment? | → default policy |
+| :-- | :-- | :-- | :-- | :-- |
+| Membership / loyalty | can lapse — re-verify per draw | low | no | **delegable** |
+| Product / company discounts | entitlement, can lapse | low | no | **delegable** |
+| Diploma / license | permanent | low | rarely | delegable (qualification) |
+| Payment | consumable value | medium | no | delegable **within caps** |
+| Age over 21 | monotonic | high (legal gate) | often — ID at handoff | **step-up by default** |
+| Prescription | consumable (N refills, expiry) | high (controlled) | usually | step-up / tightly bounded draws |
+
+Consequences worth recording:
+
+- **Age flips from "can't" to "won't by default."** 005 excluded age delegation for lack of a trust anchor
+  (technical limit). Under issuer-verified wallet-custody the wallet *could* present a fresh `age_over_21`
+  unattended; the step-up is kept as **policy** — the point of an age gate is a human at the moment of
+  consequence. The honesty labels should state the reason changed.
+- **FR-008's discount exclusion dissolves.** 005 forces HNP to ignore membership discounts (no fresh proof
+  possible unattended). The wallet presents the membership credential *fresh at each draw*, issuer-checked —
+  member pricing under HNP becomes legitimate. A concrete capability unlocked by the architecture.
+- **The prescription is a natural Intent Mandate**: issued by a doctor (issuer), bounded (drug, dose, N
+  refills, expiry), consumable per draw, revocable, auditable. "Refill when due" is the canonical HNP
+  scenario, already shaped like intent → bounded draws → atomic consume.
+- **Merchant DX**: one word of policy per credential family, on the same builders the gate already ships:
+
+  ```js
+  new AttestoMCP({
+    delegation: {
+      payment:      { maxDraw: usd(100), stepUpOver: usd(50) },
+      membership:   "presentable",        // wallet may re-present while absent
+      discount:     "presentable",
+      age:          "step-up",            // policy, not limitation — never unattended
+      prescription: { perDraw: 1, requires: "issuer-verified" },
+    },
+  });
+  ```
+
+- **Positioning**: this credential generality is the differentiation vs. payments-only agentic-commerce
+  stacks (ACP, network SDKs) — the consent layer spans every credential a wallet holds, with payments as
+  chapter one.
