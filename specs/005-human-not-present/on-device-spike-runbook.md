@@ -76,6 +76,27 @@ Bugs found in the hosted stack along the way (upstream-reportable):
 - `upay/verify_credentials.js` crashes (`TypeError … reading 'digital'`) instead of surfacing backend
   400s (e.g. unknown payee) — `make_request` errors are never shown to the user.
 
+## Readout — RUN 3, 2026-07-02 night (Pixel 9 Pro XL, Android 16, published TestApp 1193, human-observed)
+
+Full end-to-end rerun on a second device with the maintainer at the phone. On this device the
+ceremony surfaces were **screenshot-capturable** (only the biometric prompt was FLAG_SECURE), so the
+complete consent stack is now captured in [`spike-evidence/`](./spike-evidence/):
+
+| Layer | Surface | Shows the payment terms? | Evidence |
+| :-- | :-- | :-- | :-- |
+| 1 | **Chrome**: "Do you trust this site with your data?" (origin trust, Cancel/Continue) | NO | `1-chrome-origin-trust.png` |
+| 2 | **Credential Manager** "Share info" sheet: credential card + claim names; "View details" reveals claim VALUES (Utopia Bank, pi-77AABBCC, 2028-09-01, Erika Mustermann) | NO — transaction data not rendered at this layer at all | `2-…`, `3-…` |
+| 3 | **Wallet (TestApp)** consent sheet: red box **"Includes transaction data: • Payment"** + "⚠ The website requesting this data is unknown" | NO — displayName only (Consent.kt), no amount/payee | `4-wallet-consent-transaction-data.png` |
+| 4 | **Biometric** (fingerprint; human presence gate) | — | secure surface (black) |
+| 5 | Verifier: parsed the mdoc, then **`invalid_request: Payment card is not from a trusted issuer`** | — | reproduces Run 2 |
+
+**The headline finding, now airtight:** the user authorizes a $12.50 payment to a specific account
+and **no surface in the entire stack ever shows the amount or payee** — while the DeviceKey *does*
+sign over the TS12 transaction-data hashes (sealing real, rendering absent). The unknown-verifier
+warning exists at TWO layers (Chrome origin + wallet). Question #3 is answered; #2 is answered with
+screenshots; #4 reproduced including the biometric gate. Incidental: the CredMan selector chose the
+red (dev) TestApp variant's credential over the blue install — first-registered wins silently.
+
 ### Verdict + next actions (2026-07-02, post Run 2)
 
 1. **The §12.1/12.1b questions are answered without self-hosting**: ceremony mechanics work
