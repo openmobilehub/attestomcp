@@ -126,6 +126,29 @@ Two design-relevant details from the brewery DCQL:
   transaction hashes. This is "delegate actions, not identity" already live in the reference
   verifier: identity claims disclose, only the payment instrument seals the transaction.
 
+## Readout — RUN 5, 2026-07-03 (SELF-HOSTED Utopia stack: local issuance works, green settlement one tap away)
+
+Goal: a settlement the verifier **accepts**, without waiting for the hosted-issuer fix. Method: run
+the whole Utopia bundle locally and use its internally-consistent trust chain (registry = CA; bank
+enrolls with it; UPay trusts it) — no IACA surgery.
+
+**Stack**: `multipaz-utopia` → `./gradlew :deployment:buildDockerImage` (2m39s clean build) → one
+docker image, all services behind nginx on `localhost:8100`. Phone reaches it via
+`adb reverse tcp:8100 tcp:8100` — and since `http://localhost:8100` is the **default BASE_URL**,
+every URL in the protocol messages is correct with zero config (and localhost is a secure context
+on both Chrome desktop and Android).
+
+| Finding | Detail |
+| :-- | :-- |
+| **Published Wallet cannot issue from a local issuer — architectural** | After the offer deep-link, the wallet polls `root/getIssuingAuthority` against its **hosted wallet-server**: the OID4VCI client runs server-side, so `localhost` offers resolve on the wrong machine. Direct confirmation of the wallet-server custody architecture 005 §5 assumes — the wallet app holds keys + UI; the wallet server does the protocol legwork. |
+| **On-device client works: TestApp issued from the local bank, end-to-end** | Blue TestApp → "Provision a Document from an Issuer" → `http://localhost:8100/bank_of_utopia` → PAR → authorize (persona page served by the **local** registry, personas incl. Pivo Miller with a payment record) → token 200 → **`POST /bank_of_utopia/credential` → 200 (1.1 MB)**. "Pivo's Debit Card" (mDoc, `payment_sca_mdoc`) provisioned, hardware-backed. |
+| **The hosted issuance 500 does NOT reproduce locally** | Same code (fresh clone), same flow, clean seed → issuance succeeds. The upstream bug (`NoSuchElementException: List is empty`) is **hosted-deployment-specific** (data/config drift), not a code bug — key input for the filed bug report. |
+| **CredMan first-registered quirk reconfirmed — now consequential** | Local UPay ceremony ran twice; both times the **red (dev) TestApp** answered with Erika's self-issued card and the verifier (rightly) refused it — while trust-chain-valid "Pivo's Debit Card" sat in the blue TestApp. The wrong-wallet-wins behavior observed in Run 3 is not cosmetic: it silently routes a payment ceremony to an untrusted credential. Upstream-reportable UX finding. |
+| Green settlement | **Pending one correct card pick + fingerprint** — stack, card, and ceremony all verified up to the picker. |
+
+Local quirk noted: the local UPay page renders payee as a dropdown fed by `accounts.json` (hosted
+page is free-text); the real form value lives in `input#account`.
+
 ### Verdict + next actions (2026-07-02, post Run 2)
 
 1. **The §12.1/12.1b questions are answered without self-hosting**: ceremony mechanics work
