@@ -42,16 +42,29 @@ Chrome on the phone · ~15 minutes.
    cross-device handoff. Record whether it works with the published wallet (this is the shape the
    claude.ai approve page will use).
 
-## Readout table (fill in)
+## Readout table — RUN 2026-07-02 (Pixel 10 Pro, Android 16, adb-driven)
 
 | # | Question | Result |
 | :-- | :-- | :-- |
-| 1 | Utopia payment card provisionable from the published APK's issuer list? | |
-| 2 | Consent sheet: "• Payment" only, or payload fields rendered? (screenshot) | |
-| 3 | Unknown-verifier warning shown? | |
-| 4 | Ceremony completes end-to-end (ledger confirmation)? | |
-| 5 | Cross-device (desktop QR) works? | |
-| 6 | Brewery combined age+payment presentment works? | |
+| 1 | Utopia payment card provisionable from the published APK's issuer list? | **NO — hosted issuance broken.** The card IS in the issuer list, but issuance fails with a server-side **500: `NoSuchElementException: List is empty`** (logcat `ProvisioningModel`). Reproduced on wallet **W22 AND W27** (updated mid-spike), for **payment AND core/age** record types. Also: only **1 of 8** hosted personas (Phileas Foggbottom) has a payment record at all; the local repo seed's payment personas (Pivo Miller, Nadezhda Akulova) don't exist on the hosted records server. |
+| 2 | Consent sheet rendering | **BLOCKED** by #1 — no credential ever landed |
+| 3 | Unknown-verifier warning | BLOCKED |
+| 4 | Ceremony end-to-end | BLOCKED |
+| 5 | Cross-device QR | BLOCKED |
+| 6 | Brewery age+payment | BLOCKED |
+
+### Verdict + next actions (2026-07-02)
+
+The published wallet + hosted-issuer path is **unusable today** — a hosted-infra bug, not a design
+problem. Consequences:
+
+1. **Upstream bug report** (concrete, reproducible): wallet W27 + `issuer.multipaz.org` → 500
+   "List is empty" on every issuance. This becomes the NEW lead item of the Multipaz conversation
+   (stronger than the old Ask 2 — it blocks their own demo, not just ours).
+2. **Demo plan flips to self-hosted Utopia stack** (podman; `multipaz-utopia/deployment/README.md`) —
+   where `records.json` is ours, the seed has working payment personas, and we control uptime.
+   The "zero self-hosted infra" claim of this runbook is dead until the hosted bug is fixed.
+3. Ceremony/consent-sheet questions (#2–6) move to the self-hosted rerun.
 
 ## What the answers decide
 
