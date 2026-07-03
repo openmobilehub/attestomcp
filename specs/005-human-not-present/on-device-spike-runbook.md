@@ -116,6 +116,15 @@ point as same-device: `invalid_request: Payment card is not from a trusted issue
 | # | Question | Result |
 | :-- | :-- | :-- |
 | 5 | Cross-device QR with published artifacts | **YES — full loop works.** Desktop QR → phone scan → CredMan/wallet consent + biometric on phone → presentation travels back to the desktop origin → verifier parses it. Issuer-trust refusal is the expected endpoint (TestApp IACA), not a transport failure. **This is exactly the shape the claude.ai approve page needs** — the §5 design's cross-device leg is de-risked on stock, published software. |
+| 6 | Brewery combined age+payment | **Wire: YES, same cross-device route.** `POST /brewery/checkout` returns ONE DCQL query with two `credential_sets` — age (`photoid \| mdl \| eupid \| aadhaar`, claim-set fallback `age_over_18` → `age_in_years` → `birth_date`) and payment — plus TS12 `urn:eudi:sca:payment:1` transaction_data bound **only to the payment credential** (`credential_ids: ["payment"]`; payee "Utopia Brewery"/38445565, amount 84.0 USD). Captured in [`spike-evidence/6-brewery-checkout-dcql.json`](./spike-evidence/6-brewery-checkout-dcql.json). Ceremony completed from the phone; verifier declined (`invalid_request` — the brewery page drops the detail string, presumably the same issuer-trust refusal). Phone-side consent observations: pending maintainer report. |
+
+Two design-relevant details from the brewery DCQL:
+- The age set requests **`age_over_18` for alcohol** — Utopia's jurisdictional threshold. Invariant
+  #5 (threshold must match the product's restriction) is a *policy* choice the verifier makes; the
+  rails don't enforce it. Our US gate stays `age.over(21)`.
+- The transaction data is bound **only to the payment credential** — the age credential signs no
+  transaction hashes. This is "delegate actions, not identity" already live in the reference
+  verifier: identity claims disclose, only the payment instrument seals the transaction.
 
 ### Verdict + next actions (2026-07-02, post Run 2)
 

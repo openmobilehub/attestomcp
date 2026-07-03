@@ -1,0 +1,313 @@
+{
+    "dcql": {
+        "credentials": [
+            {
+                "id": "photoid",
+                "format": "mso_mdoc",
+                "meta": {
+                    "doctype_value": "org.iso.23220.photoid.1"
+                },
+                "claims": [
+                    {
+                        "id": "given_name",
+                        "path": [
+                            "org.iso.23220.1",
+                            "given_name"
+                        ]
+                    },
+                    {
+                        "id": "family_name",
+                        "path": [
+                            "org.iso.23220.1",
+                            "family_name"
+                        ]
+                    },
+                    {
+                        "id": "birth_date",
+                        "path": [
+                            "org.iso.23220.1",
+                            "birth_date"
+                        ]
+                    },
+                    {
+                        "id": "age_in_years",
+                        "path": [
+                            "org.iso.23220.1",
+                            "age_in_years"
+                        ]
+                    },
+                    {
+                        "id": "age_over_18",
+                        "path": [
+                            "org.iso.23220.photoid.1",
+                            "age_over_18"
+                        ]
+                    }
+                ],
+                "claim_sets": [
+                    [
+                        "age_over_18"
+                    ],
+                    [
+                        "age_in_years"
+                    ],
+                    [
+                        "birth_date"
+                    ]
+                ]
+            },
+            {
+                "id": "mdl",
+                "format": "mso_mdoc",
+                "meta": {
+                    "doctype_value": "org.iso.18013.5.1.mDL"
+                },
+                "claims": [
+                    {
+                        "id": "given_name",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "given_name"
+                        ]
+                    },
+                    {
+                        "id": "family_name",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "family_name"
+                        ]
+                    },
+                    {
+                        "id": "birth_date",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "birth_date"
+                        ]
+                    },
+                    {
+                        "id": "age_in_years",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "age_in_years"
+                        ]
+                    },
+                    {
+                        "id": "age_over_21",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "age_over_21"
+                        ]
+                    },
+                    {
+                        "id": "age_over_18",
+                        "path": [
+                            "org.iso.18013.5.1",
+                            "age_over_18"
+                        ]
+                    }
+                ],
+                "claim_sets": [
+                    [
+                        "age_over_18"
+                    ],
+                    [
+                        "age_over_21"
+                    ],
+                    [
+                        "age_in_years"
+                    ],
+                    [
+                        "birth_date"
+                    ]
+                ]
+            },
+            {
+                "id": "eupid",
+                "format": "mso_mdoc",
+                "meta": {
+                    "doctype_value": "eu.europa.ec.eudi.pid.1"
+                },
+                "claims": [
+                    {
+                        "id": "given_name",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "given_name"
+                        ]
+                    },
+                    {
+                        "id": "family_name",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "family_name"
+                        ]
+                    },
+                    {
+                        "id": "birth_date",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "birth_date"
+                        ]
+                    },
+                    {
+                        "id": "age_in_years",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "age_in_years"
+                        ]
+                    },
+                    {
+                        "id": "age_over_21",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "age_over_21"
+                        ]
+                    },
+                    {
+                        "id": "age_over_18",
+                        "path": [
+                            "eu.europa.ec.eudi.pid.1",
+                            "age_over_18"
+                        ]
+                    }
+                ],
+                "claim_sets": [
+                    [
+                        "age_over_18"
+                    ],
+                    [
+                        "age_over_21"
+                    ],
+                    [
+                        "age_in_years"
+                    ],
+                    [
+                        "birth_date"
+                    ]
+                ]
+            },
+            {
+                "id": "aadhaar",
+                "format": "mso_mdoc",
+                "meta": {
+                    "doctype_value": "in.gov.uidai.aadhaar.1"
+                },
+                "claims": [
+                    {
+                        "id": "resident_name",
+                        "path": [
+                            "in.gov.uidai.aadhaar.1",
+                            "resident_name"
+                        ]
+                    },
+                    {
+                        "id": "age_above18",
+                        "path": [
+                            "in.gov.uidai.aadhaar.1",
+                            "age_above18"
+                        ]
+                    },
+                    {
+                        "id": "birth_date",
+                        "path": [
+                            "in.gov.uidai.aadhaar.1",
+                            "birth_date"
+                        ]
+                    }
+                ],
+                "claim_sets": [
+                    [
+                        "age_above18"
+                    ],
+                    [
+                        "birth_date"
+                    ]
+                ]
+            },
+            {
+                "id": "payment",
+                "format": "mso_mdoc",
+                "meta": {
+                    "doctype_value": "org.multipaz.payment.sca.1"
+                },
+                "claims": [
+                    {
+                        "path": [
+                            "org.multipaz.payment.sca.1",
+                            "issuer_name"
+                        ]
+                    },
+                    {
+                        "path": [
+                            "org.multipaz.payment.sca.1",
+                            "masked_account_reference"
+                        ]
+                    },
+                    {
+                        "path": [
+                            "org.multipaz.payment.sca.1",
+                            "payment_instrument_id"
+                        ]
+                    },
+                    {
+                        "path": [
+                            "org.multipaz.payment.sca.1",
+                            "holder_name"
+                        ]
+                    },
+                    {
+                        "path": [
+                            "org.multipaz.payment.sca.1",
+                            "expiry_date"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "credential_sets": [
+            {
+                "purpose": "Age verification for alcohol purchase",
+                "options": [
+                    [
+                        "photoid"
+                    ],
+                    [
+                        "mdl"
+                    ],
+                    [
+                        "eupid"
+                    ],
+                    [
+                        "aadhaar"
+                    ]
+                ]
+            },
+            {
+                "purpose": "Payment",
+                "options": [
+                    [
+                        "payment"
+                    ]
+                ]
+            }
+        ]
+    },
+    "transaction_data": [
+        {
+            "type": "urn:eudi:sca:payment:1",
+            "credential_ids": [
+                "payment"
+            ],
+            "payload": {
+                "transaction_id": "v6lVd86c8gSFoa_z",
+                "payee": {
+                    "name": "Utopia Brewery",
+                    "id": "38445565"
+                },
+                "amount": 84.0,
+                "currency": "USD"
+            }
+        }
+    ],
+    "nonce": "_q0vw2tjJWYlNp5vaDEK"
+}
