@@ -18,16 +18,15 @@ _Updated **2026-07-02** · `005-human-not-present` · CI green · 189 tests pass
       manually in that order. See `docs/PUBLISHING.md`.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **Rename — no longer optional (2026-07-02).** LF brand counsel (Daniel Scales, via the Saurabh/Mike
-      Woster thread) ruled that "MCP" in the name suggests the project is run by the MCP project (AgenticAI
-      Foundation trademark) and violates the [LF trademark policy](https://lfprojects.org/policies/trademark-policy/)
-      unless used **descriptively** — "X for MCP" is fine, a fused "XMCP" is not. Decide the new name **before**
-      adding `NPM_TOKEN` / publishing `0.2.0` (nothing is cemented: `0.2.0` unpublished, GDC not public).
-      Wrinkle: plain "Attesto" was itself rated *contested* commercially (`docs/naming-clearance.md` — note that
-      doc's history was mangled by the #8 bulk rename; its collision analysis reads "AttestoMCP" but is about
-      "Attesto"). Vetted coined shortlist: **Heralda / Warrend / Avowa**. Suggested path: confirm the acceptable
-      descriptive pattern with counsel (e.g. "Attesto — a consent gate for MCP agents"), then pick and do the
-      known-size find-replace (~171 sites, same job as #8/#30).
+- [ ] **Rename — DEFERRED to ~week of 2026-07-06 (maintainer, 2026-07-03).** Mandatory per LF brand counsel
+      (Daniel Scales, via the Saurabh/Mike Woster thread): "MCP" in the name suggests the project is run by the
+      MCP project (AgenticAI Foundation trademark) and violates the
+      [LF trademark policy](https://lfprojects.org/policies/trademark-policy/) unless used **descriptively** —
+      "X for MCP" is fine, a fused "XMCP" is not. Research is **done** (nine sweeps in `docs/naming-clearance.md`;
+      queue leader **Consentinel**, shortlist Attorn / Creance / Assentio / Poder). **Next action is external:
+      forward `docs/naming-counsel-brief.md` (drafted 2026-07-03, ready to send) to LF counsel for a USPTO+EUIPO
+      knockout in classes 9/36/42.** Revisit next week. Blocks `NPM_TOKEN` / publish `0.2.0` (nothing cemented:
+      `0.2.0` unpublished, GDC not public). Execution when a name clears = known-size find-replace (~171 sites).
 - [ ] **005 sequencing fork — the spike input is now IN (2026-07-02).** Ship merchant-side v0.1
       (server-HMAC grants) first, or re-scope 005 to the wallet-custody connector architecture directly?
       The on-device spike answered all six opens (`specs/005-human-not-present/on-device-spike-runbook.md`,
