@@ -42,29 +42,52 @@ Chrome on the phone · ~15 minutes.
    cross-device handoff. Record whether it works with the published wallet (this is the shape the
    claude.ai approve page will use).
 
-## Readout table — RUN 2026-07-02 (Pixel 10 Pro, Android 16, adb-driven)
+## Readout table — RUN 1, 2026-07-02 morning (published Wallet, Pixel 10 Pro, Android 16, adb-driven)
 
 | # | Question | Result |
 | :-- | :-- | :-- |
 | 1 | Utopia payment card provisionable from the published APK's issuer list? | **NO — hosted issuance broken.** The card IS in the issuer list, but issuance fails with a server-side **500: `NoSuchElementException: List is empty`** (logcat `ProvisioningModel`). Reproduced on wallet **W22 AND W27** (updated mid-spike), for **payment AND core/age** record types. Also: only **1 of 8** hosted personas (Phileas Foggbottom) has a payment record at all; the local repo seed's payment personas (Pivo Miller, Nadezhda Akulova) don't exist on the hosted records server. |
-| 2 | Consent sheet rendering | **BLOCKED** by #1 — no credential ever landed |
-| 3 | Unknown-verifier warning | BLOCKED |
-| 4 | Ceremony end-to-end | BLOCKED |
-| 5 | Cross-device QR | BLOCKED |
-| 6 | Brewery age+payment | BLOCKED |
+| 2 | Consent sheet rendering | BLOCKED by #1 (answered in Run 2 below) |
+| 3 | Unknown-verifier warning | BLOCKED (Run 2: not directly observable — secure surface) |
+| 4 | Ceremony end-to-end | BLOCKED (answered in Run 2 below) |
+| 5 | Cross-device QR | BLOCKED (still open after Run 2) |
+| 6 | Brewery age+payment | BLOCKED (still open after Run 2) |
 
-### Verdict + next actions (2026-07-02)
+## Readout — RUN 2, 2026-07-02 evening (Multipaz **TestApp** route around the broken issuer)
 
-The published wallet + hosted-issuer path is **unusable today** — a hosted-infra bug, not a design
-problem. Consequences:
+Pivot: the **Multipaz TestApp** (blue variant, `org.multipaz.testapp`, v0.100.0-pre / build 1199)
+**self-issues its sample documents on-device** — no hosted issuer in the loop. "Create Test Documents
+in Platform Secure Area" → **13 documents in ~11s**, hardware-backed, including **"Erika's Payment
+Card Credential"** (`DigitalPaymentCredential`) and an mDL. Ceremony driven on the hosted UPay page
+via Chrome DevTools protocol (`run()` with user gesture), payee = seed account `38445565`
+(hosted ledger accepts 38445565 / 79356114 / 87874773; rejects unknown accounts).
 
-1. **Upstream bug report** (concrete, reproducible): wallet W27 + `issuer.multipaz.org` → 500
-   "List is empty" on every issuance. This becomes the NEW lead item of the Multipaz conversation
-   (stronger than the old Ask 2 — it blocks their own demo, not just ours).
-2. **Demo plan flips to self-hosted Utopia stack** (podman; `multipaz-utopia/deployment/README.md`) —
-   where `records.json` is ours, the seed has working payment personas, and we control uptime.
-   The "zero self-hosted infra" claim of this runbook is dead until the hosted bug is fixed.
-3. Ceremony/consent-sheet questions (#2–6) move to the self-hosted rerun.
+| # | Question | Result |
+| :-- | :-- | :-- |
+| 1b | Payment credential obtainable at all? | **YES — TestApp self-issuance.** Hosted-issuer bug stands (report still worth filing) but no longer blocks the ceremony questions. |
+| 2 | Consent sheet rendering | **CONFIRMED: displayName-only.** Live run + source: `multipaz-compose … presentment/Consent.kt` renders transaction data as a red (`colorScheme.error`) banner containing only `• ${type.displayName}` → **"• Payment"** — no amount, no payee, no TS12 fields. Same composable serves TestApp AND Wallet. Desk prediction F2 confirmed; §5 approve-page-carries-the-terms stands; upstream Ask 1 unchanged. |
+| 3 | Unknown-verifier warning | **Not capturable**: the entire consent UI runs on a **FLAG_SECURE surface** — `adb screencap` returns black frames for the whole ceremony (itself a correct-behavior finding: consent UI is screenshot-proof). Needs eyes-on-device. |
+| 4 | Ceremony end-to-end | **Wire: YES. Settlement: REFUSED at issuer trust.** DC API (OpenID4VP v1) → TestApp presents → post-share screen "The info was shared" → UPay backend decrypts + parses the mdoc, then rejects: **`invalid_request: Payment card is not from a trusted issuer`**. The hosted UPay verifier enforces a real issuer trust list — issuer-verified verification exists in the wild on the verifier side, exactly where the design puts it. TestApp's self-signed IACA is (rightly) not in it. |
+| 5 | Cross-device QR | Open — rerun from desktop browser. |
+| 6 | Brewery age+payment | Open — TestApp's self-issued mDL will presumably hit the same trusted-issuer refusal at the brewery verifier; consent-sheet observation still valuable. |
+
+Bugs found in the hosted stack along the way (upstream-reportable):
+- `issuer.multipaz.org`: 500 `NoSuchElementException: List is empty` on ALL issuance (Run 1, the blocker).
+- `upay/verify_credentials.js` crashes (`TypeError … reading 'digital'`) instead of surfacing backend
+  400s (e.g. unknown payee) — `make_request` errors are never shown to the user.
+
+### Verdict + next actions (2026-07-02, post Run 2)
+
+1. **The §12.1/12.1b questions are answered without self-hosting**: ceremony mechanics work
+   end-to-end; consent sheet is displayName-only (mitigation stands); verifier-side issuer trust is
+   real in the hosted stack.
+2. **Green-path settlement** (a presentation the verifier accepts) still needs either fixed hosted
+   issuance or the **self-hosted Utopia stack** with the TestApp/our IACA added to the verifier trust
+   list — now needed only for the demo's happy path, not for de-risking.
+3. **Upstream bug report stays the lead item** of the Multipaz conversation, now with two bugs and
+   one confirmed rendering gap (Ask 1).
+4. Open observations for a human-eyes run (secure surface): consent-sheet look, biometric prompt,
+   unknown-verifier warning; plus #5 cross-device QR and #6 brewery beat.
 
 ## What the answers decide
 
