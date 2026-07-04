@@ -49,12 +49,13 @@ _Updated **2026-07-02** · `005-human-not-present` · CI green · 189 tests pass
   [#26](https://github.com/openmobilehub/attestomcp/issues/26)).
 - **Cart Mandate (004) — CORE ALREADY BUILT (discovered 2026-07-03; STATUS was stale).** `ceremony/cartMandate.ts`
   (issue/verify, typed refusals, `alg`/expiry/trust fencing), `completion.ts` wiring (verify → re-price →
-  reconcile), and `reconciliation.ts` all exist, committed, and **tested green** (10 cartMandate + 11
-  reconciliation among 160 gate tests). FR-001…006, 008 satisfied. **Only FR-007 (`statelessOrders`, US3 P3) is
-  unbuilt** — the opt-in that lets `resolveOrder` reconstruct a created order from a verified cart mandate with
-  no store read; it's security-bearing + cross-cutting (mandate threaded through the rails + host). Does NOT
-  need publish (workspace dev; rename only gates publish). Note: this also corrects the sequencing memo's
-  "004 builds after publish" — 004's prerequisite for 005 is effectively satisfied.
+  reconcile), and `reconciliation.ts` all exist, committed, and **tested green**. **FR-007 (`statelessOrders`)
+  now implemented too** (2026-07-03, `42d7abb`): opt-in `resolveOrder` reconstruction from a verified Cart
+  Mandate with no store read; 9 new tests incl. SC-003 two-instance resolve→complete + 4 bypass tests proven
+  red when the control is removed. **169 gate tests green; build clean.** All 9 FRs satisfied. **Only remaining
+  slice: the rail HTTP handlers don't yet thread the request-borne mandate into `resolveOrder`** (thin
+  follow-up; wire-encoding is a small design choice) — the capability + completion path are done. Corrects the
+  sequencing memo's "004 builds after publish" (it didn't need publish; rename only gates publish).
 - **HNP (005)** — big design day 2026-07-01 (branch `005-human-not-present`, pushed; no PR yet): the
   **connector-architecture design** (wallet-custody over MCP: stock Multipaz Wallet seals the Intent
   Mandate, a new wallet server signs bounded draws, a UPay-style verifier settles, Claude orchestrates
