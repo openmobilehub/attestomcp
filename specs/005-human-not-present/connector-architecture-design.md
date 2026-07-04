@@ -91,6 +91,15 @@ connectors are their whole interface.
 **merchant/PSP** own enforcement + settlement, and the **platform** (Android/browser) owns the referee calls
 (origin binding, biometric, consent-sheet rendering).
 
+> **Reference, not payload — a recurring stance.** "The agent holds a reference, never authority" also
+> governs *cart* transport on the merchant side. The gate's `ap2.CartMandate` supports an opt-in
+> `statelessOrders` mode (spec 004 FR-007) where the signed cart travels *with* the request instead of
+> living in a server store — useful for serverless merchants, but it puts cart contents (product ids +
+> quantities) on the wire through the agent. That is the opposite of the reference-holding stance here, so
+> under wallet-custody the default remains **off**: the agent carries an `intentId` / order id (a name),
+> and content stays server-side unless a merchant genuinely cannot keep shared state. Same principle, both
+> sides of the ceremony: delegate a *reference*, not the *content*.
+
 **Compromise asymmetry** (why state lives where it does): a leaked `intentId` is a *name*, not a token —
 worthless without the wallet's OAuth session and `K_s`. A compromised orchestrator can only *ask* for
 in-bounds draws. A leaked wallet-server key (`K_s`) is the worst server-side asset, yet still bounded: it
