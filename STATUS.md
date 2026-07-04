@@ -47,7 +47,14 @@ _Updated **2026-07-02** · `005-human-not-present` · CI green · 189 tests pass
   on `@openmobilehub/attestomcp-*` from the workspace to the published `^0.2.x`, and renames its own
   `AttestoMcp` / `attestoMcpManifest` imports to `AttestoMCP` / `attestoMCPManifest` (tracked in that repo,
   [#26](https://github.com/openmobilehub/attestomcp/issues/26)).
-- **Cart Mandate (004)** — spec ready (`specs/004-cart-mandate/spec.md`); build after publish.
+- **Cart Mandate (004) — CORE ALREADY BUILT (discovered 2026-07-03; STATUS was stale).** `ceremony/cartMandate.ts`
+  (issue/verify, typed refusals, `alg`/expiry/trust fencing), `completion.ts` wiring (verify → re-price →
+  reconcile), and `reconciliation.ts` all exist, committed, and **tested green** (10 cartMandate + 11
+  reconciliation among 160 gate tests). FR-001…006, 008 satisfied. **Only FR-007 (`statelessOrders`, US3 P3) is
+  unbuilt** — the opt-in that lets `resolveOrder` reconstruct a created order from a verified cart mandate with
+  no store read; it's security-bearing + cross-cutting (mandate threaded through the rails + host). Does NOT
+  need publish (workspace dev; rename only gates publish). Note: this also corrects the sequencing memo's
+  "004 builds after publish" — 004's prerequisite for 005 is effectively satisfied.
 - **HNP (005)** — big design day 2026-07-01 (branch `005-human-not-present`, pushed; no PR yet): the
   **connector-architecture design** (wallet-custody over MCP: stock Multipaz Wallet seals the Intent
   Mandate, a new wallet server signs bounded draws, a UPay-style verifier settles, Claude orchestrates
