@@ -52,10 +52,13 @@ _Updated **2026-07-02** · `005-human-not-present` · CI green · 189 tests pass
   reconcile), and `reconciliation.ts` all exist, committed, and **tested green**. **FR-007 (`statelessOrders`)
   now implemented too** (2026-07-03, `42d7abb`): opt-in `resolveOrder` reconstruction from a verified Cart
   Mandate with no store read; 9 new tests incl. SC-003 two-instance resolve→complete + 4 bypass tests proven
-  red when the control is removed. **169 gate tests green; build clean.** All 9 FRs satisfied. **Only remaining
-  slice: the rail HTTP handlers don't yet thread the request-borne mandate into `resolveOrder`** (thin
-  follow-up; wire-encoding is a small design choice) — the capability + completion path are done. Corrects the
-  sequencing memo's "004 builds after publish" (it didn't need publish; rename only gates publish).
+  red when the control is removed. **All 9 FRs satisfied, and the rails now thread it end-to-end** (`a995da4`):
+  every rail decodes the mandate (`?cart` base64url on GET, `cartMandate` in the verify body on POST) via a
+  shared `decodeCartMandateParam`; payment rails forward it to `completeOrder`. Proven by 2 dc-payment
+  supertest integration tests (full stateless checkout against a throwing order store). **171 gate tests green;
+  build clean.** DX documented in `docs/reference/api.md`. **Remaining DX polish (not blocking):** the approve
+  link doesn't yet auto-embed the mandate under `statelessOrders` (host wires the client today) — planned
+  ergonomic follow-up. Corrects the sequencing memo's "004 builds after publish" (rename only gates publish).
 - **HNP (005)** — big design day 2026-07-01 (branch `005-human-not-present`, pushed; no PR yet): the
   **connector-architecture design** (wallet-custody over MCP: stock Multipaz Wallet seals the Intent
   Mandate, a new wallet server signs bounded draws, a UPay-style verifier settles, Claude orchestrates
