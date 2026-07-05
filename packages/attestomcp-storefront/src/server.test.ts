@@ -522,3 +522,37 @@ describe.each([
     expect(done.body.completed).toBe(true);
   });
 });
+
+// statelessOrders + UNGATED instant-demo place-order: the "Place order (instant demo)"
+// button must forward the cart, or the store-less server can't record the order. (This
+// path only shows when resolveGate returns [] — here headphones under an alcohol-only gate.)
+describe("statelessOrders — ungated instant-demo place-order carries the cart", () => {
+  const buildUngated = (): Storefront => {
+    const store = createStorefront({ statelessOrders: true, baseUrl: "http://shop.test" });
+    const a = new AttestoMCP();
+    a.mount(store.app);
+    // Only gate alcohol → headphones are UNGATED → the instant-demo place-order button shows.
+    a; store.gate((order) => a.requirements(order, [required(age.over(21).when((o) => o.lines.some((l) => (l.minimumAge ?? 0) >= 21)))]));
+    return store;
+  };
+
+  it("the checkout page's place-order script forwards the cart (regression: it dropped it)", async () => {
+    const store = buildUngated();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "aurora-headphones", quantity: 1 }] } })).structuredContent as any;
+    const url = new URL(sc.checkoutUrl);
+    const page = await request(store.app).get(url.pathname + url.search);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("const CART = new URLSearchParams"); // the fix: cart read + forwarded
+  });
+
+  it("place-order with the cart records the order on a store-less server", async () => {
+    const store = buildUngated();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "aurora-headphones", quantity: 1 }] } })).structuredContent as any;
+    const cart = new URL(sc.checkoutUrl).searchParams.get("cart");
+    const placed = await request(store.app).post("/checkout/place-order").send({ order: sc.orderId, cart });
+    expect(placed.status).toBe(200);
+    // recorded ⇒ order-status reports completed (was impossible without the cart)
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${sc.orderId}`);
+    expect(status.body.completed).toBe(true);
+  });
+});
