@@ -149,21 +149,31 @@ For any new API or change, ask:
 
 ## Open gaps against these principles (current, honest)
 
-These are live tensions found while working in the code (2026-07-04) — the rubric applied to ourselves:
+These are live tensions found while working in the code — the rubric applied to ourselves. Updated
+2026-07-04 after the `statelessOrders` work (PR #32) closed some and confirmed others.
 
-1. **`resolveOrder` is called ~7× across three rails** (P2/P7). Threading one parameter touched all of
-   them. Order resolution wants to be a *single* per-request choke point (a resolver/middleware), not
-   inlined. The duplicated loyalty-read in its two branches is the small symptom.
-2. **The mandate transport contract was undesigned** (P4/contract-at-the-boundary). Left as "a small
-   design choice," which is *why* `statelessOrders` was inert over HTTP until the `?cart` convention was
-   invented mid-implementation. Boundary contracts should be pinned in the spec, not discovered in code.
-3. **The approve link doesn't auto-carry the mandate under `statelessOrders`** (P1/P5). The host must
-   wire the client to thread it — the *ergonomic, safe* default (embed it in the approve URL) isn't the
-   easy path yet. Make the right thing the default thing.
-4. **Two inconsistent error doors** (P4). `verifyCartMandate` returns a verdict; `verifyChallenge`
-   throws. Pick one convention for "verify" functions and hold it.
-5. **`completeOrder` does seven things in sequence** (P7 readability). Cohesive and correct, but it
-   wants to read as a named pipeline of steps (`checkGates → idempotency → verifyCart → reprice →
+1. **The cart mandate is threaded by hand through ~10 hops** (P2/P7 — the biggest open gap, and it
+   *grew*). Getting `statelessOrders` correct meant adding the cart to `resolveOrder` (×7 rail call
+   sites), each rail's verify-POST body, each rail page's client JS, the storefront `/checkout` page,
+   `place-order`, `homeRequires`, the gate `returnUrl` (×3), the passkey device-toggle, and the ungated
+   place-order — and each missed hop was a silent 404 (found reactively, one bug at a time). This is the
+   textbook symptom of a **missing single choke point**: order resolution + link-building want to be one
+   place that carries the transport, not N inlined sites. **Highest-value refactor on this list.**
+2. ~~**The mandate transport contract was undesigned**~~ — now designed + documented (`?cart` base64url
+   on GET, `cartMandate`/`cart` in the verify body; `docs/reference/api.md`). Lesson stands: it should
+   have been pinned in the spec *before* implementation, not discovered mid-build.
+3. ~~**The approve link doesn't auto-carry the mandate**~~ — **done** in the storefront (PR #32): the
+   `checkout` tool embeds the mandate in the link and `homeRequires` propagates it to every approve URL,
+   so the client threads it transparently. (A *bare gate* consumer still wires it — the storefront is
+   the ergonomic default.)
+4. **`statelessOrders` needed a stable key, and originally didn't demand one** (P6/P11 — caught by the
+   automated review, fixed in PR #32). It now fails fast without a `signingKey`/`allowEphemeralKey`. The
+   lesson: a mode whose whole point is multi-instance must *fail fast* on the config that breaks
+   multi-instance, never silently self-generate an instance-local secret.
+5. **Two inconsistent error doors** (P4, still open). `verifyCartMandate` returns a verdict;
+   `verifyChallenge` throws. Pick one convention for "verify" functions and hold it.
+6. **`completeOrder` does seven things in sequence** (P7 readability, still open). Cohesive and correct,
+   but it wants to read as a named pipeline of steps (`checkGates → idempotency → verifyCart → reprice →
    reconcile → ageGate → settle → record`) so the shape is legible and each step is independently testable.
 
 ---
