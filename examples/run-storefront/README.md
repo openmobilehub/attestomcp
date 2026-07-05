@@ -19,6 +19,27 @@ Serves, all from this repo's code:
 - `http://localhost:3005/attestomcp/*` — the gate's browsable checkout / approve pages
 - the product-picker widget bundle
 
+### Stateful vs stateless (env toggle)
+
+The harness reads two env vars so you can run **either custody model** — even both at once:
+
+```bash
+node examples/run-storefront/serve.mjs                        # STATEFUL  (default) → :3005
+STATELESS=1 PORT=3006 node examples/run-storefront/serve.mjs  # STATELESS           → :3006
+```
+
+The startup log prints the active mode, and the `checkout` tool's link shows the difference:
+
+| Mode | `STATELESS` | checkout link | order lives in |
+| :-- | :-- | :-- | :-- |
+| **Stateful** (default) | unset | `…/checkout?order=<id>` | the server's created-order store |
+| **Stateless** | `1` | `…/checkout?order=<id>&cart=<base64url mandate>` | the signed link (no store) |
+
+To feel the difference: in **stateless**, hit `/checkout?order=<id>` *without* `&cart=` → **404** (no
+store); *with* `&cart=` → renders. In **stateful**, the id alone renders (the store holds the order).
+Both re-price from the catalog and enforce the same gates. (`statelessOrders` drops only the
+*created-order* store — verification + completion state stay server-side.)
+
 ## See the ceremony end-to-end
 
 Shopping happens through an MCP client, so connect one — the quickest is the Inspector (no account):
@@ -51,14 +72,7 @@ it to buy the whiskey.)
   ```
   A `serverInfo: attestomcp-storefront` line means it's healthy.
 
-## `statelessOrders` is ON here
-
-This harness sets `createStorefront({ statelessOrders: true })`, so the `checkout` tool carries the
-order in a **signed cart mandate on the link** — `.../checkout?order=<id>&cart=<base64url>` — instead of
-a server-side order store, and the `/checkout` page + gate rails reconstruct + **verify** it. You'll see
-the `cart=` payload in the checkout URL the `checkout` tool returns and in each `/attestomcp/…` approve
-link. (The completion + verification stores are still server-side; `statelessOrders` only drops the
-*created-order* store.) The lower-level, store-free version is [`../stateless-orders/`](../stateless-orders/).
+The lower-level, store-free version is [`../stateless-orders/`](../stateless-orders/) (always stateless).
 
 ## Note
 

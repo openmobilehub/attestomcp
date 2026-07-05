@@ -16,11 +16,12 @@ import express from "express";
 import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
 import { AttestoMCP, required, age } from "@openmobilehub/attestomcp-gate";
 
-const PORT = 3005;
+const PORT = Number(process.env.PORT) || 3005;
+// STATELESS=1 → the checkout link carries the signed cart mandate (?order=…&cart=…), no
+// order store. Default (unset) → STATEFUL: the store holds the order, link is ?order=id.
+const STATELESS = process.env.STATELESS === "1" || process.env.STATELESS === "true";
 const base = `http://localhost:${PORT}`;
-// statelessOrders: the checkout link carries the signed cart mandate (?order=…&cart=…)
-// instead of a server-side order store — the page + rails reconstruct + verify it.
-const store = createStorefront({ baseUrl: base, statelessOrders: true });
+const store = createStorefront({ baseUrl: base, statelessOrders: STATELESS });
 
 // Wire the gate exactly as the quickstart does: an age-21 gate on any alcohol line.
 // mount() reads statelessOrders (+ the owned signingKey) off app.locals.attestomcp.
@@ -48,6 +49,7 @@ app.use(store.app);
 await new Promise((resolve) => app.listen(PORT, resolve));
 const url = `${base}/mcp`;
 console.log(`\n  storefront (this repo's code) → ${base}`);
+console.log(`  mode                          → ${STATELESS ? "STATELESS (cart mandate in the link: ?order=id&cart=…)" : "STATEFUL (store-backed: ?order=id)"}`);
 console.log(`  MCP endpoint                  → ${url}`);
 console.log(`  gate checkout pages           → ${base}/attestomcp/…`);
 console.log(`\n  Shop via an MCP client:  npx @modelcontextprotocol/inspector  → ${url}`);
