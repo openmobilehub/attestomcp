@@ -10,6 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { readFileSync } from "node:fs";
 import { createStorefront, originFromRequest, type Storefront } from "./server.js";
 import { redisStorage, type RedisLike } from "./redis.js";
+import { firestoreCatalog, type FirestoreLike } from "./firestore.js";
 import { MemoryOrderStore } from "./state.js";
 import { AttestoMCP, age, membership, payment, required, optional, MemoryVerificationStore } from "@openmobilehub/attestomcp-gate";
 import type { Request } from "express";
@@ -35,6 +36,25 @@ function fakeRedis(): RedisLike & { store: Map<string, unknown> } {
 
 const mockReq = (headers: Record<string, string>, protocol = "http"): Request =>
   ({ headers, protocol } as unknown as Request);
+
+// A fake Firestore so a `firestoreCatalog(...)` source can be driven through createStorefront
+// with no live Firebase. `fail(true)` simulates an unreachable backend.
+function fakeFirestore(
+  docs: Array<{ id: string; data: Record<string, unknown> }>,
+): FirestoreLike & { fail: (v: boolean) => void } {
+  let failing = false;
+  return {
+    fail: (v: boolean) => { failing = v; },
+    collection() {
+      return {
+        async get() {
+          if (failing) throw new Error("firestore unreachable");
+          return { docs: docs.map((d) => ({ id: d.id, data: () => d.data })) };
+        },
+      };
+    },
+  };
+}
 
 const ALL_TOOLS = [
   "browse-products", "add-to-cart", "set-quantity", "remove-from-cart", "get-cart",
@@ -222,6 +242,66 @@ describe("GET /checkout — the shared three-gate page (renderRequirements)", ()
     expect(pay.body.completed).toBe(true);
     const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
     expect(status.body.completed).toBe(true);
+  });
+});
+
+describe("dynamic catalog source (spec 006) — createStorefront({ catalog: firestoreCatalog(...) })", () => {
+  const DOCS = [
+    { id: "oak-whiskey", data: { name: "Oak Reserve", price: 124, currency: "USD", category: "Beverages", minimumAge: 21 } },
+    { id: "drift-mouse", data: { name: "Drift Mouse", price: 49, currency: "USD", category: "Electronics" } },
+  ];
+
+  const checkoutId = async (c: Client, productId: string): Promise<string> =>
+    ((await c.callTool({ name: "checkout", arguments: { items: [{ productId, quantity: 1 }] } })).structuredContent as any).orderId;
+
+  function gatedDynamicStore(fs: FirestoreLike): Storefront {
+    const store = createStorefront({ catalog: firestoreCatalog({ client: fs }) });
+    const attestomcp = new AttestoMCP();
+    attestomcp.mount(store.app);
+    store.gate((order) =>
+      attestomcp.requirements(order, [
+        required(age.over(21).when((o: { lines: { minimumAge?: number }[] }) => o.lines.some((l) => l.minimumAge != null))),
+        required(payment.in("usd")),
+      ]),
+    );
+    return store;
+  }
+
+  it("serves the Firestore-loaded catalog through the tools (incl. the doc's age threshold)", async () => {
+    const c = await connect(createStorefront({ catalog: firestoreCatalog({ client: fakeFirestore(DOCS) }) }));
+    const res = (await c.callTool({ name: "browse-products", arguments: {} })).structuredContent as any;
+    expect(res.products.map((p: any) => p.id).sort()).toEqual(["drift-mouse", "oak-whiskey"]);
+    expect(res.products.find((p: any) => p.id === "oak-whiskey").minimumAge).toBe(21);
+  });
+
+  it("re-derives the age gate from the LIVE catalog on the checkout path (invariant 2)", async () => {
+    const store = gatedDynamicStore(fakeFirestore(DOCS));
+    const orderId = await checkoutId(await connect(store), "oak-whiskey");
+    const res = await request(store.app).get(`/checkout?order=${orderId}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("cred=age"); // the age gate, derived from the doc's minimumAge
+    expect(res.text).toContain("Payment is locked"); // withheld until age is proven
+  });
+
+  // BYPASS (Security invariant 1): a gated dynamic-catalog order POSTed straight to the
+  // instant-demo path is refused server-side, exactly like a static-catalog gated order.
+  it("BYPASS: a gated order over a dynamic catalog is refused at place-order (403)", async () => {
+    const store = gatedDynamicStore(fakeFirestore(DOCS));
+    const orderId = await checkoutId(await connect(store), "oak-whiskey");
+    await request(store.app).post("/checkout/place-order").type("form").send({ order: orderId }).expect(403);
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(false);
+  });
+
+  // FAIL-CLOSED (Security invariant 2, load-bearing): an unreachable cold load must REFUSE
+  // every request (503) rather than serve an empty catalog. FAILS if the prime middleware /
+  // fail-closed path is removed (the request would proceed against an absent catalog).
+  it("FAIL-CLOSED: an unreachable cold catalog load makes requests 503", async () => {
+    const fs = fakeFirestore(DOCS);
+    fs.fail(true); // down on the FIRST (cold) load — no last-known-good
+    const store = createStorefront({ catalog: firestoreCatalog({ client: fs }) });
+    const res = await request(store.app).get(`/checkout/order-status?orderId=whatever`);
+    expect(res.status).toBe(503);
   });
 });
 

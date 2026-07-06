@@ -36,6 +36,14 @@ _Updated **2026-07-05** · `main` · CI green._
   in-memory stays the zero-config default, explicit per-slot injection still wins, per-order keying + namespace
   isolation, fail-closed. Storefront suite green (+12 tests). **Pending:** commit (DCO) + PR; demo slim-down
   (scope A) tracked in `mcp-apps-shopping-demo`.
+- **Storefront dynamic catalog (006)** — [#28](https://github.com/openmobilehub/attestomcp/issues/28) (epic #29).
+  Spec-kit set in `specs/006-storefront-catalog-source/`. `createStorefront({ catalog: firestoreCatalog(…) })`:
+  `catalog` now accepts `Product[] | CatalogSource`; `firestoreCatalog` (subpath `./firestore`) loads from
+  Firestore with a TTL cache, fail-closed cold/empty, last-known-good on a refresh blip, malformed/negative
+  rejection. `firebase-admin` is an optional lazy peer dep; the static array stays the zero-config default.
+  Async source feeds the gate's **synchronous** ceremony re-price via a `load()` + `current()` split + a
+  request-priming middleware — **no gate change**. Storefront suite green (+16 tests); gate unchanged (160).
+  **Pending:** review + merge; demo slim-down (scope A) tracked in `mcp-apps-shopping-demo`.
 
 ---
 
