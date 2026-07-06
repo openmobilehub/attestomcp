@@ -363,9 +363,26 @@ into this same re-scope decision.
    standard flow); our wallet server is verifier + policy engine + draw signer + MCP connector only. The
    Utopia org backends (UPay, bank, brewery) are NOT hosted on apps.multipaz.org — they come from the
    `multipaz-utopia` docker deployment. On-device confirmation of the hosted issuance flow remains.
-2. **Scheduled-run connector auth** on claude.ai (durable OAuth grants for routines) — verify. ChatGPT:
-   the June-2026 scheduled-tasks update indicates connected apps ARE usable in tasks on paid plans —
-   verify in rehearsal. Cross-platform note: the mandate is keyed to the user at the wallet, not to the
+2. **~~Scheduled-run connector auth~~ — SPIKE-VERIFIED 2026-07-05: PASS** (`spike/headless-auth/`,
+   3½-day live experiment): the scheduled task's OAuth refresh chain rotated headlessly `gen 1 → 26`
+   (Jul 2 → Jul 6 UTC) with **no re-authentication** ⇒ routines can carry the unattended leg. Two
+   findings that reshape demo setup: (a) **tool permissions are a second, separate gate — and they are
+   TASK-SCOPED**: every scheduled run stalls on a human "Allow" prompt; the ladder is *Allow once → Allow
+   for this task / for all scheduled runs (of that task) → Allow for all tasks* (connector-wide), and a
+   NEW task re-prompts even after an old one was granted (verified with an ad-hoc task 2026-07-05).
+   Rehearsal checklist = one OAuth consent + **one permission grant per task** that touches the connector,
+   all human-present (per-task grants = the platform's own per-intent delegation — a talk beat in itself;
+   avoid the unbounded "Allow for all tasks"); **standing-grant persistence CONFIRMED 2026-07-05**: a
+   recurring task granted once on run 1 then executed its next run fully headless (server logs: token
+   refresh gen 27→28 + heartbeat, zero interaction) — the grant survives task edits and covers all
+   subsequent runs; prompt appears only on the task's first tool use (fires immediately at creation, so
+   the grant is a setup-time step); (b) claude.ai registers **two DCR clients
+   with independent token chains** (web chat vs. scheduled tasks) — the web chain can expire and demand
+   "reconnect" while the task chain stays healthy; never diagnose one surface from the other. Ops lesson
+   for the wallet server: **logs ≠ audit trail** (Hobby-tier retention ate the server-side evidence;
+   the draw log / `delegationId` record must be first-class state). ChatGPT side still to
+   verify in rehearsal (June-2026 scheduled-tasks update indicates connected apps ARE usable in tasks on
+   paid plans). Cross-platform note stands: the mandate is keyed to the user at the wallet, not to the
    platform, so the same intent is orchestrator-portable (delegate in ChatGPT, redeem from a Claude
    routine, or vice versa) — a strong neutrality demo beat.
 3. **Merchant trust of the wallet server** — single-entry trust list for the demo; the ecosystem answer

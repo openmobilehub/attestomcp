@@ -86,13 +86,24 @@ _Updated **2026-07-02** · `005-human-not-present` · CI green · 189 tests pass
   earlier two-day refusals was credential **selection** (CredMan routing to untrusted same-doctype
   cards), not trust. **Upstream-reportable**: CredMan wrong-wallet-wins silently routes a payment to
   an untrusted credential. Issuance-bug handoff: `~/tools/git/multipaz/TROUBLESHOOT-ISSUANCE-500.md`.
-- **HNP §12.2 headless-auth spike — LIVE (2026-07-02).** `spike/headless-auth/` deployed to
-  `https://headless-auth-coral.vercel.app/mcp`; connector added to claude.ai and verified server-side
-  (DCR → consent → token gen=1 → heartbeat 200 in the Vercel logs; claude.ai registered two DCR clients,
-  confirming the predicted proliferation). Daily scheduled task created 2026-07-02; **read out
-  ~2026-07-05** per the README rubric (rising tokenGeneration + no re-auth = PASS → routines can carry
-  the unattended demo leg). Rename decision consciously deferred by the maintainer (2026-07-02); publish
-  remains on hold behind it.
+- **HNP §12.2 headless-auth spike — READ OUT 2026-07-05: PASS, with a discovered second gate.**
+  Heartbeat succeeded `tokenGeneration 1 → 26` (Jul 2 → Jul 6 UTC), *"authenticated without re-auth"* — the
+  scheduled task's OAuth refresh chain rotated headlessly for 3½ days ⇒ **claude.ai routines CAN carry the
+  unattended demo leg.** Two companion findings: (1) **tool permissions are a second gate, and they are
+  TASK-SCOPED** — every scheduled run stalled on a human "Allow" prompt; the permission ladder is *Allow
+  once → Allow for this task / for all scheduled runs (of that task) → Allow for all tasks*
+  (connector-wide); a NEW task re-prompts even after an old task was granted (verified 2026-07-05 with an
+  ad-hoc task). **Standing-grant persistence CONFIRMED 2026-07-05**: a recurring test task granted once
+  on run 1 ran its next cycle fully headless (server logs: refresh gen 27→28 + heartbeat, zero clicks);
+  the prompt appears only on a task's first tool use, which fires immediately at creation → the grant is
+  a setup-time step. Demo setup recipe: one OAuth consent + one per-task permission grant, both
+  human-present; (2) claude.ai's **two DCR clients hold independent chains** — the
+  web-chat client expired → "reconnect" while the task client stayed alive (per-surface auth, don't
+  conflate). Ops lesson for the real wallet server: **console logs are not an audit trail** (Vercel Hobby
+  retains 1h; the readout survived only in the task's own reports) — the draw log/`delegationId` record
+  must be first-class state. Cleanup pending: confirmation window through ~Jul 8, then delete the Vercel
+  project + connector (committed HMAC secret). Rename decision still deferred; publish remains on hold
+  behind it.
 
 ---
 

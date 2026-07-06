@@ -113,6 +113,11 @@ same hosted issuer *did* issue a **SD-JWT** payment card the same day via the Te
 **mDoc payment** path (`payment_sca_mdoc` / `org.multipaz.payment.sca.1`) and/or the
 **wallet-server-mediated** flow. Details + the cheap disambiguating test in the handoff doc.
 
+**Filed upstream:** [openwallet-foundation/multipaz#1797](https://github.com/openwallet-foundation/multipaz/issues/1797)
+— "Intermittent 500 during OpenID4VCI issuance: NoSuchElementException: List is empty on empty
+credential-signing certificate chain" (dzuluaga, 2026-07-03, open). The issue's root-cause hypothesis
+(empty credential-signing cert chain) is sharper than this runbook's; track the fix there.
+
 ## Readout — RUN 4, 2026-07-02 night (cross-device QR: desktop Chrome 149 → Pixel 9)
 
 Question #5 answered. Ceremony fired from a **desktop** Chrome (149, macOS, fresh profile — DC API
