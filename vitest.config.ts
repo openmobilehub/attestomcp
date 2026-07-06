@@ -7,7 +7,11 @@ import { defineConfig, configDefaults } from "vitest/config";
 // Neither weakens any assertion — a real regression fails all attempts.
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, "**/.worktrees/**", "**/.claude/worktrees/**"],
+    // `spike/**` holds standalone design prototypes whose tests use Node's built-in
+    // runner (`node --test`), NOT vitest — exclude them so `vitest run` doesn't try to
+    // load a `node:test` file and fail with "No test suite found". Run them on demand:
+    // `node --test spike/**/**.test.mjs`.
+    exclude: [...configDefaults.exclude, "**/.worktrees/**", "**/.claude/worktrees/**", "spike/**"],
     testTimeout: 15000,
     poolOptions: { forks: { minForks: 1, maxForks: 2 } },
     fileParallelism: false,
