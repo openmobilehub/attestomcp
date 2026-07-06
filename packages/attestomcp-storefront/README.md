@@ -94,6 +94,36 @@ const store = createStorefront({
   **share one cart**. For isolated carts, give each shopper their own `namespace` (or inject a
   per-session `cartStore` via the escape hatch above).
 
+## Live catalog — one option, no loader
+
+`createStorefront({ catalog })` takes a static `Product[]` by default — perfect for the quickstart.
+A real merchant wants to edit products **without a redeploy**, i.e. a **dynamic catalog source**.
+Pass `firestoreCatalog(...)` and the module owns the loader, the cache, and fail-closed loading — no
+hand-written glue:
+
+```ts
+import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
+import { firestoreCatalog } from "@openmobilehub/attestomcp-storefront/firestore";
+
+const store = createStorefront({
+  catalog: firestoreCatalog({
+    collection: "products",   // Firestore collection of product docs
+    ttlMs: 300_000,           // cache for 5 min, then refresh
+    // credential: { projectId, clientEmail, privateKey }  // or rely on Application Default Credentials
+  }),
+});
+```
+
+- **Static array stays the zero-config default** — pass a `Product[]` (or omit `catalog`) and nothing
+  changes; no Firebase required.
+- **Fails closed:** an empty/unreachable **cold** load **refuses** (the server returns 503) rather than
+  serving an empty catalog; a **refresh** blip serves the last-known-good catalog; a malformed /
+  negative-price doc **fails the load** (never silently drops a product).
+- **Prices and age thresholds re-derive server-side** from the loaded catalog on every completion path
+  (Security invariant 2 — never trust the order token).
+- **Lean by default:** `firebase-admin` is an **optional peer dependency**, loaded lazily only on the
+  credentials path — static-catalog users never install it.
+
 ## The three execution contexts
 
 `createStorefront()` is built around the split the gate enforces — conflating these is forbidden
@@ -136,9 +166,12 @@ the catalog; unknown ids are collected (`unknownIds`), not thrown.
 - Loyalty discount with a per-call percent override (`LOYALTY_DISCOUNT_PCT`, `PriceOpts`).
 - Pluggable stores (cart / created-order / completed-order / verification) — default in-memory;
   inject a shared store (e.g. Redis) for a multi-instance serverless deployment.
+- Catalog is static by default or a **dynamic source** (`firestoreCatalog(...)` from `./firestore`) —
+  edit products with no redeploy; loaded + cached server-side, fail-closed.
 
 `createStorefront()` accepts `{ catalog, reviews, baseUrl, cartStore, orderStore, createdOrderStore,
-verificationStore, signingKey, allowEphemeralKey, settle }`. The optional `settle` seam (e.g.
+verificationStore, storage, signingKey, allowEphemeralKey, settle }`. `catalog` is a `Product[]` (static)
+or a `CatalogSource` (dynamic, e.g. `firestoreCatalog(...)`). The optional `settle` seam (e.g.
 on-chain) **gates** completion: a configured-but-failed settle records nothing and leaves the cart
 intact.
 

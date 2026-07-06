@@ -167,6 +167,36 @@ export function getReviews(reviews: Record<string, Review[]> | undefined, produc
   return reviews?.[productId] ?? [];
 }
 
+/**
+ * A source of products for `createStorefront({ catalog })`. The static-array default is
+ * wrapped in `staticCatalog(...)`; a DYNAMIC source (e.g. `firestoreCatalog(...)` from
+ * `@openmobilehub/attestomcp-storefront/firestore`) loads products server-side with a TTL
+ * cache so a merchant edits the catalog without a redeploy.
+ *
+ * Two methods so an async source can feed the gate's SYNCHRONOUS ceremony re-price:
+ * `load()` refreshes (fail-closed on a cold/empty load); `current()` returns the
+ * last-known-good snapshot the synchronous re-price paths read. The storefront awaits
+ * `load()` before every request, so `current()` is always warm inside a handler. Prices
+ * and age thresholds are always re-derived from this source server-side (Security
+ * invariant 2 — never trust the order token).
+ */
+export interface CatalogSource {
+  /** Load the current catalog, TTL-cached. Rejects (fail-closed) on a cold/empty load. */
+  load(): Promise<Product[]>;
+  /** Last-known-good snapshot for the synchronous re-price paths. Throws if never loaded. */
+  current(): Product[];
+}
+
+/** Wrap a static product array as a {@link CatalogSource} — the zero-config default (never fails). */
+export function staticCatalog(products: Product[]): CatalogSource {
+  return { load: async () => products, current: () => products };
+}
+
+/** True when `x` is a {@link CatalogSource} (has a `load` method) rather than a plain `Product[]`. */
+export function isCatalogSource(x: Product[] | CatalogSource | undefined): x is CatalogSource {
+  return !!x && !Array.isArray(x) && typeof (x as CatalogSource).load === "function";
+}
+
 /** A tiny runnable catalog (incl. one age-restricted item) so the package demos itself. */
 // Generated, self-contained product images (see generated-images.ts) — emoji tiles
 // embedded as data URIs, so the catalog needs no external image service.

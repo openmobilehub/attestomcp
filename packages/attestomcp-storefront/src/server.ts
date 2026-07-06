@@ -30,10 +30,15 @@ import {
   createOrder,
   getProduct,
   getReviews,
+  isCatalogSource,
   priceCart,
   SAMPLE_CATALOG,
+  staticCatalog,
 } from "./index.js";
-import type { CartItemInput, Order, PricedCart, Product, Review } from "./index.js";
+import type { CartItemInput, CatalogSource, Order, PricedCart, Product, Review } from "./index.js";
+// Re-export the catalog contract so a consumer can type a custom dynamic source without
+// reaching into the pure model module.
+export type { CatalogSource } from "./index.js";
 import { appToolMeta } from "./tool-meta.js";
 import { MemoryCartStore, MemoryOrderStore } from "./state.js";
 import type { CartStore, OrderStore } from "./state.js";
@@ -82,8 +87,14 @@ export interface StorageProvider {
 }
 
 export interface StorefrontOptions {
-  /** Products to sell. Defaults to the package's `SAMPLE_CATALOG`. */
-  catalog?: Product[];
+  /**
+   * Products to sell. Defaults to the package's `SAMPLE_CATALOG`. Pass a plain `Product[]`
+   * for the zero-config static catalog, or a {@link CatalogSource} (e.g.
+   * `firestoreCatalog(...)` from `@openmobilehub/attestomcp-storefront/firestore`) for a
+   * live, editable catalog the module loads + caches server-side. Prices and age
+   * thresholds always re-derive from this catalog server-side (Security invariant 2).
+   */
+  catalog?: Product[] | CatalogSource;
   /** Reviews per product id, backing `get-product-reviews`. */
   reviews?: Record<string, Review[]>;
   /** Origin the checkout links resolve from. Default `http://localhost:<port>`. */
@@ -151,6 +162,7 @@ export interface CompletedOrderRecord {
 
 export interface Storefront {
   app: Express;
+  /** The current catalog. Static source: the injected array; dynamic source: last-known-good. */
   catalog: Product[];
   gate(resolve: GateResolver): void;
   listen(port?: number): Promise<{ url: string; port: number }>;
@@ -228,7 +240,14 @@ function homeRequires(requires: unknown[], base: string): unknown[] {
 }
 
 export function createStorefront(opts: StorefrontOptions = {}): Storefront {
-  const catalog = opts.catalog ?? SAMPLE_CATALOG;
+  // Normalize the catalog into a CatalogSource: a plain array (or the default) is wrapped
+  // in a static source; a dynamic source (e.g. `firestoreCatalog(...)`) is used as-is. Every
+  // catalog read below goes through `source.current()` — the last-known-good snapshot the
+  // prime middleware keeps warm — so the SYNCHRONOUS re-price paths (incl. the gate's
+  // ceremony `createOrder`) re-derive prices/ages server-side (invariant 2) with no gate change.
+  const source: CatalogSource = isCatalogSource(opts.catalog)
+    ? opts.catalog
+    : staticCatalog(opts.catalog ?? SAMPLE_CATALOG);
   const reviews = opts.reviews;
   // Per-slot store resolution: an explicit store wins, else the `storage` provider's
   // store for that slot (e.g. `redisStorage(...)`), else the in-memory default. Keeping
@@ -261,6 +280,19 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // is undefined and completion is never recorded.
   app.use(express.urlencoded({ extended: false }));
 
+  // Prime the catalog before EVERY route runs — including the `/attestomcp/*` ceremony
+  // rails a consumer mounts later (registered after this middleware, so this runs first).
+  // Awaiting the TTL-cached load means every synchronous `source.current()` below reads a
+  // warm, server-side re-derived snapshot. A cold/unreachable load FAILS CLOSED (503, no
+  // handler runs) rather than serving an empty catalog (Security invariant 2). The static
+  // default resolves instantly and never fails, so the zero-config path is unchanged.
+  app.use((_req: Request, res: Response, next) => {
+    source.load().then(
+      () => next(),
+      () => res.status(503).type("text").send("Catalog temporarily unavailable."),
+    );
+  });
+
   // ── AttestoMCP ceremony seams (Context 2) ──────────────────────────────────────
   // Pre-bound so `new AttestoMCP().mount(store.app)` wires the `/attestomcp/*` rails with
   // ZERO explicit args — it reads these off `app.locals.attestomcp` (see the quickstart).
@@ -270,7 +302,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // get-order-status / the order-status poll read.
   const ceremonyCatalog: CeremonyCatalog = {
     createOrder: (items: CartItemRef[], orderId: string, repriceOpts?: RepriceOpts): CeremonyOrder =>
-      createOrder(items, orderId, catalog, { ageVerified: repriceOpts?.ageVerified, loyaltyApplied: repriceOpts?.loyaltyApplied }),
+      createOrder(items, orderId, source.current(), { ageVerified: repriceOpts?.ageVerified, loyaltyApplied: repriceOpts?.loyaltyApplied }),
   };
   const ceremonyOrderStore: CeremonyOrderStore = {
     // A storefront Order is structurally a CeremonyOrder; resolveOrder re-prices it
@@ -299,11 +331,19 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     allowEphemeralKey: opts.allowEphemeralKey ?? !opts.signingKey,
   };
 
-  // ── cart logic (closure over the injected catalog + the cart store) ───────
+  // ── cart logic (closure over the catalog source + the cart store) ─────────
+  // `priceFrom` reads the warm snapshot synchronously; every async entry below first
+  // `await source.load()` so the snapshot is fresh regardless of transport — the HTTP
+  // `/mcp` route is already primed by the middleware, but `mcpServer()` over a raw
+  // transport (e.g. stdio) is not, so the tool handlers warm the catalog themselves.
   const priceFrom = (cart: Map<string, number>): PricedCart =>
-    priceCart([...cart.entries()].map(([productId, quantity]) => ({ productId, quantity })), catalog);
-  const readPriced = async (): Promise<PricedCart> => priceFrom(await cartStore.read());
+    priceCart([...cart.entries()].map(([productId, quantity]) => ({ productId, quantity })), source.current());
+  const readPriced = async (): Promise<PricedCart> => {
+    await source.load();
+    return priceFrom(await cartStore.read());
+  };
   const addToCart = async (items: CartItemInput[]): Promise<PricedCart> => {
+    await source.load();
     const cart = await cartStore.read();
     for (const { productId, quantity } of items) {
       if (quantity <= 0) continue;
@@ -313,6 +353,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     return priceFrom(cart);
   };
   const setQuantity = async (productId: string, quantity: number): Promise<PricedCart> => {
+    await source.load();
     const cart = await cartStore.read();
     if (quantity <= 0) cart.delete(productId);
     else cart.set(productId, quantity);
@@ -320,6 +361,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     return priceFrom(cart);
   };
   const removeFromCart = async (productId: string): Promise<PricedCart> => {
+    await source.load();
     const cart = await cartStore.read();
     cart.delete(productId);
     await cartStore.write(cart);
@@ -328,7 +370,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // Cart-bearing result, emitted three ways so either host reads it: structuredContent
   // (ChatGPT widget + model), a JSON text block, and _meta (Claude's out-of-band channel).
   const cartResult = (priced: PricedCart): CallToolResult => ({
-    structuredContent: { products: catalog, cart: priced } as unknown as Record<string, unknown>,
+    structuredContent: { products: source.current(), cart: priced } as unknown as Record<string, unknown>,
     content: [{ type: "text", text: JSON.stringify(priced) }],
     _meta: { [CART_META_KEY]: priced },
   });
@@ -351,6 +393,8 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         _meta: UI_META,
       },
       async (): Promise<CallToolResult> => {
+        await source.load();
+        const catalog = source.current();
         const priced = await readPriced();
         return {
           content: [
@@ -396,6 +440,8 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
       "checkout",
       { title: "Checkout", description: "Snapshot the cart into an order and return a checkout link; if gated, also a `requires` manifest of what the buyer must prove on the page.", inputSchema: { items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive() })).optional() }, annotations: { readOnlyHint: false }, _meta: UI_META },
       async ({ items }): Promise<CallToolResult> => {
+        await source.load();
+        const catalog = source.current();
         const entries = items?.length ? items : [...(await cartStore.read()).entries()].map(([productId, quantity]) => ({ productId, quantity }));
         if (entries.length === 0) return { content: [{ type: "text", text: "The cart is empty — add items before checking out." }], isError: true };
         // Random id (not a per-instance counter): two serverless instances must
@@ -420,7 +466,8 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
       "get-product-details",
       { title: "Get Product Details", description: "Return full details for a single product by id.", inputSchema: { productId: z.string() }, annotations: { readOnlyHint: true } },
       async ({ productId }): Promise<CallToolResult> => {
-        const product = getProduct(catalog, productId);
+        await source.load();
+        const product = getProduct(source.current(), productId);
         return product
           ? { content: [{ type: "text", text: JSON.stringify(product) }], structuredContent: { product } }
           : { content: [{ type: "text", text: `No product found with id "${productId}".` }], isError: true };
@@ -581,7 +628,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
 
   return {
     app,
-    catalog,
+    // Static source: the injected array. Dynamic source: the last-known-good snapshot
+    // (throws if read before the first successful load — the server primes it per request).
+    get catalog(): Product[] { return source.current(); },
     mcpServer: buildServer,
     gate(resolve: GateResolver) { resolveGate = resolve; },
     async listen(port = 3005): Promise<{ url: string; port: number }> {

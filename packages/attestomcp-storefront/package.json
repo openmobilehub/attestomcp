@@ -27,6 +27,10 @@
     "./redis": {
       "types": "./dist/redis.d.ts",
       "default": "./dist/redis.js"
+    },
+    "./firestore": {
+      "types": "./dist/firestore.d.ts",
+      "default": "./dist/firestore.js"
     }
   },
   "main": "./dist/index.js",
@@ -52,10 +56,14 @@
     "zod": "^4.1.13"
   },
   "peerDependencies": {
-    "@upstash/redis": "^1.34.0"
+    "@upstash/redis": "^1.34.0",
+    "firebase-admin": "^13.0.0"
   },
   "peerDependenciesMeta": {
     "@upstash/redis": {
+      "optional": true
+    },
+    "firebase-admin": {
       "optional": true
     }
   },
