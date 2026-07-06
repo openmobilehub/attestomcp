@@ -89,6 +89,10 @@ const store = createStorefront({
   `{ url, token }` path — in-memory users never install it.
 - Order and verification state is **keyed per order id** (never process-global — Security invariant 4);
   the store persists state only and is **not** a trust anchor.
+- **The cart is a single working cart per storefront / namespace — not per user.** Unlike orders and
+  verification, `cartStore` has no session key, so concurrent buyers sharing one `redisStorage` provider
+  **share one cart**. For isolated carts, give each shopper their own `namespace` (or inject a
+  per-session `cartStore` via the escape hatch above).
 
 ## The three execution contexts
 
