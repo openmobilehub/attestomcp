@@ -324,7 +324,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     if (statelessOrders && cartRaw !== undefined) {
       const verdict = verifyCartMandate(decodeCartMandateParam(cartRaw), orderId, signingKey as string);
       if (!verdict.ok) return null;
-      return createOrder(verdict.mandate.lines.map((l) => ({ productId: l.id, quantity: l.quantity })), orderId, catalog);
+      return createOrder(verdict.mandate.lines.map((l) => ({ productId: l.id, quantity: l.quantity })), orderId, source.current());
     }
     return (await createdOrderStore.read(orderId)) ?? null;
   };
