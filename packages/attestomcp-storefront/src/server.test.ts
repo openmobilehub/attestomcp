@@ -422,3 +422,156 @@ describe("per-session carts over HTTP (issue #34 · Security Invariant #4)", () 
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   });
 });
+
+// statelessOrders (gate FR-007): the checkout link carries the signed Cart Mandate
+// instead of a createdOrderStore write; the page reconstructs + verifies it. The store
+// here THROWS on read, so any passing test also proves no created-order store read.
+describe("statelessOrders — the cart mandate is the order transport (FR-007)", () => {
+  const makeStateless = (): Storefront => {
+    const store = createStorefront({
+      statelessOrders: true,
+      allowEphemeralKey: true, // single-process test; a real multi-instance deploy passes a stable signingKey
+      baseUrl: "http://shop.test",
+      createdOrderStore: {
+        read: () => { throw new Error("createdOrderStore.read must NOT happen under statelessOrders"); },
+        write: async () => { throw new Error("createdOrderStore.write must NOT happen under statelessOrders"); },
+      },
+    });
+    const attestomcp = new AttestoMCP();
+    attestomcp.mount(store.app);
+    store.gate((order) => attestomcp.requirements(order, [required(age.over(21).when((o) => o.lines.some((l) => (l.minimumAge ?? 0) >= 21)))]));
+    return store;
+  };
+  const checkoutUrl = async (store: Storefront): Promise<URL> => {
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "oak-whiskey", quantity: 1 }] } })).structuredContent as any;
+    return new URL(sc.checkoutUrl);
+  };
+
+  it("checkout returns a link (and approve links) carrying the signed cart mandate", async () => {
+    const store = makeStateless();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "oak-whiskey", quantity: 1 }] } })).structuredContent as any;
+    expect(sc.checkoutUrl).toMatch(/[?&]cart=[A-Za-z0-9_-]+/);
+    expect(sc.requires?.[0]?.approveUrl).toMatch(/[?&]cart=[A-Za-z0-9_-]+/); // the age gate link too
+  });
+
+  it("GET /checkout renders from the mandate with NO created-order store read", async () => {
+    const store = makeStateless();
+    const url = await checkoutUrl(store);
+    const res = await request(store.app).get(url.pathname + url.search);
+    expect(res.status).toBe(200); // reconstructed from ?cart; the throwing store was never read
+  });
+
+  it("BYPASS: a tampered cart mandate resolves nothing (fails closed → 404)", async () => {
+    const store = makeStateless();
+    const url = await checkoutUrl(store);
+    // Keep valid JSON + valid lines but break the signature (edit the sealed cart).
+    const m = JSON.parse(Buffer.from(url.searchParams.get("cart")!, "base64url").toString("utf8"));
+    m.lines = [{ id: "oak-whiskey", quantity: 99, unitPrice: 124, lineTotal: 12276 }];
+    url.searchParams.set("cart", Buffer.from(JSON.stringify(m)).toString("base64url"));
+    const res = await request(store.app).get(url.pathname + "?" + url.searchParams.toString());
+    expect(res.status).toBe(404); // verifyCartMandate refuses the edited cart → resolveCreated null
+  });
+});
+
+// Full checkout walk in BOTH custody modes — the regression Diego hit: after the age
+// gate, the "return to checkout" link must carry the cart under statelessOrders, or the
+// store-less hub 404s ("Unknown order"). Walks checkout → age gate → back-to-checkout →
+// dc-payment → completed, and asserts the return hop RESOLVES in both modes.
+describe.each([
+  ["stateful", false],
+  ["stateless", true],
+])("full checkout walk — %s (age gate → back to checkout → pay)", (_mode, stateless) => {
+  const DC_CLAIMS = { issuer_name: "Demo Bank", payment_instrument_id: "pi-77AABBCC", holder_name: "Demo Buyer", expiry_date: "2032-09-01" };
+  const build = (): Storefront => {
+    const store = createStorefront({ statelessOrders: stateless, allowEphemeralKey: true, baseUrl: "http://shop.test" });
+    const a = new AttestoMCP();
+    a.mount(store.app);
+    store.gate((order) => a.requirements(order, [required(age.over(21).when((o) => o.lines.some((l) => (l.minimumAge ?? 0) >= 21)))]));
+    return store;
+  };
+
+  it("walks checkout → age → return-to-checkout (resolves, not 'Unknown order') → dc-payment → completed", async () => {
+    const store = build();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "oak-whiskey", quantity: 1 }] } })).structuredContent as any;
+    const orderId: string = sc.orderId;
+    const cart = new URL(sc.checkoutUrl).searchParams.get("cart");
+    // the link carries the cart iff stateless
+    expect(!!cart).toBe(stateless);
+
+    // the checkout hub resolves the order
+    const hubUrl = new URL(sc.checkoutUrl);
+    expect((await request(store.app).get(hubUrl.pathname + hubUrl.search)).status).toBe(200);
+
+    // the age gate page — its returnUrl must carry the cart under statelessOrders
+    const ageUrl = new URL(sc.requires.find((r: any) => String(r.approveUrl).includes("cred=age")).approveUrl);
+    const agePage = await request(store.app).get(ageUrl.pathname + ageUrl.search);
+    expect(agePage.status).toBe(200);
+    const returnUrl: string = JSON.parse(agePage.text.match(/const RETURN_URL = ("(?:[^"\\]|\\.)*")/)![1]);
+    expect(returnUrl.includes("cart=")).toBe(stateless);
+
+    // prove age (instant demo)
+    const verified = await request(store.app).post("/attestomcp/credential/verify").send({ order: orderId, cred: "age", cart, claims: { age_over_21: true } });
+    expect(verified.body.verified).toBe(true);
+
+    // THE REGRESSION: returning to checkout must resolve the order (was 404 statelessly)
+    const back = await request(store.app).get(returnUrl);
+    expect(back.status).toBe(200);
+    expect(back.text).not.toContain("Unknown order");
+
+    // pay → complete through the shared seam (age already proven above)
+    const done = await request(store.app).post("/attestomcp/dc-payment/verify").send({ order: orderId, cart, amount: 124, claims: DC_CLAIMS });
+    expect(done.body.completed).toBe(true);
+  });
+});
+
+// statelessOrders + UNGATED instant-demo place-order: the "Place order (instant demo)"
+// button must forward the cart, or the store-less server can't record the order. (This
+// path only shows when resolveGate returns [] — here headphones under an alcohol-only gate.)
+describe("statelessOrders — ungated instant-demo place-order carries the cart", () => {
+  const buildUngated = (): Storefront => {
+    const store = createStorefront({ statelessOrders: true, allowEphemeralKey: true, baseUrl: "http://shop.test" });
+    const a = new AttestoMCP();
+    a.mount(store.app);
+    // Only gate alcohol → headphones are UNGATED → the instant-demo place-order button shows.
+    a; store.gate((order) => a.requirements(order, [required(age.over(21).when((o) => o.lines.some((l) => (l.minimumAge ?? 0) >= 21)))]));
+    return store;
+  };
+
+  it("the checkout page's place-order script forwards the cart (regression: it dropped it)", async () => {
+    const store = buildUngated();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "aurora-headphones", quantity: 1 }] } })).structuredContent as any;
+    const url = new URL(sc.checkoutUrl);
+    const page = await request(store.app).get(url.pathname + url.search);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("const CART = new URLSearchParams"); // the fix: cart read + forwarded
+  });
+
+  it("place-order with the cart records the order on a store-less server", async () => {
+    const store = buildUngated();
+    const sc = (await (await connect(store)).callTool({ name: "checkout", arguments: { items: [{ productId: "aurora-headphones", quantity: 1 }] } })).structuredContent as any;
+    const cart = new URL(sc.checkoutUrl).searchParams.get("cart");
+    const placed = await request(store.app).post("/checkout/place-order").send({ order: sc.orderId, cart });
+    expect(placed.status).toBe(200);
+    // recorded ⇒ order-status reports completed (was impossible without the cart)
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${sc.orderId}`);
+    expect(status.body.completed).toBe(true);
+  });
+});
+
+// statelessOrders needs a STABLE signing key (its whole point is surviving an instance
+// split — a per-process random key would make a mandate minted on instance A fail on B).
+// Fail fast unless a signingKey is given or allowEphemeralKey is explicit (dev/tests).
+describe("statelessOrders — requires a stable signingKey (fail fast)", () => {
+  it("throws when statelessOrders is on with no signingKey and no allowEphemeralKey", () => {
+    expect(() => createStorefront({ statelessOrders: true })).toThrow(/statelessOrders requires a stable/);
+  });
+  it("accepts a configured signingKey (the multi-instance-correct path)", () => {
+    expect(() => createStorefront({ statelessOrders: true, signingKey: "stable-secret" })).not.toThrow();
+  });
+  it("accepts an explicit allowEphemeralKey (single-process dev / tests)", () => {
+    expect(() => createStorefront({ statelessOrders: true, allowEphemeralKey: true })).not.toThrow();
+  });
+  it("stateful (default) never requires a key", () => {
+    expect(() => createStorefront({})).not.toThrow();
+  });
+});

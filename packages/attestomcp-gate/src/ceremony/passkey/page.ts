@@ -19,12 +19,13 @@ function money(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
 }
 
-export function renderPasskeyPage(args: { order: CeremonyOrder; crossDevice?: boolean; returnUrl?: string }): string {
+export function renderPasskeyPage(args: { order: CeremonyOrder; crossDevice?: boolean; returnUrl?: string; cart?: string }): string {
   const { order, crossDevice = false } = args;
   // Where the completed receipt links back to — the checkout hub, which then renders
   // the paid state (a forward, fresh GET — so the buyer never browser-backs onto a
   // stale, re-payable checkout). Defaults to this server's `/checkout?order=<id>`.
-  const returnUrl = args.returnUrl ?? `/checkout?order=${encodeURIComponent(order.id)}`;
+  // statelessOrders: carry the cart mandate back so the store-less hub can re-resolve.
+  const returnUrl = args.returnUrl ?? `/checkout?order=${encodeURIComponent(order.id)}${args.cart ? `&cart=${args.cart}` : ""}`;
   const total = money(order.total, order.currency);
 
   // The shared order summary card (line items + bold Total) — same chrome as the hub.
@@ -42,7 +43,10 @@ export function renderPasskeyPage(args: { order: CeremonyOrder; crossDevice?: bo
   // skips local Touch ID and shows the QR for a phone (caBLE). The toggle link flips
   // the mode by adding/removing the xdev param on the same gate URL.
   const optionsUrl = crossDevice ? "/attestomcp/passkey/options?xdev=1" : "/attestomcp/passkey/options";
-  const toggleHref = crossDevice ? `/attestomcp/passkey?order=${encodeURIComponent(order.id)}` : `/attestomcp/passkey?order=${encodeURIComponent(order.id)}&xdev=1`;
+  // statelessOrders: keep the cart mandate on the same-device ⇄ cross-device toggle so the
+  // store-less server can still resolve THIS order after switching.
+  const cartQ = args.cart ? `&cart=${args.cart}` : "";
+  const toggleHref = crossDevice ? `/attestomcp/passkey?order=${encodeURIComponent(order.id)}${cartQ}` : `/attestomcp/passkey?order=${encodeURIComponent(order.id)}&xdev=1${cartQ}`;
   const toggleText = crossDevice ? "← Use this device instead" : "Use my phone instead (scan a QR) →";
 
   // Page-local chrome over the shared design system: the verify-progress rows reuse
@@ -74,6 +78,9 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
   <script type="module">
     import { startRegistration } from "/attestomcp/lib/sw/index.js";
     const ORDER_ID = ${JSON.stringify(order.id)};
+    // statelessOrders: forward the signed cart mandate (?cart=… in this page's URL) so a
+    // store-less server can reconstruct THIS order on verify.
+    const CART = new URLSearchParams(location.search).get("cart");
     const OPTIONS_URL = ${JSON.stringify(optionsUrl)};
     const RETURN_URL = ${JSON.stringify(returnUrl)};
     const DONE_BANNER = ${JSON.stringify(completionHandoffBanner(returnUrl))};
@@ -94,7 +101,7 @@ ${pageHead(`Authorize payment · ${order.id}`, extraCss)}
         const out = await fetch("/attestomcp/passkey/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response, challengeToken, order: ORDER_ID }),
+          body: JSON.stringify({ response, challengeToken, order: ORDER_ID, cart: CART }),
         }).then((r) => r.json()).finally(() => settling.classList.remove("on"));
         if (!out.mandate) throw new Error(out.error || "authorization failed");
         step("✓ authorized · mandate built (" + out.trust_level + ")", "ok");

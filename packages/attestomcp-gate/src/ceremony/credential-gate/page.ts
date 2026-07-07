@@ -32,6 +32,9 @@ export interface CredentialPageArgs {
    * Defaults to this server's `/checkout?order=<id>`.
    */
   returnUrl?: string;
+  /** statelessOrders: the base64url cart mandate to carry back to `/checkout` so the
+   *  store-less hub can re-resolve this order. Appended to the default returnUrl. */
+  cart?: string;
 }
 
 function escapeHtml(s: string): string {
@@ -52,7 +55,7 @@ export function renderCredentialPage(args: CredentialPageArgs): string {
   // through the SAME server-side explicit-positive-claim check as a real wallet.
   const demoClaims = isAge ? { [`age_over_${minimumAge}`]: true } : { membership_number: "DEMO-MEMBER-0001" };
   const totalLine = args.total != null ? `<p class="small amount">Order ${escapeHtml(args.order)} · ${escapeHtml(args.currency ?? "USD")} ${args.total}</p>` : "";
-  const returnUrl = args.returnUrl ?? `/checkout?order=${encodeURIComponent(args.order)}`;
+  const returnUrl = args.returnUrl ?? `/checkout?order=${encodeURIComponent(args.order)}${args.cart ? `&cart=${args.cart}` : ""}`;
   // Identity-first tagline + the progress rail with THIS gate marked current. The age
   // gate is step 0 (Age) of Age · Membership · Pay; membership is the middle step.
   const tagline = isAge ? "Present a digital ID" : "Present a membership credential";
@@ -86,6 +89,9 @@ ${pageHead(title, extraCss)}
   <script type="module">
     const ORDER = ${JSON.stringify(args.order)};
     const CRED = ${JSON.stringify(args.kind)};
+    // statelessOrders: forward the signed cart mandate (?cart=… in this page's URL) so a
+    // store-less server can reconstruct THIS order on verify.
+    const CART = new URLSearchParams(location.search).get("cart");
     const DEMO_CLAIMS = ${JSON.stringify(demoClaims)};
     const RETURN_URL = ${JSON.stringify(returnUrl)};
     const log = document.getElementById("log");
@@ -137,7 +143,7 @@ ${pageHead(title, extraCss)}
           step("→ verify (" + ((result && result.protocol) || "?") + ")");
           const out = await fetch("/attestomcp/credential/verify", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ order: ORDER, cred: CRED, readerContextToken: rd.readerContextToken, mdocContextToken: rd.mdocContextToken, result: { protocol: (result && result.protocol) || null, data } }),
+            body: JSON.stringify({ order: ORDER, cart: CART, cred: CRED, readerContextToken: rd.readerContextToken, mdocContextToken: rd.mdocContextToken, result: { protocol: (result && result.protocol) || null, data } }),
           }).then((r) => r.json());
           if (!out.verified) throw new Error(out.error || "not verified");
           step("✓ verified (" + out.trust_level + ")", "ok");
@@ -156,7 +162,7 @@ ${pageHead(title, extraCss)}
         step("→ verify (presence-only)");
         const out = await fetch("/attestomcp/credential/verify", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order: ORDER, cred: CRED, claims: DEMO_CLAIMS }),
+          body: JSON.stringify({ order: ORDER, cart: CART, cred: CRED, claims: DEMO_CLAIMS }),
         }).then((r) => r.json());
         if (!out.verified) throw new Error(out.error || "not verified");
         step("✓ verified (" + out.trust_level + ")", "ok");
