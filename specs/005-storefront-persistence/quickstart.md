@@ -10,7 +10,7 @@ How to use the feature and how to prove it works. Full type/behavior detail live
 ### Zero-config (unchanged) — in-memory
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
 
 const store = createStorefront();            // in-memory; no @upstash/redis needed
 ```
@@ -18,8 +18,8 @@ const store = createStorefront();            // in-memory; no @upstash/redis nee
 ### Production — one option
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { redisStorage } from "@openmobilehub/attestomcp-storefront/redis";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { redisStorage } from "@openmobilehub/credentagent-storefront/redis";
 
 const store = createStorefront({
   storage: redisStorage({
@@ -47,7 +47,7 @@ const store = createStorefront({
 
 ## Validation scenarios
 
-Run from `packages/attestomcp-storefront`. These map 1:1 to the spec's success criteria.
+Run from `packages/credentagent-storefront`. These map 1:1 to the spec's success criteria.
 
 ### V1 — In-memory default still works (SC-003 / FR-002)
 

@@ -1,12 +1,12 @@
 {
-  "name": "attestomcp",
+  "name": "credentagent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "AttestoMCP — the consent layer for AI agents (@openmobilehub/attestomcp-* packages)",
+  "description": "CredentAgent — the consent layer for AI agents (@openmobilehub/credentagent-* packages)",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/openmobilehub/attestomcp",
-  "repository": { "type": "git", "url": "https://github.com/openmobilehub/attestomcp.git" },
+  "homepage": "https://github.com/openmobilehub/credentagent",
+  "repository": { "type": "git", "url": "https://github.com/openmobilehub/credentagent.git" },
   "workspaces": [
     "packages/*"
   ],

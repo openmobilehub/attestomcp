@@ -6,11 +6,11 @@
 
 **Status**: Draft
 
-**Input**: GitHub issue [#28](https://github.com/openmobilehub/attestomcp/issues/28) (part of epic #29) — "createStorefront: first-class dynamic/Firestore catalog source so consumers don't hand-write the loader". Labels: `enhancement`, `dx`. Companion to [#27](https://github.com/openmobilehub/attestomcp/issues/27) (persistence, spec 005).
+**Input**: GitHub issue [#28](https://github.com/openmobilehub/credentagent/issues/28) (part of epic #29) — "createStorefront: first-class dynamic/Firestore catalog source so consumers don't hand-write the loader". Labels: `enhancement`, `dx`. Companion to [#27](https://github.com/openmobilehub/credentagent/issues/27) (persistence, spec 005).
 
 ## Overview
 
-`createStorefront({ catalog })` (from `@openmobilehub/attestomcp-storefront`) takes a **static in-memory `Product[]`**. That is correct for local dev and the quickstart, but a real merchant wants to edit products **without a redeploy** — a **dynamic catalog source** (Firestore/Firebase). Today the consumer hand-writes the loader: the reference demo hand-rolls three modules the library could own — a Firestore loader (TTL cache, fail-closed cold load, malformed/negative-price rejection), a lazy Firebase Admin init, and a `static|firestore` source selector.
+`createStorefront({ catalog })` (from `@openmobilehub/credentagent-storefront`) takes a **static in-memory `Product[]`**. That is correct for local dev and the quickstart, but a real merchant wants to edit products **without a redeploy** — a **dynamic catalog source** (Firestore/Firebase). Today the consumer hand-writes the loader: the reference demo hand-rolls three modules the library could own — a Firestore loader (TTL cache, fail-closed cold load, malformed/negative-price rejection), a lazy Firebase Admin init, and a `static|firestore` source selector.
 
 This feature makes a **dynamic catalog source a first-class, one-option** concern: `catalog` accepts either a `Product[]` (unchanged, zero-config) **or** a `CatalogSource`, and the package ships `firestoreCatalog(...)` — the loader + cache + fail-closed loading — so no adopter hand-writes it again. It mirrors spec 005 (`storage` / `redisStorage`): the static array stays the default, `firebase-admin` is an optional peer dependency, and prices/age thresholds still re-derive server-side (Security invariant 2).
 
@@ -18,13 +18,13 @@ The design difference from 005: the storefront's stores were already async, but 
 
 ## User Scenarios & Testing *(mandatory)*
 
-The "user" of this feature is a **developer** consuming `@openmobilehub/attestomcp-storefront`.
+The "user" of this feature is a **developer** consuming `@openmobilehub/credentagent-storefront`.
 
 ### User Story 1 - One-option live catalog (Priority: P1)
 
 A developer running the storefront for a real merchant wants products editable in Firestore (price, availability, new items) to appear **without a redeploy**, by passing **one option**, writing no loader code.
 
-**Why this priority**: This is the entire point of the issue — it removes the hand-rolled Firestore loader/cache/selector that make "using AttestoMCP" look far heavier than the 28-line quickstart.
+**Why this priority**: This is the entire point of the issue — it removes the hand-rolled Firestore loader/cache/selector that make "using CredentAgent" look far heavier than the 28-line quickstart.
 
 **Independent Test**: Construct `createStorefront({ catalog: firestoreCatalog({ client }) })` over a fake Firestore, drive the MCP tools + checkout, and confirm products, prices, and age thresholds come from the loaded docs.
 

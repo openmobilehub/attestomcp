@@ -1,6 +1,6 @@
 // Gate ANY consequential action with ANY credential (Principle V).
 //
-//   npm run build:packages               # build the two @openmobilehub/attestomcp-* packages
+//   npm run build:packages               # build the two @openmobilehub/credentagent-* packages
 //   node examples/custom-credential.mjs  # → http://localhost:3006/mcp
 //
 // Mirrors examples/storefront.mjs, but adds a CUSTOM credential — a `prescription`
@@ -12,14 +12,14 @@
 // (age/membership/payment) are merely pre-defined credentials; you write your own
 // the exact same way.
 //
-// `attestomcp.mount(store.app)` reads the ceremony seams the storefront published on
-// `store.app.locals.attestomcp` and wires the `/attestomcp/*` rails onto THIS server. Set
+// `credentagent.mount(store.app)` reads the ceremony seams the storefront published on
+// `store.app.locals.credentagent` and wires the `/credentagent/*` rails onto THIS server. Set
 // GATE_SECRET for a stable challenge key across restarts (otherwise a dev server
 // uses an ephemeral per-process key).
 
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
 import {
-  AttestoMCP,
+  CredentAgent,
   age,
   membership,
   payment,
@@ -28,12 +28,12 @@ import {
   defineCredential,
   dcql,
   gate,
-} from "@openmobilehub/attestomcp-gate";
+} from "@openmobilehub/credentagent-gate";
 
 // ── A catalog with a pharmacy (Rx) line, so the custom gate has something to fire on ──
 // createStorefront() injects the catalog; `Product.category` is a free-form string,
 // and priceCart() forwards `category` (and `minimumAge`) onto each priced line — so a
-// priced Order feeds attestomcp.requirements() directly, no mapping (see the storefront's
+// priced Order feeds credentagent.requirements() directly, no mapping (see the storefront's
 // PricedCartLine).
 const catalog = [
   {
@@ -67,8 +67,8 @@ const catalog = [
 ];
 
 const store = createStorefront({ catalog, signingKey: process.env.GATE_SECRET });
-const attestomcp = new AttestoMCP();
-attestomcp.mount(store.app); // …reads the seams + wires the /attestomcp/* ceremony rails
+const credentagent = new CredentAgent();
+credentagent.mount(store.app); // …reads the seams + wires the /credentagent/* ceremony rails
 
 // ── The custom credential — defined by OBJECT, no registration (Principle V) ──
 // defineCredential returns a Credential of the SAME shape as age.over(21) /
@@ -95,7 +95,7 @@ const hasAlcohol = (order) => order.lines.some((l) => l.minimumAge != null);
 // order; payment settles LAST no matter where it's declared. `.when(...)` composes
 // (AND) onto a credential's `appliesTo`.
 store.gate((order) =>
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(prescription), // CUSTOM gate — surfaces only when appliesTo (Pharmacy) holds
     required(age.over(21).when(hasAlcohol)), // built-in 21+ — only when the cart has alcohol
     optional(membership.discount(10)), // built-in 10% off with a loyalty credential
@@ -104,7 +104,7 @@ store.gate((order) =>
 );
 
 // ── inputSchema → handler-field tracing (Principle I) ──
-// The storefront's `checkout` tool (attestomcp-storefront/src/server.ts) declares
+// The storefront's `checkout` tool (credentagent-storefront/src/server.ts) declares
 // `inputSchema: { items: z.array(z.object({ productId, quantity })).optional() }`. Its
 // handler destructures exactly that `{ items }`, snapshots them into a priced Order,
 // and passes that Order to the `store.gate(...)` resolver above — which returns the
@@ -114,7 +114,7 @@ store.gate((order) =>
 // run server-side HERE and never cross the wire (Principle VI).
 
 const { url } = await store.listen(Number(process.env.PORT ?? 3006));
-console.log(`\n  ✓ AttestoMCP custom-credential storefront running → ${url}`);
+console.log(`\n  ✓ CredentAgent custom-credential storefront running → ${url}`);
 console.log("  Add it to Goose as a Streamable HTTP connector, then try:");
 console.log('    "buy the amoxicillin"  → the Prescription gate is surfaced (appliesTo: Pharmacy)');
 console.log('    "buy the ibuprofen"    → NO prescription gate (OTC line)');
@@ -125,7 +125,7 @@ console.log('    "buy the whiskey"      → the built-in age 21+ gate fires inst
 // effect, ui.label, and a per-order approve link all flow through — and the agent
 // surfaces it correctly. What is NOT wired yet: the MOUNTED phone ceremony only knows
 // the built-in `age` / `membership` kinds (CredentialKind in
-// attestomcp-gate/src/ceremony/credential-gate/dcql.ts is `"age" | "membership"`), so a
+// credentagent-gate/src/ceremony/credential-gate/dcql.ts is `"age" | "membership"`), so a
 // custom credential's own `request` (DCQL) / `verify` / `ui.action` are not executed
 // by the ceremony page in v0.1 — completing an arbitrary custom credential on the
 // phone is roadmap. And trust_level is "presence-only-demo": v0.1 enforces disclosure

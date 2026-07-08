@@ -17,7 +17,7 @@ markers** in the Technical Context; these are design resolutions, each grounded 
 const cartStore = opts.cartStore ?? opts.storage?.cartStore ?? new MemoryCartStore();
 ```
 
-**Rationale**: This is the smallest change to [server.ts:206](../../packages/attestomcp-storefront/src/server.ts) — the
+**Rationale**: This is the smallest change to [server.ts:206](../../packages/credentagent-storefront/src/server.ts) — the
 four `opts.X ?? new MemoryX()` lines each gain one `?? opts.storage?.X` term. It gives FR-006 per-slot
 precedence (explicit wins, then provider, then memory) for free, and keeps `createStorefront` ignorant of
 Redis. A provider that returns *constructed stores* (not a factory of factories) is the simplest thing that
@@ -33,7 +33,7 @@ are cheap to construct eagerly.
 ## R2 — How do we keep `@upstash/redis` optional and off the in-memory path?
 
 **Decision**: Put all Redis code in a new `src/redis.ts` reached **only** via a new package export subpath
-`@openmobilehub/attestomcp-storefront/redis`. Declare `@upstash/redis` as an **optional `peerDependency`**
+`@openmobilehub/credentagent-storefront/redis`. Declare `@upstash/redis` as an **optional `peerDependency`**
 (`peerDependenciesMeta: { "@upstash/redis": { optional: true } }`) plus a `devDependency` for typecheck and
 tests. `server.ts` / `./server` import only the **type** `StorageProvider` (from `state.ts`), never
 `redis.ts`, so importing the storefront server never pulls in `@upstash/redis`.
@@ -61,13 +61,13 @@ into the server entry's module graph.
 | completed-order | `${ns}:order:completed:${orderId}` | `CompletedOrderRecord` JSON |
 | verification | `${ns}:verification:${orderId}` | `VerificationRecord` JSON |
 
-`namespace` defaults to `"attestomcp-storefront"` when omitted (single-tenant common case). Two providers
+`namespace` defaults to `"credentagent-storefront"` when omitted (single-tenant common case). Two providers
 with different namespaces over one backend cannot collide (FR-007); order/verification keys embed the order
 id (FR-005, Security Inv #4).
 
 **Rationale**: Mirrors the demo's proven `product-picker:<kind>:<id>` scheme but with a caller-controlled
 namespace. Splitting `order:created` vs `order:completed` matches the two distinct `OrderStore` slots
-`createStorefront` uses today ([server.ts:210-213](../../packages/attestomcp-storefront/src/server.ts)).
+`createStorefront` uses today ([server.ts:210-213](../../packages/credentagent-storefront/src/server.ts)).
 
 **Alternatives considered**: Redis hash tags / separate logical DBs per tenant — rejected: over-engineered;
 a namespace prefix is sufficient and portable across Upstash plans.
@@ -94,7 +94,7 @@ this cart size, and diverges from the single-value get/set shape of the other st
 **Decision**: The Redis verification adapter is a **plain per-order `get`/`set` of the full
 `VerificationRecord`** — no internal read-modify-write merge. Field merging already happens at the ceremony
 call site (`{ ...prev, ageVerified: true }`,
-[credential-gate/routes.ts:91-95](../../packages/attestomcp-gate/src/ceremony/credential-gate/routes.ts)),
+[credential-gate/routes.ts:91-95](../../packages/credentagent-gate/src/ceremony/credential-gate/routes.ts)),
 which reads then writes the whole record. The isolation guarantee is **per-order keying**, not adapter-level
 merge (matches `MemoryVerificationStore` in the gate, which also just `set`s the full record).
 
@@ -147,7 +147,7 @@ violates the intent of opting into persistence.
 
 **Decision**: Export `CartStore`, `OrderStore`, `StorageProvider`, and `RedisStorageOptions` from the
 package. `CartStore` / `OrderStore` live in `state.ts` today but are **not** currently re-exported
-([server.ts](../../packages/attestomcp-storefront/src/server.ts) imports them without re-export), so
+([server.ts](../../packages/credentagent-storefront/src/server.ts) imports them without re-export), so
 consumers can only rely on structural typing. `VerificationStore` is already exported by the gate.
 
 **Rationale**: For a first-class API a consumer should be able to `import type { StorageProvider }` and,
@@ -165,7 +165,7 @@ change.
 | :-- | :-- |
 | R1 | `StorageProvider` = the four constructed stores; per-slot resolution `explicit ?? storage ?? memory`. |
 | R2 | Redis code in `src/redis.ts` behind a `./redis` subpath; `@upstash/redis` optional peer dep. |
-| R3 | Keys `${namespace}:${kind}:${id}`; namespace default `attestomcp-storefront`; order/verification carry order id. |
+| R3 | Keys `${namespace}:${kind}:${id}`; namespace default `credentagent-storefront`; order/verification carry order id. |
 | R4 | Auto-JSON via upstash; cart converts `Map`↔object at the boundary. |
 | R5 | Verification adapter = full-record get/set (merge stays at the ceremony call site). |
 | R6 | Injectable `RedisLike` (`get`/`set`/`del`) seam for deterministic offline tests. |

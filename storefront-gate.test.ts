@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createStorefront, type Storefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { createStorefront, type Storefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, age, membership, payment, required, optional } from "@openmobilehub/credentagent-gate";
 
 // Guards the quickstart showcase (examples/storefront.mjs): the two packages
-// compose with ZERO glue — a priced storefront Order feeds attestomcp.requirements()
+// compose with ZERO glue — a priced storefront Order feeds credentagent.requirements()
 // directly (the line carries minimumAge), and the checkout tool surfaces the
 // manifest. Drives the real MCP server over an in-memory transport (deterministic).
 
@@ -15,10 +15,10 @@ const hasAlcohol = (order: { lines: { minimumAge?: number }[] }) =>
 
 function gatedStore(): Storefront {
   const store = createStorefront();
-  const attestomcp = new AttestoMCP();
-  attestomcp.mount(store.app);
+  const credentagent = new CredentAgent();
+  credentagent.mount(store.app);
   store.gate((order) =>
-    attestomcp.requirements(order, [
+    credentagent.requirements(order, [
       required(age.over(21).when(hasAlcohol)),
       optional(membership.discount(10)),
       required(payment.in("usd")),
@@ -38,7 +38,7 @@ async function connect(store: Storefront): Promise<Client> {
 const checkout = (c: Client, productId: string) =>
   c.callTool({ name: "checkout", arguments: { items: [{ productId, quantity: 1 }] } });
 
-describe("attestomcp-storefront × attestomcp-gate compose (zero glue)", () => {
+describe("credentagent-storefront × credentagent-gate compose (zero glue)", () => {
   it("registers the storefront tools", async () => {
     const tools = (await (await connect(gatedStore())).listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(expect.arrayContaining(["browse-products", "checkout", "get-order-status"]));
@@ -69,7 +69,7 @@ describe("attestomcp-storefront × attestomcp-gate compose (zero glue)", () => {
 });
 
 // The full composition over HTTP: opening the checkout LINKS to the mounted
-// /attestomcp/* ceremony routes (in policy order, payment last), and a buyer can
+// /credentagent/* ceremony routes (in policy order, payment last), and a buyer can
 // actually COMPLETE the ceremony — prove age → present membership → authorize
 // payment — which writes completion that the order-status poll reflects. Drives the
 // real mounted rails on `store.app` via supertest (the MCP server + the app share the
@@ -86,7 +86,7 @@ const DC_CLAIMS = {
   holder_name: "Test Buyer",
 };
 
-describe("end-to-end ceremony over the mounted /attestomcp/* routes", () => {
+describe("end-to-end ceremony over the mounted /credentagent/* routes", () => {
   it("prove age → present membership → authorize payment completes with the DISCOUNTED amount", async () => {
     const store = gatedStore();
     const client = await connect(store);
@@ -97,11 +97,11 @@ describe("end-to-end ceremony over the mounted /attestomcp/* routes", () => {
     // order (payment last): age/membership → the credential page, payment → dc-payment.
     expect(sc.requires.map((e) => e.credential)).toEqual(["age", "membership", "payment"]);
     const byCred = Object.fromEntries(sc.requires.map((e) => [e.credential, e.approveUrl]));
-    expect(byCred.age).toContain("/attestomcp/credential?order=");
+    expect(byCred.age).toContain("/credentagent/credential?order=");
     expect(byCred.age).toContain("cred=age");
-    expect(byCred.membership).toContain("/attestomcp/credential?order=");
+    expect(byCred.membership).toContain("/credentagent/credential?order=");
     expect(byCred.membership).toContain("cred=membership");
-    expect(byCred.payment).toContain("/attestomcp/dc-payment?order=");
+    expect(byCred.payment).toContain("/credentagent/dc-payment?order=");
 
     // The age gate page renders (the link from requires[].approveUrl resolves).
     const page = await request(store.app).get(byCred.age);
@@ -110,15 +110,15 @@ describe("end-to-end ceremony over the mounted /attestomcp/* routes", () => {
 
     // Prove age (explicit positive claim at the order's threshold) + present membership
     // (opts THIS order into the 10% discount).
-    const ageOut = await request(store.app).post("/attestomcp/credential/verify").send({ order: orderId, cred: "age", claims: { age_over_21: true } });
+    const ageOut = await request(store.app).post("/credentagent/credential/verify").send({ order: orderId, cred: "age", claims: { age_over_21: true } });
     expect(ageOut.body.verified).toBe(true);
-    const memOut = await request(store.app).post("/attestomcp/credential/verify").send({ order: orderId, cred: "membership", claims: { membership_number: "MEMBER-7" } });
+    const memOut = await request(store.app).post("/credentagent/credential/verify").send({ order: orderId, cred: "membership", claims: { membership_number: "MEMBER-7" } });
     expect(memOut.body.verified).toBe(true);
 
     // Authorize payment. The bound amount is the DISCOUNTED total — line sum 124 − 10%
     // = 111.6 — re-derived from the catalog + this order's verified loyalty (invariant
     // 3), and a finished ceremony records through the shared completeOrder seam.
-    const pay = await request(store.app).post("/attestomcp/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
+    const pay = await request(store.app).post("/credentagent/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
     expect(pay.body.completed).toBe(true);
     expect(pay.body.mandate.payment.amount).toBeCloseTo(111.6);
 
@@ -138,7 +138,7 @@ describe("end-to-end ceremony over the mounted /attestomcp/* routes", () => {
     // amount binds), but the SHARED completeOrder re-derives the age restriction from
     // the catalog-priced lines and REFUSES — invariant 1, on the completion path, not
     // merely a hidden button. Nothing is recorded.
-    const refused = await request(store.app).post("/attestomcp/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
+    const refused = await request(store.app).post("/credentagent/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
     expect(refused.body.completed).toBe(false);
     expect(refused.body.reason).toBe("age");
     const pending = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
@@ -146,8 +146,8 @@ describe("end-to-end ceremony over the mounted /attestomcp/* routes", () => {
 
     // REVERT: prove age, retry the SAME order → it now completes (so the refusal was
     // the age control, not an unrelated failure). No membership ⇒ full 124.
-    await request(store.app).post("/attestomcp/credential/verify").send({ order: orderId, cred: "age", claims: { age_over_21: true } });
-    const ok = await request(store.app).post("/attestomcp/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
+    await request(store.app).post("/credentagent/credential/verify").send({ order: orderId, cred: "age", claims: { age_over_21: true } });
+    const ok = await request(store.app).post("/credentagent/dc-payment/verify").send({ order: orderId, claims: DC_CLAIMS });
     expect(ok.body.completed).toBe(true);
     expect(ok.body.mandate.payment.amount).toBeCloseTo(124);
     const done = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);

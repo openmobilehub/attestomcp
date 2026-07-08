@@ -10,10 +10,10 @@ verbatim.
 
 | Entity | Contract | Shape | Source |
 | :-- | :-- | :-- | :-- |
-| Working cart | `CartStore` | `Map<productId, qty>` | [state.ts:7](../../packages/attestomcp-storefront/src/state.ts) |
-| Created order | `OrderStore<Order>` | `Order` (id, lines, totals, createdAt) | [state.ts:25](../../packages/attestomcp-storefront/src/state.ts) · [index.ts:71](../../packages/attestomcp-storefront/src/index.ts) |
-| Completed order | `OrderStore<CompletedOrderRecord>` | orderId, amount, currency, method, completedAt, … | [server.ts:116](../../packages/attestomcp-storefront/src/server.ts) |
-| Verification | `VerificationStore` | `VerificationRecord` (ageVerified?, loyalty?, `[credentialId]`) | [types.ts:141](../../packages/attestomcp-gate/src/types.ts) |
+| Working cart | `CartStore` | `Map<productId, qty>` | [state.ts:7](../../packages/credentagent-storefront/src/state.ts) |
+| Created order | `OrderStore<Order>` | `Order` (id, lines, totals, createdAt) | [state.ts:25](../../packages/credentagent-storefront/src/state.ts) · [index.ts:71](../../packages/credentagent-storefront/src/index.ts) |
+| Completed order | `OrderStore<CompletedOrderRecord>` | orderId, amount, currency, method, completedAt, … | [server.ts:116](../../packages/credentagent-storefront/src/server.ts) |
+| Verification | `VerificationStore` | `VerificationRecord` (ageVerified?, loyalty?, `[credentialId]`) | [types.ts:141](../../packages/credentagent-gate/src/types.ts) |
 
 **Keying rule (invariant):** the created-order, completed-order, and verification stores are keyed by
 **order id**. The cart store is a single working cart per storefront instance (no id). `namespace` scopes
@@ -48,7 +48,7 @@ Input to the `redisStorage()` factory.
 | `url` | `string` | one of `url`+`token` **or** `client` | — | Upstash REST URL |
 | `token` | `string` | with `url` | — | Upstash REST token |
 | `client` | `RedisLike` | alternative to `url`+`token` | — | inject a pre-built / fake client (tests, custom) |
-| `namespace` | `string` | no | `"attestomcp-storefront"` | key prefix for tenant isolation |
+| `namespace` | `string` | no | `"credentagent-storefront"` | key prefix for tenant isolation |
 
 - **Validation**: exactly one of (`url`+`token`) or `client` must be supplied. If neither, throw a clear
   error. If `url`+`token` given but `@upstash/redis` is not installed, throw an actionable error naming the

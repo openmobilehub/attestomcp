@@ -1,4 +1,4 @@
-# Project Status — AttestoMCP
+# Project Status — CredentAgent
 
 _Single source of truth for what's done, what's next, and what's waiting on you._
 _Updated **2026-07-05** · `main` · CI green._
@@ -11,13 +11,13 @@ _Updated **2026-07-05** · `main` · CI green._
 
 ## ⏳ Decisions for you
 
-- [ ] **Publish `0.2.0`** (bumped from the never-published `0.1.0` for the `AttestoMCP` rename below — an
+- [ ] **Publish `0.2.0`** (bumped from the never-published `0.1.0` for the `CredentAgent` rename below — an
       exported class rename). Add the **`NPM_TOKEN`** secret (publish rights to the `@openmobilehub` scope),
       then cut a **GitHub Release** → `.github/workflows/publish.yml` publishes **gate first, then
       storefront** (with provenance). Or publish manually in that order. See `docs/PUBLISHING.md`.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **GDC front-door timing / optional rename.** "AttestoMCP" is contested but chosen for now
+- [ ] **GDC front-door timing / optional rename.** "CredentAgent" is contested but chosen for now
       (`docs/naming-clearance.md` has a vetted rename fallback). Confirm before the public GDC push.
 
 ---
@@ -26,17 +26,17 @@ _Updated **2026-07-05** · `main` · CI green._
 
 - **Publish `0.2.0`** — blocked on the `NPM_TOKEN` secret (above). Pre-flight green (CI build+test).
 - **Flip the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its dependency
-  on `@openmobilehub/attestomcp-*` from the workspace to the published `^0.2.x`, and renames its own
-  `AttestoMcp` / `attestoMcpManifest` imports to `AttestoMCP` / `attestoMCPManifest` (tracked in that repo,
-  [#26](https://github.com/openmobilehub/attestomcp/issues/26)).
+  on `@openmobilehub/credentagent-*` from the workspace to the published `^0.2.x`, and renames its own
+  `AttestoMcp` / `attestoMcpManifest` imports to `CredentAgent` / `credentAgentManifest` (tracked in that repo,
+  [#26](https://github.com/openmobilehub/credentagent/issues/26)).
 - **Cart Mandate (004)** — spec ready (`specs/004-cart-mandate/spec.md`); build after publish.
-- **Storefront persistence (005)** — [#27](https://github.com/openmobilehub/attestomcp/issues/27) (epic #29).
+- **Storefront persistence (005)** — [#27](https://github.com/openmobilehub/credentagent/issues/27) (epic #29).
   Full spec-kit set in `specs/005-storefront-persistence/`. `createStorefront({ storage: redisStorage(…) })`
   implemented on the working tree: builds all four stores over Upstash Redis (optional peer dep, lazy-loaded),
   in-memory stays the zero-config default, explicit per-slot injection still wins, per-order keying + namespace
   isolation, fail-closed. Storefront suite green (+12 tests). **Pending:** commit (DCO) + PR; demo slim-down
   (scope A) tracked in `mcp-apps-shopping-demo`.
-- **Storefront dynamic catalog (006)** — [#28](https://github.com/openmobilehub/attestomcp/issues/28) (epic #29).
+- **Storefront dynamic catalog (006)** — [#28](https://github.com/openmobilehub/credentagent/issues/28) (epic #29).
   Spec-kit set in `specs/006-storefront-catalog-source/`. `createStorefront({ catalog: firestoreCatalog(…) })`:
   `catalog` now accepts `Product[] | CatalogSource`; `firestoreCatalog` (subpath `./firestore`) loads from
   Firestore with a TTL cache, fail-closed cold/empty, last-known-good on a refresh blip, malformed/negative
@@ -51,7 +51,7 @@ _Updated **2026-07-05** · `main` · CI green._
 
 | What | Where |
 | :-- | :-- |
-| `AttestoMcp` → `AttestoMCP` brand-casing rename (class, `AttestoMCPOptions`, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` | [#26](https://github.com/openmobilehub/attestomcp/issues/26) |
+| `AttestoMcp` → `CredentAgent` brand-casing rename (class, `CredentAgentOptions`, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
 | Repo migrated out of `mcp-apps-shopping-demo` (history-preserved), CI green, branch protection on `main` | this repo |
 | Dev + reference docs (`docs/reference/*`, README, ARCHITECTURE, CONTRIBUTING, SECURITY-INVARIANTS) | `docs/` |
 | The full ceremony extraction (003): the demo became a thin consumer; the gate is the published library | `specs/003-…` |

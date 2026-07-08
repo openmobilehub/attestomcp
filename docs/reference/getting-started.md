@@ -1,6 +1,6 @@
 # Getting started
 
-AttestoMCP is **the consent layer for AI agents**: before a consequential MCP tool
+CredentAgent is **the consent layer for AI agents**: before a consequential MCP tool
 completes — a payment, an age gate, an access grant — the agent must prove a
 **verifiable credential** from the user's phone wallet. Identity leads; payments
 is just one application. `age.over(21)`, a loyalty membership, a prescription, and
@@ -9,10 +9,10 @@ is just one application. `age.over(21)`, a loyalty membership, a prescription, a
 This page stands up a credential-gated agentic storefront in about ten lines and
 connects it to an MCP host. Two npm packages compose with zero glue:
 
-- **[`@openmobilehub/attestomcp-gate`](https://www.npmjs.com/package/@openmobilehub/attestomcp-gate)** — the Gate.
-  `new AttestoMCP()`, `attestomcp.mount(app)`, the policy builders (`age` / `membership` /
-  `payment` / `defineCredential`), and the real `/attestomcp/*` ceremony rails.
-- **[`@openmobilehub/attestomcp-storefront`](https://www.npmjs.com/package/@openmobilehub/attestomcp-storefront)** — a runnable
+- **[`@openmobilehub/credentagent-gate`](https://www.npmjs.com/package/@openmobilehub/credentagent-gate)** — the Gate.
+  `new CredentAgent()`, `credentagent.mount(app)`, the policy builders (`age` / `membership` /
+  `payment` / `defineCredential`), and the real `/credentagent/*` ceremony rails.
+- **[`@openmobilehub/credentagent-storefront`](https://www.npmjs.com/package/@openmobilehub/credentagent-storefront)** — a runnable
   MCP shopping server, catalog-injected. `createStorefront()` ships the cart →
   priced-cart → order model, the shopping tools, the widget bundle, and a checkout
   page, and publishes the ceremony seams the Gate mounts onto.
@@ -32,10 +32,10 @@ connects it to an MCP host. Two npm packages compose with zero glue:
 ## Install
 
 ```bash
-npm install @openmobilehub/attestomcp-gate @openmobilehub/attestomcp-storefront
+npm install @openmobilehub/credentagent-gate @openmobilehub/credentagent-storefront
 ```
 
-Both packages are Apache-2.0 and ESM. `@openmobilehub/attestomcp-storefront` has two
+Both packages are Apache-2.0 and ESM. `@openmobilehub/credentagent-storefront` has two
 entry points: `.` (the pure pricing/order model, dependency-light) and `./server`
 (the runnable MCP server, which brings in `@modelcontextprotocol/sdk` + `express`).
 
@@ -43,20 +43,20 @@ entry points: `.` (the pure pricing/order model, dependency-light) and `./server
 
 `createStorefront()` stands up the real MCP server (the shopping tools, a widget
 resource, a checkout page) over HTTP at `/mcp`, and publishes ceremony seams on
-`store.app.locals.attestomcp`. `new AttestoMCP().mount(store.app)` reads those seams and
-wires the real `/attestomcp/*` ceremony rails onto the same server. `store.gate()`
+`store.app.locals.credentagent`. `new CredentAgent().mount(store.app)` reads those seams and
+wires the real `/credentagent/*` ceremony rails onto the same server. `store.gate()`
 resolves your policy on every `checkout` call.
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, age, membership, payment, required, optional } from "@openmobilehub/credentagent-gate";
 
 const store = createStorefront();                  // the whole storefront — one line
-const attestomcp = new AttestoMCP();                     // zero-config (defaults to http://localhost:3000)
-attestomcp.mount(store.app);                          // wires the real /attestomcp/* ceremony rails
+const credentagent = new CredentAgent();                     // zero-config (defaults to http://localhost:3000)
+credentagent.mount(store.app);                          // wires the real /credentagent/* ceremony rails
 
 store.gate((order) =>                              // resolved on every checkout (payment settles LAST)
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(age.over(21).when((order) => order.lines.some((l) => l.minimumAge != null))),
     optional(membership.discount(10)),              // 10% off if a loyalty credential is presented
     required(payment.in("usd")),                    // amount derived from the order; settles last
@@ -64,7 +64,7 @@ store.gate((order) =>                              // resolved on every checkout
 );
 
 const { url } = await store.listen(3005);          // → http://localhost:3005/mcp
-console.log(`AttestoMCP-gated storefront running → ${url}`);
+console.log(`CredentAgent-gated storefront running → ${url}`);
 ```
 
 What each line does:
@@ -72,13 +72,13 @@ What each line does:
 - `createStorefront()` — the storefront, catalog-injected. With no `catalog` passed
   it serves a built-in `SAMPLE_CATALOG` that includes one 21+ item (whiskey) so it
   demos itself. The return value is `{ app, catalog, gate, listen, mcpServer }`.
-- `new AttestoMCP()` — the Gate client, zero-config. For a deployment, pass your public
-  origin: `new AttestoMCP({ walletOrigin: "https://shop.example" })`.
-- `attestomcp.mount(store.app)` — wires the `/attestomcp/*` ceremony routes (passkey,
+- `new CredentAgent()` — the Gate client, zero-config. For a deployment, pass your public
+  origin: `new CredentAgent({ walletOrigin: "https://shop.example" })`.
+- `credentagent.mount(store.app)` — wires the `/credentagent/*` ceremony routes (passkey,
   credential, dc-payment) onto the storefront's Express app.
 - `store.gate((order) => …)` — registers your policy resolver. It runs on every
   `checkout` call and returns the `requires` manifest the agent and widget read back.
-- `attestomcp.requirements(order, policy)` — the **code→data boundary**: it runs your
+- `credentagent.requirements(order, policy)` — the **code→data boundary**: it runs your
   `.when()` / `appliesTo` predicates **server-side**, sorts `payment` last, and emits a
   flat, JSON-safe manifest. No functions cross the wire.
 - `required(c)` / `optional(c)` — wrap each credential to build the ordered policy
@@ -89,7 +89,7 @@ What each line does:
 
 The product's `minimumAge` is the single field that ties the two packages together:
 the storefront re-derives it onto each priced line, so a storefront `Order` feeds
-`attestomcp.requirements()` directly — no mapping. The gate's amount is **re-derived
+`credentagent.requirements()` directly — no mapping. The gate's amount is **re-derived
 server-side from the catalog**, never trusted from the order token.
 
 > **Stable challenge key.** A dev server uses an ephemeral per-process challenge key,
@@ -104,7 +104,7 @@ example:
 
 ```bash
 npm install
-npm run build:packages          # build the two @openmobilehub/attestomcp-* packages
+npm run build:packages          # build the two @openmobilehub/credentagent-* packages
 node examples/storefront.mjs    # → http://localhost:3005/mcp
 ```
 
@@ -120,7 +120,7 @@ Add that URL as a remote MCP connector in any host:
   HTTP)** → URL `http://localhost:3005/mcp`.
 - **Claude / ChatGPT** — add it as a remote MCP / custom connector pointing at
   `http://localhost:3005/mcp`. (For hosts that only accept a public HTTPS endpoint,
-  deploy the server and pass your origin to `new AttestoMCP({ walletOrigin: "https://…" })`.)
+  deploy the server and pass your origin to `new CredentAgent({ walletOrigin: "https://…" })`.)
 
 Then drive the flow from chat:
 
@@ -130,21 +130,21 @@ Then drive the flow from chat:
 - *"Add the Aurora headphones and check out"* → **no age gate** — the `.when()`
   predicate sees no `minimumAge` line and is false.
 
-Open the checkout link to complete the gates end-to-end on the `/attestomcp/*` page —
+Open the checkout link to complete the gates end-to-end on the `/credentagent/*` page —
 prove age → present membership → authorize payment — recorded so the agent's
 `get-order-status` poll reflects the (discounted) confirmation.
 
 ## How the flow is split (the three execution contexts)
 
-The split is load-bearing — AttestoMCP enforces it, and conflating the contexts is the
+The split is load-bearing — CredentAgent enforces it, and conflating the contexts is the
 documented root cause of confusion. v0.1 is consolidated **Mode A**:
 
 1. **Tool — mints the link + reports requirements.** Your `checkout` handler runs once
    when checkout is requested. There is no phone in the loop, so it runs **no ceremony**
-   — it calls `attestomcp.requirements(order, policy)` and returns
+   — it calls `credentagent.requirements(order, policy)` and returns
    `{ orderId, checkoutUrl, requires }`.
 2. **Page — runs the gates.** The buyer opens the link and completes every verification
-   and payment in one browser session, on the `/attestomcp/*` routes `mount()` serves.
+   and payment in one browser session, on the `/credentagent/*` routes `mount()` serves.
 3. **Poll — reports completion.** The agent polls (MCP has no server→client push) and
    reports the result. It never performs the ceremony itself.
 
@@ -161,7 +161,7 @@ effect, appliesTo?, ui })` — no registration step — and drop it into the **s
 ordered policy array:
 
 ```ts
-import { defineCredential, dcql, gate, required } from "@openmobilehub/attestomcp-gate";
+import { defineCredential, dcql, gate, required } from "@openmobilehub/credentagent-gate";
 
 const prescription = defineCredential({
   id: "prescription",
@@ -173,7 +173,7 @@ const prescription = defineCredential({
 });
 
 store.gate((order) =>
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(prescription),                     // custom gate — conditional via appliesTo
     required(age.over(21).when(hasAlcohol)),    // built-ins drop into the SAME array
     optional(membership.discount(10)),
@@ -212,8 +212,8 @@ in the reference repo (`npm run build:packages` first, then `node examples/<file
 ## Learn more
 
 - Package READMEs:
-  [`@openmobilehub/attestomcp-gate`](https://www.npmjs.com/package/@openmobilehub/attestomcp-gate) ·
-  [`@openmobilehub/attestomcp-storefront`](https://www.npmjs.com/package/@openmobilehub/attestomcp-storefront)
+  [`@openmobilehub/credentagent-gate`](https://www.npmjs.com/package/@openmobilehub/credentagent-gate) ·
+  [`@openmobilehub/credentagent-storefront`](https://www.npmjs.com/package/@openmobilehub/credentagent-storefront)
 - The reference demo (full fail-closed wallet ceremony, on-chain settlement):
   [openmobilehub/mcp-apps-shopping-demo](https://github.com/openmobilehub/mcp-apps-shopping-demo)
 

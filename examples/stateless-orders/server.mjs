@@ -3,12 +3,12 @@
 //   node examples/stateless-orders/server.mjs      # boots on http://localhost:4000
 //   bash examples/stateless-orders/demo.sh         # drives a full checkout with curl
 //
-// It mounts the AttestoMCP gate with `statelessOrders: true` and an EMPTY order store
+// It mounts the CredentAgent gate with `statelessOrders: true` and an EMPTY order store
 // (it THROWS on read) — so the only way a checkout can succeed is by reconstructing the
 // order from a *signed* cart mandate carried on the request. If you see a completed
 // order, no server-side order state was involved: the signed cart was the transport.
 import express from "express";
-import { AttestoMCP, completeOrder, MemoryVerificationStore, issueCartMandate } from "@openmobilehub/attestomcp-gate";
+import { CredentAgent, completeOrder, MemoryVerificationStore, issueCartMandate } from "@openmobilehub/credentagent-gate";
 
 const SECRET = "demo-signing-key-change-me";
 const PORT = 4000;
@@ -29,7 +29,7 @@ const catalog = {
   },
 };
 
-// Shared verification store — the AttestoMCP instance and the completion seam use the same one.
+// Shared verification store — the CredentAgent instance and the completion seam use the same one.
 const store = new MemoryVerificationStore();
 const records = new Map();
 const completionCtx = {
@@ -43,8 +43,8 @@ const completionCtx = {
 const app = express();
 app.use(express.json());
 
-const attestomcp = new AttestoMCP({ store });
-attestomcp.mount(app, {
+const credentagent = new CredentAgent({ store });
+credentagent.mount(app, {
   // The order store is DELIBERATELY empty and throws — proving no server-side order
   // state is used. In a real serverless deploy this would just be "no shared store".
   orderStore: { read: () => { throw new Error("orderStore read — should not happen under statelessOrders"); } },
@@ -71,7 +71,7 @@ app.get("/issue", (req, res) => {
 app.listen(PORT, () => {
   console.log(`stateless-orders example on http://localhost:${PORT}`);
   console.log(`  1) GET  /issue?order=ORD-1               → mint a signed cart mandate`);
-  console.log(`  2) GET  /attestomcp/dc-payment?order=ORD-1&cart=<b64>   → the gate page (no store read)`);
-  console.log(`  3) POST /attestomcp/dc-payment/verify    { order, cartMandate, claims } → completes`);
+  console.log(`  2) GET  /credentagent/dc-payment?order=ORD-1&cart=<b64>   → the gate page (no store read)`);
+  console.log(`  3) POST /credentagent/dc-payment/verify    { order, cartMandate, claims } → completes`);
   console.log(`Run:  bash examples/stateless-orders/demo.sh`);
 });

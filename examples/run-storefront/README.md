@@ -1,7 +1,7 @@
 # Example — run THIS repo's storefront + gate
 
 The separate demo (`openmobilehub/mcp-apps-shopping-demo`) vendors its **own, older** copy of the
-packages (the pre-rename `Attesto` API) and can't consume this repo's `attestomcp` packages until the
+packages (the pre-rename `Attesto` API) and can't consume this repo's `credentagent` packages until the
 "flip the demo" step lands. So to exercise **the code in this repo** — the gate + storefront we
 actually iterate on — boot the storefront directly. `createStorefront().listen()` is a runnable MCP
 shopping server with the gate mounted on it.
@@ -9,14 +9,14 @@ shopping server with the gate mounted on it.
 ## Run it
 
 ```bash
-npm run build -w @openmobilehub/attestomcp-gate
-npm run build -w @openmobilehub/attestomcp-storefront
+npm run build -w @openmobilehub/credentagent-gate
+npm run build -w @openmobilehub/credentagent-storefront
 node examples/run-storefront/serve.mjs        # → http://localhost:3005
 ```
 
 Serves, all from this repo's code:
 - `http://localhost:3005/mcp` — the MCP shopping endpoint (9 tools: browse, cart, checkout, …)
-- `http://localhost:3005/attestomcp/*` — the gate's browsable checkout / approve pages
+- `http://localhost:3005/credentagent/*` — the gate's browsable checkout / approve pages
 - the product-picker widget bundle
 
 ### Stateful vs stateless (env toggle)
@@ -49,7 +49,7 @@ npx @modelcontextprotocol/inspector       # open the UI, connect to http://local
 ```
 
 Then: `browse-products` → `add-to-cart` the **Oak Whiskey** (21+) → `checkout`. Because whiskey is
-age-restricted, checkout returns a `requires` manifest **plus an approve link** under `/attestomcp/…`.
+age-restricted, checkout returns a `requires` manifest **plus an approve link** under `/credentagent/…`.
 Open that link in a **browser** and drive the age → passkey / dc-payment ceremony with the
 **instant-demo buttons** — no phone wallet needed. The gate serving those pages is *this repo's* gate.
 
@@ -70,7 +70,7 @@ it to buy the whiskey.)
     -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"c","version":"0"}}}'
   ```
-  A `serverInfo: attestomcp-storefront` line means it's healthy.
+  A `serverInfo: credentagent-storefront` line means it's healthy.
 
 The lower-level, store-free version is [`../stateless-orders/`](../stateless-orders/) (always stateless).
 

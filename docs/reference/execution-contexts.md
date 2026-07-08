@@ -1,29 +1,29 @@
 # The three execution contexts
 
 A credential is proven on the user's **phone** — never inside an MCP tool call. That
-one physical fact splits an AttestoMCP-gated flow into **three contexts that run at
+one physical fact splits an CredentAgent-gated flow into **three contexts that run at
 different times, in different places**. Respecting the split is load-bearing:
 conflating the contexts is the **documented root cause of confusion** in every earlier
 draft of this design ([constitution, Principle II](../../.specify/memory/constitution.md);
 [spec §0](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md)),
 and it is forbidden by the constitution.
 
-Read this page before wiring a gate. Every example in the AttestoMCP docs assumes it.
+Read this page before wiring a gate. Every example in the CredentAgent docs assumes it.
 
 ```
 ┌─ CONTEXT 1 · the MCP tool handler (your Node server) — runs ONCE, when checkout is requested ─┐
 │  TRIGGER: the user clicks the widget's "Checkout" button OR says "check out" in chat.          │
 │  JOB: take the cart → price the order → return the checkout link + what the page WILL require. │
 │       Then it EXITS. No phone is in the loop yet — so it runs NO ceremony.                      │
-│       → attestomcp.requirements(order, policy)                                                     │
+│       → credentagent.requirements(order, policy)                                                     │
 └───────────────────────────────────────────────────────────────────────────────────────────────┘
                          │ returns { orderId, checkoutUrl, requires }
                          ▼
 ┌─ CONTEXT 2 · the checkout page (browser + phone) — where the gates actually RUN ──────────────┐
 │  The buyer opens the link ONCE and completes every verification + payment in one session,      │
-│  on the /attestomcp/* routes that mount() serves. Age → (membership discount) → pay → settle.     │
+│  on the /credentagent/* routes that mount() serves. Age → (membership discount) → pay → settle.     │
 │  Every gate is re-enforced server-side on every completion path (fail-closed → 403).           │
-│       → attestomcp.mount(app)                                                                      │
+│       → credentagent.mount(app)                                                                      │
 └───────────────────────────────────────────────────────────────────────────────────────────────┘
                          │
                          ▼
@@ -51,7 +51,7 @@ requirements; it does not *perform* them. The single call that does this is:
 requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[]
 ```
 
-([`packages/attestomcp-gate/src/client.ts`](../../packages/attestomcp-gate/src/client.ts) `AttestoMCP.requirements`).
+([`packages/credentagent-gate/src/client.ts`](../../packages/credentagent-gate/src/client.ts) `CredentAgent.requirements`).
 You hand it the server-priced `order` and your ordered policy array; it resolves the
 policy and hands back the flat `requires` manifest your tool surfaces to the agent and
 the widget:
@@ -59,7 +59,7 @@ the widget:
 ```ts
 // inside your checkout MCP tool handler — Context 1
 const order = priceCart(items);                 // your pricing, server-side
-const requires = attestomcp.requirements(order, [
+const requires = credentagent.requirements(order, [
   required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
   optional(membership.discount(10)),
   required(payment.in("usd")),                  // amount derived from the order; settles last
@@ -77,13 +77,13 @@ and are enforced in Context 2.
 
 The agent hands the buyer the `checkoutUrl`. The buyer opens it **once** and completes
 **every** verification and payment in a single browser session — age → (optional
-membership discount) → pay → settle — on the `/attestomcp/*` routes that
+membership discount) → pay → settle — on the `/credentagent/*` routes that
 
 ```ts
 mount(app: ExpressApp, ceremony?: MountCeremony): void
 ```
 
-([`AttestoMCP.mount`](../../packages/attestomcp-gate/src/client.ts)) wires onto your
+([`CredentAgent.mount`](../../packages/credentagent-gate/src/client.ts)) wires onto your
 Express-shaped host. These are **separate HTTP routes, not the Context-1 handler** —
 they are where the phone enters the loop and where the actual cryptographic ceremonies
 happen (WebAuthn on the passkey rail; OpenID4VP on the credential and dc-payment rails).
@@ -105,7 +105,7 @@ confirmation (total, gates cleared, settlement).
 
 ## Why the split is sacred
 
-| Context | Where it runs | When | Does it run a ceremony? | AttestoMCP call |
+| Context | Where it runs | When | Does it run a ceremony? | CredentAgent call |
 | :-- | :-- | :-- | :-- | :-- |
 | **1 · Tool** | your Node server | once, at checkout request | **No** — no phone in the loop | `requirements(order, policy)` |
 | **2 · Page** | browser + phone | when the buyer opens the link | **Yes** — this is the only place gates run | `mount(app)` |
@@ -125,7 +125,7 @@ report in 3.**
 `requirements()` enforces that: it runs your `.when()` / `appliesTo` predicates
 **server-side**, drops the gates that don't apply, sorts `payment` (the `authorize`
 effect) **last**, and emits a flat, JSON-safe manifest with no closures
-([`packages/attestomcp-gate/src/manifest.ts`](../../packages/attestomcp-gate/src/manifest.ts)
+([`packages/credentagent-gate/src/manifest.ts`](../../packages/credentagent-gate/src/manifest.ts)
 `resolveRequirements`).
 
 Each entry is a `VerificationManifestEntry` — pure data:
@@ -139,7 +139,7 @@ Each entry is a `VerificationManifestEntry` — pure data:
   "trust_level": "presence-only-demo",
   "label": "Verify you're 21+",
   "minAge": 21,              // present on age gates
-  "approveUrl": "https://shop.example/attestomcp/credential?order=ORD-1&cred=age"
+  "approveUrl": "https://shop.example/credentagent/credential?order=ORD-1&cred=age"
 }
 ```
 
@@ -160,6 +160,6 @@ sufficient to drive the agent.
 
 ---
 
-See also: [`@openmobilehub/attestomcp-gate` README — "The three execution contexts"](../../packages/attestomcp-gate/README.md)
+See also: [`@openmobilehub/credentagent-gate` README — "The three execution contexts"](../../packages/credentagent-gate/README.md)
 · [spec §0](https://github.com/openmobilehub/mcp-apps-shopping-demo/blob/main/specs/001-attesto-sdk/spec.md)
 · [constitution, Principles II & III](../../.specify/memory/constitution.md).

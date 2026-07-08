@@ -12,7 +12,7 @@ Add a first-class `storage` option to `createStorefront()` plus a `redisStorage(
 
 **Language/Version**: TypeScript, Node ≥ 20, ESM (matches both workspace packages).
 
-**Primary Dependencies**: existing — `@modelcontextprotocol/sdk`, `express`, `zod`, `@openmobilehub/attestomcp-gate`. **New**: `@upstash/redis` (^1.x) as an **optional `peerDependency`** (+ `devDependency` for typecheck/tests), never a runtime `dependency`.
+**Primary Dependencies**: existing — `@modelcontextprotocol/sdk`, `express`, `zod`, `@openmobilehub/credentagent-gate`. **New**: `@upstash/redis` (^1.x) as an **optional `peerDependency`** (+ `devDependency` for typecheck/tests), never a runtime `dependency`.
 
 **Storage**: Upstash-compatible Redis over REST (`@upstash/redis`) for the persistent path; in-process `Map` for the default. The library reuses the existing store contracts (`CartStore`, `OrderStore<T>`, `VerificationStore`) — it does not define new ones.
 
@@ -20,7 +20,7 @@ Add a first-class `storage` option to `createStorefront()` plus a `redisStorage(
 
 **Target Platform**: Node serverless (multi-instance, e.g. Vercel) for the persistent path; local Node / tests for in-memory.
 
-**Project Type**: Library (npm workspace package `@openmobilehub/attestomcp-storefront`).
+**Project Type**: Library (npm workspace package `@openmobilehub/credentagent-storefront`).
 
 **Performance Goals**: No added latency or dependency load on the in-memory path. Persistent store ops are single O(1) `get`/`set`/`del` per call (same shape as the demo's hand-rolled adapters).
 
@@ -32,7 +32,7 @@ Add a first-class `storage` option to `createStorefront()` plus a `redisStorage(
 
 *GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design.*
 
-Instantiated against the AttestoMCP SDK Constitution (Principles I–VII + Security Requirements):
+Instantiated against the CredentAgent SDK Constitution (Principles I–VII + Security Requirements):
 
 | Gate | Assessment |
 | :-- | :-- |
@@ -70,7 +70,7 @@ specs/005-storefront-persistence/
 ### Source Code (repository root)
 
 ```text
-packages/attestomcp-storefront/
+packages/credentagent-storefront/
 ├── package.json              # + @upstash/redis as optional peerDependency (+ devDependency);
 │                             #   + "./redis" subpath in "exports"; + peerDependenciesMeta.optional
 ├── src/
@@ -86,7 +86,7 @@ packages/attestomcp-storefront/
 └── README.md                 # + a short "Production persistence" section (one option)
 ```
 
-**Structure Decision**: Single npm workspace package (`packages/attestomcp-storefront`). The new persistence code lands entirely in that package as a self-contained `redis.ts` module reached only via the new `./redis` subpath export — mirroring how the repo isolates optional concerns. `server.ts` gains only type-level knowledge of `StorageProvider` (no `@upstash/redis` import), preserving the lean in-memory path. The gate package is untouched (it already exports `VerificationStore` / `MemoryVerificationStore`).
+**Structure Decision**: Single npm workspace package (`packages/credentagent-storefront`). The new persistence code lands entirely in that package as a self-contained `redis.ts` module reached only via the new `./redis` subpath export — mirroring how the repo isolates optional concerns. `server.ts` gains only type-level knowledge of `StorageProvider` (no `@upstash/redis` import), preserving the lean in-memory path. The gate package is untouched (it already exports `VerificationStore` / `MemoryVerificationStore`).
 
 ## Complexity Tracking
 
