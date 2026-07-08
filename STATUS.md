@@ -18,15 +18,14 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
       manually in that order. See `docs/PUBLISHING.md`.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **Rename — DEFERRED to ~week of 2026-07-06 (maintainer, 2026-07-03).** Mandatory per LF brand counsel
-      (Daniel Scales, via the Saurabh/Mike Woster thread): "MCP" in the name suggests the project is run by the
-      MCP project (AgenticAI Foundation trademark) and violates the
-      [LF trademark policy](https://lfprojects.org/policies/trademark-policy/) unless used **descriptively** —
-      "X for MCP" is fine, a fused "XMCP" is not. Research is **done** (nine sweeps in `docs/naming-clearance.md`;
-      queue leader **Consentinel**, shortlist Attorn / Creance / Assentio / Poder). **Next action is external:
-      forward `docs/naming-counsel-brief.md` (drafted 2026-07-03, ready to send) to LF counsel for a USPTO+EUIPO
-      knockout in classes 9/36/42.** Revisit next week. Blocks `NPM_TOKEN` / publish `0.2.0` (nothing cemented:
-      `0.2.0` unpublished, GDC not public). Execution when a name clears = known-size find-replace (~171 sites).
+- [ ] **Rename — NAME CHOSEN (team, 2026-07-08): AttestoMCP → CredentAgent.** Execution tracked in
+      [#37](https://github.com/openmobilehub/attestomcp/issues/37) (mapping table, measured scope, PR-#8
+      exemption list, 6-phase plan, verification gates) + website companion
+      [attestomcp-website#7](https://github.com/openmobilehub/attestomcp-website/issues/7). Satisfies the LF
+      counsel ruling (no "MCP" token; tagline keeps descriptive use). **Sequencing: merge #32 → #31 first,
+      then rename on clean `main`.** Advisory flags from `docs/naming-clearance.md` (generic "-Agent" suffix,
+      cred- neighbors) recorded in #37; **update `docs/naming-counsel-brief.md` to name CredentAgent and send
+      for the USPTO+EUIPO knockout (classes 9/36/42) — publish `0.2.0` stays behind that knockout.**
 - [ ] **005 sequencing fork — decision memo ready to ratify (2026-07-03).** Ship merchant-side v0.1
       (server-HMAC) first, or re-scope 005 to wallet-custody directly? Full analysis +
       recommendation in [`sequencing-fork-memo.md`](specs/005-human-not-present/sequencing-fork-memo.md).
