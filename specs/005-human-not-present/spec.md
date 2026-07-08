@@ -5,9 +5,10 @@ not `main` — do not lose prior work)
 
 **Created**: 2026-06-29
 
-**Status**: Draft — decisions baked in from research + hardened by an adversarial review; **awaiting maintainer
-confirmation** (Group-A discussed 2026-07-01; a tentative direction is noted but **not settled**); plus the
-Decision-13 constitution amendment before `/speckit-implement` (see callouts)
+**Status**: Draft — **sequencing fork RATIFIED 2026-07-07: Option B (wallet-custody, seams-first)**
+(`sequencing-fork-memo.md`). Group-A D1–D3 directionally settled by the ratification + the 2026-07-07 Multipaz
+meeting (D1 yes; D3 signer → **DeviceKey / DPC**, not server-HMAC). The **Decision-13 constitution amendment**
+remains a prerequisite before `/speckit-implement`. See the ⚠️ **Option-B reconciliation** callout below.
 
 **Input**: A typed **`ap2.IntentMandate`** that lets an agent complete a consequential **action** when the
 human is **not present**, under a **bounded, revocable, auditable** grant — the **smallest honest end-to-end
@@ -44,7 +45,24 @@ a 13-item decision menu).
 > | 12 | Async step-up? | A distinct third mode; only the step-up **threshold/refusal** is in this increment |
 > | 13 | Governance? | Depends on a **MINOR constitution amendment** to **Principles II, III, and VII** (separate `/speckit-constitution` step) — see Dependencies |
 
-> ## 🔎 Honesty framing (load-bearing — read before reviewing)
+> ## ⚠️ Option-B reconciliation (2026-07-07 — read before the v0.1 prose below)
+>
+> This spec was authored for the **server-HMAC v0.1** path (Option A's first increment). **Option B
+> (wallet-custody) is now ratified**, so the following are **superseded** and read as *historical A-path context*:
+> the **Delegate flow** (server composes + signs bounds), **Decision 3** (server-HMAC signer), and the
+> **v0.1 honesty framing** immediately below (bearer instrument / `server-issued-demo` / settlement-suppressed).
+> Under B the **user's phone signs** the bounds (**DeviceKey + on-device DPC**), naming a wallet-server key
+> `K_s`; the honesty label becomes **`issuer-verified (demo PKI)` + fake money**, presence **`delegated`** (see
+> `connector-architecture-design.md` §10–§11).
+>
+> **What does NOT change — and ships first:** the four **shared gate seams** — draw-verification **envelope**
+> (`checkDraw`), the **`completeOrder` draw branch**, the **revocation store**, and the **typed-refusal
+> vocabulary** (§9). These are signer-agnostic (they verify a signature over canonical bounds — HMAC *or* the
+> spike's ES256 `K_s`), so **all FRs about the seams stand as written**; only the *minting* side (who composes +
+> signs) moves from the merchant gate to the wallet server (a later increment). The first-increment build plan is
+> `plan.md`; the spike prototype (`spike/intent-mandate/`, ES256 + `checkDraw` + 13 tests) is already B-shaped.
+>
+> ## 🔎 Honesty framing (load-bearing — read before reviewing) — *v0.1 / A-path; superseded by the callout above*
 >
 > A v0.1 HNP grant is **server-HMAC-signed**, so it proves only **"this server issued this grant"** — NOT that
 > the user authorized these specific bounds, NOT which user, and there is **no human at execution**. It is a

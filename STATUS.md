@@ -41,6 +41,13 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 
 ## 🔨 In flight / next
 
+- **AP2 v2 alignment — captured as [#39](https://github.com/openmobilehub/attestomcp/issues/39) +
+  [#40](https://github.com/openmobilehub/attestomcp/issues/40)** (2026-07-08), prompted by AP2-team feedback
+  (Yanhe Chen, Google, Discord 2026-06-02: v1-shaped mandate, unsigned amount, unverified issuer/deviceAuth).
+  #39 = Node/TS v2 wire format (SD-JWT/KB-SD-JWT chain, `vct: mandate.payment.1`, minor units, constraints,
+  receipts); #40 = bidirectional CI conformance against the official
+  [AP2 Python SDK](https://github.com/google-agentic-commerce/AP2/tree/main/code/sdk/python/ap2). The signing
+  swap stays #13, the issuer/device trust anchor stays #14; #12 (HNP) consumes #39's open-mandate constraints.
 - **Publish `0.2.0`** — blocked on the `NPM_TOKEN` secret (above). Pre-flight green (CI build+test).
 - **Flip the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its dependency
   on `@openmobilehub/attestomcp-*` from the workspace to the published `^0.2.x`, and renames its own
