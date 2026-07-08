@@ -3,7 +3,7 @@
 ## Static (unchanged, zero-config)
 
 ```ts
-import { createStorefront, SAMPLE_CATALOG } from "@openmobilehub/attestomcp-storefront/server";
+import { createStorefront, SAMPLE_CATALOG } from "@openmobilehub/credentagent-storefront/server";
 
 const store = createStorefront({ catalog: SAMPLE_CATALOG }); // or omit `catalog`
 ```
@@ -13,8 +13,8 @@ No Firebase, no async, no behavior change.
 ## Live catalog (Firestore)
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { firestoreCatalog } from "@openmobilehub/attestomcp-storefront/firestore";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { firestoreCatalog } from "@openmobilehub/credentagent-storefront/firestore";
 
 const store = createStorefront({
   catalog: firestoreCatalog({

@@ -3,7 +3,7 @@
 ## Why a `load()` + `current()` split (not just async)
 
 The storefront reads the catalog **synchronously** across `server.ts`, and the gate's
-`CeremonyCatalog.createOrder` — called on the completion path in `attestomcp-gate`'s
+`CeremonyCatalog.createOrder` — called on the completion path in `credentagent-gate`'s
 `completion.ts` / `mount.ts` — is a **synchronous** interface returning `CeremonyOrder`.
 A dynamic catalog loads asynchronously. Two options were weighed:
 
@@ -12,7 +12,7 @@ A dynamic catalog loads asynchronously. Two options were weighed:
 - **B. Storefront-only: `load()` + `current()` + a request-priming middleware.** The source
   exposes an async `load()` (TTL-cached, fail-closed) and a synchronous `current()`
   (last-known-good). The storefront `await`s `load()` before every route — including the
-  later-mounted `/attestomcp/*` rails — so the synchronous re-price always reads a warm,
+  later-mounted `/credentagent/*` rails — so the synchronous re-price always reads a warm,
   server-side re-derived snapshot. **No gate change.**
 
 **Chosen: B.** Smallest blast radius on the security surface; keeps the change inside the

@@ -1,7 +1,7 @@
 name: publish
 
 # Publishes both packages to npm when a GitHub Release is published.
-# Order is LOAD-BEARING: @openmobilehub/attestomcp-gate first, then attestomcp-storefront
+# Order is LOAD-BEARING: @openmobilehub/credentagent-gate first, then credentagent-storefront
 # (the storefront depends on the gate via ^0.1.0). Requires the NPM_TOKEN secret with
 # publish rights to the @openmobilehub scope.
 #
@@ -29,11 +29,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - name: Publish @openmobilehub/attestomcp-gate
-        run: npm publish -w @openmobilehub/attestomcp-gate --access public
+      - name: Publish @openmobilehub/credentagent-gate
+        run: npm publish -w @openmobilehub/credentagent-gate --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish @openmobilehub/attestomcp-storefront
-        run: npm publish -w @openmobilehub/attestomcp-storefront --access public
+      - name: Publish @openmobilehub/credentagent-storefront
+        run: npm publish -w @openmobilehub/credentagent-storefront --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

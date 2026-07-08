@@ -1,6 +1,6 @@
 # Implementation Plan: Storefront Dynamic Catalog Source (`firestoreCatalog`)
 
-**Branch**: `feat/storefront-catalog-source` · **Spec**: [spec.md](./spec.md) · **Issue**: [#28](https://github.com/openmobilehub/attestomcp/issues/28)
+**Branch**: `feat/storefront-catalog-source` · **Spec**: [spec.md](./spec.md) · **Issue**: [#28](https://github.com/openmobilehub/credentagent/issues/28)
 
 ## Approach
 
@@ -10,7 +10,7 @@ Mirror spec 005 (`storage` / `redisStorage`): a first-class option + a provider,
 
 - **`CatalogSource` contract** (`src/index.ts`, pure model): `load(): Promise<Product[]>` (TTL-cached, fail-closed) + `current(): Product[]` (last-known-good snapshot for the synchronous re-price; throws if never loaded). Helpers `staticCatalog(products)` and `isCatalogSource(x)`.
 - **`firestoreCatalog(options)`** (`src/firestore.ts`, exported via `./firestore`): mirrors `redis.ts`. Lazy `firebase-admin` loader (`_load` seam + injectable `client`), TTL cache, last-known-good on refresh error, fail-closed cold/empty, `defaultMapDoc` validation (rejects missing name / non-finite / negative price / bad `minimumAge`).
-- **Wiring** (`src/server.ts`): normalize `opts.catalog` into a `source`; a request-priming middleware `await source.load()` before every route (incl. the later-mounted `/attestomcp/*` rails) — fail-closed 503; every synchronous catalog read becomes `source.current()`; each async MCP tool handler also `await source.load()` so a non-HTTP transport is warm. `store.catalog` becomes a getter over `source.current()`.
+- **Wiring** (`src/server.ts`): normalize `opts.catalog` into a `source`; a request-priming middleware `await source.load()` before every route (incl. the later-mounted `/credentagent/*` rails) — fail-closed 503; every synchronous catalog read becomes `source.current()`; each async MCP tool handler also `await source.load()` so a non-HTTP transport is warm. `store.catalog` becomes a getter over `source.current()`.
 - **Package**: add `./firestore` export; `firebase-admin` optional peer dep (`peerDependenciesMeta`).
 
 ## Security invariants touched

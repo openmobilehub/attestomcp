@@ -9,7 +9,7 @@ A runnable, hands-on way to exercise what the gate does when the order isn't sto
 
 ```bash
 # 1) build the gate (once), so the example can import the published dist:
-npm run build -w @openmobilehub/attestomcp-gate
+npm run build -w @openmobilehub/credentagent-gate
 
 # 2) boot the example server:
 node examples/stateless-orders/server.mjs        # → http://localhost:4000
@@ -34,7 +34,7 @@ the HMAC signature, so `verifyCartMandate` refuses and the order won't resolve.
 ## The wire contract (what the client sends)
 
 - **GET** page / request — `?order=<id>&cart=<base64url(JSON mandate)>`
-- **POST** `/attestomcp/dc-payment/verify` — `{ "order": "<id>", "cartMandate": { … }, "claims": { … } }`
+- **POST** `/credentagent/dc-payment/verify` — `{ "order": "<id>", "cartMandate": { … }, "claims": { … } }`
 
 The catalog **still re-prices** — the mandate carries the *items*, never the *price*. Turn the mode off
 (default) and the same host uses the order store instead; the client then carries only the order id.

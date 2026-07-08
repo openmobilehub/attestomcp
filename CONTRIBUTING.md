@@ -1,15 +1,15 @@
-# Contributing to AttestoMCP
+# Contributing to CredentAgent
 
-Thanks for helping build **AttestoMCP** — the consent layer for AI agents. This repo holds two
+Thanks for helping build **CredentAgent** — the consent layer for AI agents. This repo holds two
 npm workspaces:
 
-- **`@openmobilehub/attestomcp-gate`** — the Gate (`new AttestoMCP()`, `attestomcp.mount(app)`): the
-  `/attestomcp/*` ceremony rails (passkey / OpenID4VP credential / Digital-Credentials payment) and
+- **`@openmobilehub/credentagent-gate`** — the Gate (`new CredentAgent()`, `credentagent.mount(app)`): the
+  `/credentagent/*` ceremony rails (passkey / OpenID4VP credential / Digital-Credentials payment) and
   the policy resolver.
-- **`@openmobilehub/attestomcp-storefront`** — the agentic storefront core (`createStorefront()`):
+- **`@openmobilehub/credentagent-storefront`** — the agentic storefront core (`createStorefront()`):
   the cart → priced-cart → order model, the MCP shopping tools, and the widget bundle.
 
-AttestoMCP is part of [Open Mobile Hub](https://openmobilehub.org) under the OpenWallet Foundation /
+CredentAgent is part of [Open Mobile Hub](https://openmobilehub.org) under the OpenWallet Foundation /
 Linux Foundation, and the contribution rules below reflect that posture — most importantly the
 **DCO sign-off** and the **security-test bar**. Please read this file before opening a PR.
 
@@ -103,7 +103,7 @@ PRs get both automated and human review.
 
 ## Tests must exercise the bypass paths
 
-AttestoMCP is a consent layer; a test that only checks the happy-path shape is not enough.
+CredentAgent is a consent layer; a test that only checks the happy-path shape is not enough.
 
 - **Cover the security-critical / bypass paths**, not just the happy path. For example: POST an
   unverified age-restricted order and assert it is **refused**; authorize a discounted cart and
@@ -120,7 +120,7 @@ positive claim** (e.g. `age_over_21 === true`, not "a token was present").
 
 ## Honesty bar
 
-AttestoMCP's current `trust_level` is **`presence-only-demo`**. The wire cryptography is real — real
+CredentAgent's current `trust_level` is **`presence-only-demo`**. The wire cryptography is real — real
 WebAuthn on the passkey rail; OpenID4VP JWE / ECDH-ES decrypt with nonce binding; HPKE; ISO-mdoc
 parse — **but there is no issuer / device-signature trust anchor yet**, and the AP2-shaped mandate is
 dev-signed (integrity hash), not key-signed. A self-crafted mdoc would pass a presence-only gate.

@@ -6,11 +6,11 @@
 
 **Status**: Draft
 
-**Input**: GitHub issue [#27](https://github.com/openmobilehub/attestomcp/issues/27) (part of epic #29) — "createStorefront: first-class persistence (redis option) so consumers don't hand-write store adapters". Labels: `enhancement`, `dx`.
+**Input**: GitHub issue [#27](https://github.com/openmobilehub/credentagent/issues/27) (part of epic #29) — "createStorefront: first-class persistence (redis option) so consumers don't hand-write store adapters". Labels: `enhancement`, `dx`.
 
 ## Overview
 
-`createStorefront()` (from `@openmobilehub/attestomcp-storefront`) stands up a runnable MCP shopping server around four pieces of mutable state: the working **cart**, **created-but-not-completed orders**, **completed orders**, and per-order **verification** state (age proven / loyalty applied). Today each of these defaults to an **in-memory** store. In-memory is correct for local dev and the quickstart, but a real deployment runs on **multiple instances** (serverless / Vercel): a cart added on instance A is invisible to the checkout that lands on instance B, so real adopters must supply **shared persistence**.
+`createStorefront()` (from `@openmobilehub/credentagent-storefront`) stands up a runnable MCP shopping server around four pieces of mutable state: the working **cart**, **created-but-not-completed orders**, **completed orders**, and per-order **verification** state (age proven / loyalty applied). Today each of these defaults to an **in-memory** store. In-memory is correct for local dev and the quickstart, but a real deployment runs on **multiple instances** (serverless / Vercel): a cart added on instance A is invisible to the checkout that lands on instance B, so real adopters must supply **shared persistence**.
 
 The library already lets a consumer inject each store, but it ships **only the interfaces and the in-memory classes** — not a persistent implementation. So every production adopter hand-writes the same Redis glue. The reference demo proves the cost: it hand-rolls near-identical adapter classes (one per store), each also **re-declaring the store interface and the in-memory class the library already exports** — roughly 150 lines that every adopter re-implements.
 
@@ -18,13 +18,13 @@ This feature makes persistence a **first-class, one-option** concern: a consumer
 
 ## User Scenarios & Testing *(mandatory)*
 
-The "user" of this feature is a **developer** consuming `@openmobilehub/attestomcp-storefront`.
+The "user" of this feature is a **developer** consuming `@openmobilehub/credentagent-storefront`.
 
 ### User Story 1 - One-line production persistence (Priority: P1)
 
 A developer deploying the storefront to a multi-instance/serverless host wants cart, order, and verification state to survive across instances by adding **one option**, without writing any store code.
 
-**Why this priority**: This is the entire point of the issue — it removes the ~150 lines of hand-written adapters that make "using AttestoMCP" look far harder than the quickstart suggests. Delivered alone, it is a complete, valuable improvement.
+**Why this priority**: This is the entire point of the issue — it removes the ~150 lines of hand-written adapters that make "using CredentAgent" look far harder than the quickstart suggests. Delivered alone, it is a complete, valuable improvement.
 
 **Independent Test**: Construct a storefront with `createStorefront({ storage: <redis provider> })`, write cart/order/verification state through one storefront instance, then read it back through a **separately constructed** storefront instance pointed at the same backend, and confirm the state is present and identical.
 
@@ -137,7 +137,7 @@ A developer runs two storefronts against a single shared backend and gives each 
 
 ## Dependencies
 
-- `@upstash/redis` (or a compatible client) as an **optional/peer** dependency of `@openmobilehub/attestomcp-storefront`.
+- `@upstash/redis` (or a compatible client) as an **optional/peer** dependency of `@openmobilehub/credentagent-storefront`.
 - The existing store contracts in the gate + storefront packages (`CartStore`, `OrderStore<T>`, `VerificationStore`, `VerificationRecord`) — reused, not redefined.
 
 ## Out of Scope

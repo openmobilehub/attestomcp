@@ -1,19 +1,19 @@
-# AttestoMCP examples
+# CredentAgent examples
 
 ## `storefront.mjs` — a credential-gated storefront in ~8 lines
 
 A minimal, runnable agentic storefront you add to **Goose** (or any MCP host) as an HTTP connector and
 watch the gate fire. The storefront is a one-line black box — `createStorefront()` ships the catalog +
-`browse-products` / `checkout` / `get-order-status` tools over HTTP — and **AttestoMCP mounts onto it**:
+`browse-products` / `checkout` / `get-order-status` tools over HTTP — and **CredentAgent mounts onto it**:
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, age, membership, payment, required, optional } from "@openmobilehub/credentagent-gate";
 
 const store = createStorefront();                 // the whole storefront — nothing to configure
-const attestomcp = new AttestoMCP();
-attestomcp.mount(store.app);                          // AttestoMCP mounts onto it
-store.gate((order) => attestomcp.requirements(order, [
+const credentagent = new CredentAgent();
+credentagent.mount(store.app);                          // CredentAgent mounts onto it
+store.gate((order) => credentagent.requirements(order, [
   required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
   optional(membership.discount(10)),
   required(payment.in("usd")),
@@ -25,7 +25,7 @@ const { url } = await store.listen(3005);          // → http://localhost:3005/
 
 ```bash
 npm install
-npm run build:packages          # build the two @openmobilehub/attestomcp-* packages
+npm run build:packages          # build the two @openmobilehub/credentagent-* packages
 node examples/storefront.mjs     # → http://localhost:3005/mcp
 ```
 
@@ -45,13 +45,13 @@ Then ask Goose:
 - *"Add the Aurora headphones and check out"* → **no age gate** — `requires` has no `age` entry.
 
 Open the checkout link to see the order + what's required. (Completing on that page is a **demo stub** — the
-real fail-closed wallet ceremony is provided by `attestomcp.mount()` and the full reference demo at the repo
+real fail-closed wallet ceremony is provided by `credentagent.mount()` and the full reference demo at the repo
 root.)
 
 ### What it proves
 
 The two packages compose with **zero glue**: the storefront's priced `Order` feeds
-`attestomcp.requirements()` directly (the line carries `minimumAge`, re-derived from the catalog), and the
+`credentagent.requirements()` directly (the line carries `minimumAge`, re-derived from the catalog), and the
 checkout tool gains a serializable `requires` manifest — the agent-facing contract — without you wiring any
 of it by hand.
 
@@ -63,7 +63,7 @@ proves Principle V — **gate any consequential action with any credential** —
 step) and dropping it into the **same** ordered policy array as the built-ins:
 
 ```ts
-import { defineCredential, dcql, gate, required } from "@openmobilehub/attestomcp-gate";
+import { defineCredential, dcql, gate, required } from "@openmobilehub/credentagent-gate";
 
 const prescription = defineCredential({
   id: "prescription",
@@ -74,7 +74,7 @@ const prescription = defineCredential({
   ui: { label: "Prescription", action: "Verify prescription" },
 });
 
-store.gate((order) => attestomcp.requirements(order, [
+store.gate((order) => credentagent.requirements(order, [
   required(prescription),                    // custom gate — conditional via appliesTo
   required(age.over(21).when(hasAlcohol)),    // built-ins drop into the SAME array
   optional(membership.discount(10)),
@@ -85,7 +85,7 @@ store.gate((order) => attestomcp.requirements(order, [
 ### Run it
 
 ```bash
-npm run build:packages              # build the two @openmobilehub/attestomcp-* packages
+npm run build:packages              # build the two @openmobilehub/credentagent-* packages
 node examples/custom-credential.mjs  # → http://localhost:3006/mcp
 ```
 
@@ -152,14 +152,14 @@ payments is one application* — by gating a **non-commerce** action: an MCP too
 records, behind an identity credential, with **no payment anywhere**.
 
 ```ts
-import { buildVerificationRequired, isVerificationRequired, ageDcql } from "@openmobilehub/attestomcp-gate";
+import { buildVerificationRequired, isVerificationRequired, ageDcql } from "@openmobilehub/credentagent-gate";
 
 function releaseRecords(args, ctx) {
   if (!ctx.ageVerified) {
     return buildVerificationRequired({         // ← gate any tool call: return a typed refusal,
       order: { id: args.requestId, total: 0, currency: "USD" }, //   a $0 ACTION, not a sale
       credential: "age", minAge: 21, request: ageDcql(),
-      approveUrl: `https://shop.example/attestomcp/credential?order=${args.requestId}&cred=age`,
+      approveUrl: `https://shop.example/credentagent/credential?order=${args.requestId}&cred=age`,
       detail: "Releasing these records requires proof the requester is 21+.",
     });
   }
@@ -181,7 +181,7 @@ after the credential is proven. The same shape gates `approve-deploy`, `file-pre
 ### Honest limits
 
 - The envelope + the gating decision are real today. The user proves on the `approve_url` **page** that
-  `attestomcp.mount()` serves (see `storefront.mjs` for the full ceremony); a fully **page-less** proving
+  `credentagent.mount()` serves (see `storefront.mjs` for the full ceremony); a fully **page-less** proving
   handshake is on the roadmap.
 - The built-in `envelopeInstruction()` is worded for the **checkout** framing ("buyer", "placed"), so this
   example builds an **action-agnostic** instruction from the envelope's fields instead. (An action-agnostic

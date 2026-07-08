@@ -1,6 +1,6 @@
 # API Contract: Storefront Persistence (`storage` / `redisStorage`)
 
-**Feature**: 005-storefront-persistence · **Package**: `@openmobilehub/attestomcp-storefront` · **Date**: 2026-07-03
+**Feature**: 005-storefront-persistence · **Package**: `@openmobilehub/credentagent-storefront` · **Date**: 2026-07-03
 
 This is the public, developer-facing contract. Types are illustrative of the surface, not the
 implementation. Signatures reuse existing exports where noted.
@@ -8,8 +8,8 @@ implementation. Signatures reuse existing exports where noted.
 ## 1. `StorefrontOptions.storage` (new field on the existing options)
 
 ```ts
-import type { CartStore, OrderStore } from "@openmobilehub/attestomcp-storefront/server";
-import type { VerificationStore } from "@openmobilehub/attestomcp-gate";
+import type { CartStore, OrderStore } from "@openmobilehub/credentagent-storefront/server";
+import type { VerificationStore } from "@openmobilehub/credentagent-gate";
 
 interface StorageProvider {
   cartStore: CartStore;
@@ -47,7 +47,7 @@ const verificationStore  = opts.verificationStore  ?? opts.storage?.verification
 ## 2. `redisStorage(options): StorageProvider` (new export, subpath `./redis`)
 
 ```ts
-import { redisStorage } from "@openmobilehub/attestomcp-storefront/redis";
+import { redisStorage } from "@openmobilehub/credentagent-storefront/redis";
 
 type RedisLike = {
   get<T>(key: string): Promise<T | null>;
@@ -59,7 +59,7 @@ interface RedisStorageOptions {
   url?: string;            // Upstash REST URL   (with `token`)
   token?: string;          // Upstash REST token (with `url`)
   client?: RedisLike;      // OR inject a pre-built / fake client (mutually exclusive with url+token)
-  namespace?: string;      // key prefix; default "attestomcp-storefront"
+  namespace?: string;      // key prefix; default "credentagent-storefront"
 }
 
 function redisStorage(options: RedisStorageOptions): StorageProvider;
@@ -96,12 +96,12 @@ Each returned store honors its existing interface exactly:
 
 | Symbol | Entry | Status |
 | :-- | :-- | :-- |
-| `redisStorage` | `@openmobilehub/attestomcp-storefront/redis` | **new** |
+| `redisStorage` | `@openmobilehub/credentagent-storefront/redis` | **new** |
 | `RedisStorageOptions`, `RedisLike` (types) | `.../redis` | **new** |
 | `StorageProvider` (type) | `.../server` | **new** |
 | `CartStore`, `OrderStore` (types) | `.../server` | **newly exported** (were structural-only) |
 | `createStorefront`, `StorefrontOptions`, `CompletedOrderRecord` | `.../server` | existing (options gains `storage`) |
-| `VerificationStore`, `MemoryVerificationStore` | `@openmobilehub/attestomcp-gate` | existing (reused) |
+| `VerificationStore`, `MemoryVerificationStore` | `@openmobilehub/credentagent-gate` | existing (reused) |
 
 ## 5. Backward compatibility
 
