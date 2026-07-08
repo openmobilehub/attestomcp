@@ -95,7 +95,7 @@ const consentPage = (q) => `<!doctype html><meta charset="utf-8">
 <body style="font-family:system-ui;max-width:34rem;margin:4rem auto;line-height:1.5">
 <h1 style="font-size:1.3rem">headless-auth spike</h1>
 <p>A Claude connector is asking for access. This is the <b>one interactive consent</b> of the
-3-day scheduled-run experiment (AttestoMCP HNP §12.2). Scope: <code>${q.scope || "heartbeat"}</code>.</p>
+3-day scheduled-run experiment (CredentAgent HNP §12.2). Scope: <code>${q.scope || "heartbeat"}</code>.</p>
 <form method="POST" action="/approve">
 ${["client_id", "redirect_uri", "state", "scope", "code_challenge", "code_challenge_method", "response_type"]
   .map((k) => `<input type="hidden" name="${k}" value="${(q[k] || "").replace(/"/g, "&quot;")}">`)
@@ -260,7 +260,7 @@ module.exports = async (req, res) => {
   if (path === "/") return html(res, 200,
     `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;max-width:34rem;margin:4rem auto">
      <h1 style="font-size:1.3rem">headless-auth spike</h1>
-     <p>MCP connector for the AttestoMCP HNP §12.2 experiment: can a Claude scheduled routine
+     <p>MCP connector for the CredentAgent HNP §12.2 experiment: can a Claude scheduled routine
      refresh its OAuth token unattended for 3 days? Add <code>${base}/mcp</code> as a custom
      connector in Claude. See <code>spike/headless-auth/README.md</code> on branch
      <code>005-human-not-present</code>.</p></body>`);

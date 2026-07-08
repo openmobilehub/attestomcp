@@ -10,7 +10,7 @@ consent UX and benefits parties beyond us.
 
 ## Context (one paragraph for the Multipaz folks)
 
-We're building an open reference for **delegated agentic authorization** on AttestoMCP
+We're building an open reference for **delegated agentic authorization** on CredentAgent
 (openmobilehub, Linux Foundation): a user performs one biometric ceremony with the **published Multipaz
 Wallet** that seals bounded purchase authority (an AP2-shaped Intent Mandate) via OpenID4VP
 `transaction_data`; an always-on wallet service then signs per-merchant draws inside those bounds while

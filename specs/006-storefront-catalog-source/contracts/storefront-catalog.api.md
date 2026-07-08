@@ -1,6 +1,6 @@
 # API Contract: Dynamic Catalog Source
 
-## `CatalogSource` (from `@openmobilehub/attestomcp-storefront`)
+## `CatalogSource` (from `@openmobilehub/credentagent-storefront`)
 
 ```ts
 interface CatalogSource {
@@ -14,7 +14,7 @@ function staticCatalog(products: Product[]): CatalogSource;      // never fails
 function isCatalogSource(x: Product[] | CatalogSource | undefined): x is CatalogSource;
 ```
 
-## `firestoreCatalog` (from `@openmobilehub/attestomcp-storefront/firestore`)
+## `firestoreCatalog` (from `@openmobilehub/credentagent-storefront/firestore`)
 
 ```ts
 interface FirestoreCatalogOptions {

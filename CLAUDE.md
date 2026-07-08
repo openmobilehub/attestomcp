@@ -6,19 +6,19 @@ us before.
 
 ## What this is
 
-**AttestoMCP — the consent layer for AI agents.** An AI agent must prove a **verifiable
+**CredentAgent — the consent layer for AI agents.** An AI agent must prove a **verifiable
 credential** from the user's phone wallet before a consequential action — a payment, an
 age gate, an access grant — completes. **Identity leads; payments is one application:**
 `age.over(21)`, a loyalty membership, a prescription, and `payment.in("usd")` are all
 just credentials in the same policy.
 
-This repo (`openmobilehub/attestomcp`) is the **library**: two npm workspaces under
+This repo (`openmobilehub/credentagent`) is the **library**: two npm workspaces under
 `packages/`.
 
-- **`@openmobilehub/attestomcp-gate`** — the Gate. `new AttestoMCP()`, `attestomcp.mount(app)`,
+- **`@openmobilehub/credentagent-gate`** — the Gate. `new CredentAgent()`, `credentagent.mount(app)`,
   the policy builders (`age`/`membership`/`payment`/`defineCredential`), and the
-  `/attestomcp/*` ceremony rails (passkey, credential, dc-payment). TypeScript/Node, ESM.
-- **`@openmobilehub/attestomcp-storefront`** — `createStorefront()`: a runnable,
+  `/credentagent/*` ceremony rails (passkey, credential, dc-payment). TypeScript/Node, ESM.
+- **`@openmobilehub/credentagent-storefront`** — `createStorefront()`: a runnable,
   catalog-injected MCP shopping server + the pure pricing/order model. Reference
   consumer of the gate.
 
@@ -42,8 +42,8 @@ blocked on me" — that's what this file answers.)
 
 The gate is the security surface; the storefront is a reference consumer.
 
-- `packages/attestomcp-gate/src/`
-  - `client.ts` — `AttestoMCP` (`requirements()` for the tool context, `mount()` for the
+- `packages/credentagent-gate/src/`
+  - `client.ts` — `CredentAgent` (`requirements()` for the tool context, `mount()` for the
     page context).
   - `credentials.ts` — the `age` / `membership` / `payment` builders, `defineCredential`,
     `dcql`, and the `gate()` / `discount()` / `authorize()` effects.
@@ -59,7 +59,7 @@ The gate is the security surface; the storefront is a reference consumer.
     - `dc-payment/` — Digital Credentials API + OpenID4VP, amount-bound (mdoc).
     - `credential-gate/` — age / loyalty via OpenID4VP.
     - `mandate.ts` — the AP2-shaped mandate + the deterministic gates.
-- `packages/attestomcp-storefront/src/` — `createStorefront()` (the runnable MCP server,
+- `packages/credentagent-storefront/src/` — `createStorefront()` (the runnable MCP server,
   `server.ts`) + the pure pricing/order model (`index.ts`: `priceCart`, `createOrder`,
   `requiredAgeForLines`, `SAMPLE_CATALOG`) + the widget bundle (`ui/`).
 - A new ceremony rail should **mirror** the `dc-payment` / `passkey` /

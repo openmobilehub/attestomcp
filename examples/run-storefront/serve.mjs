@@ -1,20 +1,20 @@
 // Run the REAL storefront + gate from THIS repo (the code we've been iterating on) —
 // not the separate demo's vendored copy.
 //
-//   npm run build -w @openmobilehub/attestomcp-gate
-//   npm run build -w @openmobilehub/attestomcp-storefront
+//   npm run build -w @openmobilehub/credentagent-gate
+//   npm run build -w @openmobilehub/credentagent-storefront
 //   node examples/run-storefront/serve.mjs        # → http://localhost:3005
 //
 // Serves:
 //   • http://localhost:3005/mcp            — the MCP shopping endpoint (connect a client)
-//   • http://localhost:3005/attestomcp/*   — the gate's browsable checkout / approve pages
+//   • http://localhost:3005/credentagent/*   — the gate's browsable checkout / approve pages
 //   • the product-picker widget bundle
 //
-// The `/attestomcp/*` checkout pages have instant-demo buttons, so you can drive the age /
+// The `/credentagent/*` checkout pages have instant-demo buttons, so you can drive the age /
 // passkey / dc-payment ceremony in a browser WITHOUT a phone wallet.
 import express from "express";
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, required, optional, age, membership } from "@openmobilehub/attestomcp-gate";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, required, optional, age, membership } from "@openmobilehub/credentagent-gate";
 
 const PORT = Number(process.env.PORT) || 3005;
 // STATELESS=1 → the checkout link carries the signed cart mandate (?order=…&cart=…), no
@@ -28,11 +28,11 @@ const store = createStorefront({ baseUrl: base, statelessOrders: STATELESS, allo
 
 // Wire the gate as the quickstart does: a required age-21 gate on any alcohol line, plus
 // an OPTIONAL 10% membership discount (present a loyalty credential → discount applies).
-// mount() reads statelessOrders (+ the owned signingKey) off app.locals.attestomcp.
-const attestomcp = new AttestoMCP();
-attestomcp.mount(store.app);
+// mount() reads statelessOrders (+ the owned signingKey) off app.locals.credentagent.
+const credentagent = new CredentAgent();
+credentagent.mount(store.app);
 store.gate((order) =>
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(age.over(21).when((o) => (o.lines ?? []).some((l) => (l.minimumAge ?? 0) >= 21))),
     optional(membership.discount(10)),
   ]),
@@ -56,7 +56,7 @@ const url = `${base}/mcp`;
 console.log(`\n  storefront (this repo's code) → ${base}`);
 console.log(`  mode                          → ${STATELESS ? "STATELESS (cart mandate in the link: ?order=id&cart=…)" : "STATEFUL (store-backed: ?order=id)"}`);
 console.log(`  MCP endpoint                  → ${url}`);
-console.log(`  gate checkout pages           → ${base}/attestomcp/…`);
+console.log(`  gate checkout pages           → ${base}/credentagent/…`);
 console.log(`\n  Shop via an MCP client:  npx @modelcontextprotocol/inspector  → ${url}`);
-console.log(`  then browse → add the whiskey → checkout returns a /attestomcp/… approve link;`);
+console.log(`  then browse → add the whiskey → checkout returns a /credentagent/… approve link;`);
 console.log(`  open it in a browser and drive the ceremony with the instant-demo buttons.\n`);

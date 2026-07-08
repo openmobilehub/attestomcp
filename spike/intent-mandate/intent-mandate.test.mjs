@@ -10,7 +10,7 @@ const JUL15 = Date.parse("2026-07-15T12:00:00Z");
 async function fixture() {
   const { privateKey, delegate } = await generateDelegate();
   const intent = await sealIntent({
-    type: "attestomcp.IntentBounds/v0",
+    type: "credentagent.IntentBounds/v0",
     naturalLanguageDescription: "Buy Ghost 17 size 10, up to $120, until Jul 31, from approved stores",
     merchants: ["utopia-marketplace", "runfast.example"],
     skus: ["gtin:00195394069122"],
@@ -26,7 +26,7 @@ async function fixture() {
     trust_level: "issuer-verified (demo PKI)",
   });
   const draw = await signDraw(
-    { type: "attestomcp.Draw/v0", intentId: intent.intentId, paymentMandateId: "draw_1", merchant: "runfast.example", amount: 40, currency: "USD", transactionId: "tx_1", presentments: ["membership:acme-loyalty"] },
+    { type: "credentagent.Draw/v0", intentId: intent.intentId, paymentMandateId: "draw_1", merchant: "runfast.example", amount: 40, currency: "USD", transactionId: "tx_1", presentments: ["membership:acme-loyalty"] },
     privateKey,
   );
   return { privateKey, delegate, intent, draw };

@@ -9,7 +9,7 @@
 
 ```jsonc
 {
-  "type": "attestomcp.IntentBounds/v0",          // candidate ext of ap2.mandates.IntentMandate
+  "type": "credentagent.IntentBounds/v0",          // candidate ext of ap2.mandates.IntentMandate
 
   // ── identity & consent ─────────────────────────────────────────────
   "intentId": "int_pYl0ZY…",                     // content-addressed: "int_" + b64url(SHA-256(canonical(all other fields)))
@@ -53,7 +53,7 @@
   "type": "urn:eudi:sca:payment:1",              // the REGISTERED type — no custom type (F4)
   "payload": {
     "transaction_id": "int_pYl0ZY…",             // = intentId → commits to the FULL bounds doc (F5)
-    "payee": { "name": "AttestoMCP demo wallet — delegation", "id": "wallet.example" },
+    "payee": { "name": "CredentAgent demo wallet — delegation", "id": "wallet.example" },
     "currency": "USD",
     "recurrence": {
       "start_date": "2026-07-01",
@@ -77,7 +77,7 @@ the honesty labels. Any post-signature edit to any field changes the hash and or
 
 ```jsonc
 {
-  "type": "attestomcp.Draw/v0",                  // maps to ap2.mandates.PaymentMandate contents
+  "type": "credentagent.Draw/v0",                  // maps to ap2.mandates.PaymentMandate contents
   "intentId": "int_pYl0ZY…",
   "paymentMandateId": "draw_01H…",               // AP2: payment_mandate_id
   "merchant": "runfast.example",                 // AP2: merchant_agent
@@ -97,7 +97,7 @@ the honesty labels. Any post-signature edit to any field changes the hash and or
 2. Amount units: TS12 uses decimal major units; the gate uses integer minor units — pick one canonical
    form for hashing (proposal: integer minor units in the bounds doc; convert at the TS12 boundary).
 3. Whether `stepUpOver`/`mayPresent`/honesty labels go into the AP2 "additional fields" proposal or stay
-   AttestoMCP extensions initially (proposal: offer them; ship as extensions regardless).
+   CredentAgent extensions initially (proposal: offer them; ship as extensions regardless).
 
 ## Validated by a runnable spike (2026-07-04)
 

@@ -1,6 +1,6 @@
 # The trust model
 
-This is the honesty document. AttestoMCP is **"the consent layer for AI agents"** — an
+This is the honesty document. CredentAgent is **"the consent layer for AI agents"** — an
 agent must prove a verifiable credential from the user's phone wallet before a
 consequential action completes. That promise is only worth as much as the truth about
 what the gate actually verifies today. This page states that truth precisely, per rail,
@@ -17,12 +17,12 @@ That sentence is not marketing copy; it is the literal trust footer shown on eve
 ceremony page (`src/ceremony/theme.ts`):
 
 ```
-🔒 presence-only-demo · secured by AttestoMCP · the wire crypto is real; issuer trust anchor is not
+🔒 presence-only-demo · secured by CredentAgent · the wire crypto is real; issuer trust anchor is not
 ```
 
 ## Honesty lives in the types, not in prose
 
-AttestoMCP's constitution (Principle VII, `.specify/memory/constitution.md`) requires the
+CredentAgent's constitution (Principle VII, `.specify/memory/constitution.md`) requires the
 status to be carried in the type system so it cannot be quietly dropped from a slide or a
 README. Two axes do that work; both are public types and both ride on every manifest
 entry and every mandate.
@@ -163,7 +163,7 @@ verified`. Issuer trust anchor absent → `presence-only-demo`.
 
 ### Per-rail summary
 
-| Rail (`/attestomcp/*`) | What it proves | Real crypto | Not yet real |
+| Rail (`/credentagent/*`) | What it proves | Real crypto | Not yet real |
 | :-- | :-- | :-- | :-- |
 | `passkey` (same- + cross-device caBLE) | WebAuthn assertion against this origin/RP-ID, user-verification required, nonce/replay-bound | `@simplewebauthn` WebAuthn end to end | mandate is dev-signed (`MOCK-DEV-SIGNER`), not key-bound |
 | `credential` (age / membership) | OpenID4VP presentation; explicit positive claim at the order's threshold | JWE/HPKE decrypt, ECDH-ES, nonce + origin binding, ISO-mdoc parse | issuer / device COSE signatures (no real CA) |

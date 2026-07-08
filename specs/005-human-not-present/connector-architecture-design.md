@@ -70,7 +70,7 @@ connectors are their whole interface.
         │             Marketplace)
    ┌────┴─────────┐        │
    ▼              ▼        ▼
- Wallet SERVER   Multipaz WALLET       attestomcp-gate ── UPay-style verifier ── Bank of Utopia
+ Wallet SERVER   Multipaz WALLET       credentagent-gate ── UPay-style verifier ── Bank of Utopia
  always-on       (stock app, phone)    (merchant envelope,  (opens the doll,      (fictitious
  policy engine   master key+biometric   completeOrder)       settles)              ledger)
  signs draws     approves · revokes
@@ -80,9 +80,9 @@ connectors are their whole interface.
 | Component | Operated by (trust domain) | Code | Status |
 | :-- | :-- | :-- | :-- |
 | Phone + Multipaz Wallet (DeviceKey, biometric) | **User** | stock Multipaz Wallet app — unmodified | exists |
-| Wallet server (policy engine, draw signer, OpenID4VP verifier, MCP connector) | **User's chosen wallet provider** (us, for the demo) | **new component** (working name `attestomcp-wallet`; where it lives is open — §12.4), built on Multipaz server-side libs | to build |
-| Agent (Claude routine / Node script) | **Agent operator** (platform or user) | none needed hosted; `attestomcp-agent` for Node devs | to build (thin) |
-| Merchant storefront + gate | **Merchant** | `attestomcp-gate`, `attestomcp-storefront` | exists; gains draw verification |
+| Wallet server (policy engine, draw signer, OpenID4VP verifier, MCP connector) | **User's chosen wallet provider** (us, for the demo) | **new component** (working name `credentagent-wallet`; where it lives is open — §12.4), built on Multipaz server-side libs | to build |
+| Agent (Claude routine / Node script) | **Agent operator** (platform or user) | none needed hosted; `credentagent-agent` for Node devs | to build (thin) |
+| Merchant storefront + gate | **Merchant** | `credentagent-gate`, `credentagent-storefront` | exists; gains draw verification |
 | Settlement verifier (UPay-style) | **Merchant's PSP** (fictitious: UPay/Utopia) | new `VerifierAssistant` on Multipaz SDK (~150 lines, no upstream changes) | to build |
 | Ledger (Bank of Utopia records server) | **PSP's system of records** (fictitious) | unchanged | exists |
 
@@ -256,12 +256,12 @@ Step-up uses the identical mechanism: an over-threshold draw refuses with an `ap
 
 ## 8. Merchant-side and agent-side DX
 
-**Merchant (`attestomcp-gate`)** — delegation config lives on the configure-once client (a standing envelope
+**Merchant (`credentagent-gate`)** — delegation config lives on the configure-once client (a standing envelope
 is configuration, *not* a per-order policy step; the policy array keeps meaning "what this order requires
 now"):
 
 ```js
-const attestomcp = new AttestoMCP({
+const credentagent = new CredentAgent({
   delegation: {
     trustedWallets: [UTOPIA_DEMO_WALLET],  // whose draws we accept (single-entry trust list for the demo)
     scopes: ["coffee-beans"],              // merchant catalog categories delegable at all
@@ -270,16 +270,16 @@ const attestomcp = new AttestoMCP({
     stepUpOver: usd(50),                   // above this → live ceremony required
   },
 });
-attestomcp.mount(app);   // draw-verification on the completion path; no config → no HNP surface (opt-in)
+credentagent.mount(app);   // draw-verification on the completion path; no config → no HNP surface (opt-in)
 ```
 
 `requirements()` additionally emits an `enforcedAt: "intent"` manifest entry when delegation is configured,
 so checkout UIs can render a "let your agent handle this" affordance.
 
-**Storefront (`attestomcp-storefront`)** — `createStorefront({ delegation: true })` registers the
+**Storefront (`credentagent-storefront`)** — `createStorefront({ delegation: true })` registers the
 delegation-aware checkout path and forwards to the gate. Zero further merchant code in the reference demo.
 
-**Agent SDK (`attestomcp-agent`)** — thin, key-ready, **nice-to-have** (hosted assistants don't need it):
+**Agent SDK (`credentagent-agent`)** — thin, key-ready, **nice-to-have** (hosted assistants don't need it):
 
 ```js
 const agent  = new AttestoAgent({ wallet: "https://wallet.example", grants: fileStore("~/.agent") });
@@ -391,7 +391,7 @@ into this same re-scope decision.
    Multipaz SDK, unlike the TS packages) — leaning **sibling repo**, undecided.
 5. **Multipaz team conversation** — deferred by choice: build on stock components first, show a working
    demo, then propose the transaction-data type upstream ("show, don't ask").
-6. **`attestomcp-agent` priority** — nice-to-have for local agents; may trail the connector work.
+6. **`credentagent-agent` priority** — nice-to-have for local agents; may trail the connector work.
 7. **Cumulative caps** — the wallet-custody model makes them enforceable (single choke point), and
    desk-verification found they are **standards-expressible today**: EUDI SCA TS12's
    `recurrence.mit_options.total_amount` ("total amount of all payments") is the cumulative cap, in the
@@ -480,7 +480,7 @@ Consequences worth recording:
 - **Merchant DX**: one word of policy per credential family, on the same builders the gate already ships:
 
   ```js
-  new AttestoMCP({
+  new CredentAgent({
     delegation: {
       payment:      { maxDraw: usd(100), stepUpOver: usd(50) },
       membership:   "presentable",        // wallet may re-present while absent

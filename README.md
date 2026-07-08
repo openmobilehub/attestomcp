@@ -1,7 +1,7 @@
-# AttestoMCP
+# CredentAgent
 
 **The consent layer for AI agents.** Before an AI agent completes a consequential
-action — a payment, an age gate, an access grant — AttestoMCP makes it prove a
+action — a payment, an age gate, an access grant — CredentAgent makes it prove a
 **verifiable credential from the user's phone wallet**. **Identity leads; payments is
 one application** — `age.over(21)`, a loyalty membership, a prescription, and
 `payment.in("usd")` are all just credentials in the same policy.
@@ -14,13 +14,13 @@ one application** — `age.over(21)`, a loyalty membership, a prescription, and
 ## What it is
 
 Agents are gaining the ability to *act* — to check out a cart, unlock age-restricted
-content, grant access. AttestoMCP puts a **human-in-the-loop credential check** in front
+content, grant access. CredentAgent puts a **human-in-the-loop credential check** in front
 of that action: the agent mints a link, the user proves a credential from their wallet
 (WebAuthn passkey, or an OpenID4VP / W3C Digital Credentials presentation), and only
 then does the action complete. The check is **enforced server-side on the completion
 path** — hiding a button is not enforcement.
 
-AttestoMCP is two npm packages plus a reference demo. The **Gate** is host-agnostic — it
+CredentAgent is two npm packages plus a reference demo. The **Gate** is host-agnostic — it
 mounts on any Express-shaped app. The **Storefront** is one ready-made host that shows
 the Gate in a full agentic-commerce flow; you can bring your own host instead.
 
@@ -28,8 +28,8 @@ the Gate in a full agentic-commerce flow; you can bring your own host instead.
 
 | Package | One line | Install |
 | :-- | :-- | :-- |
-| [`@openmobilehub/attestomcp-gate`](./packages/attestomcp-gate) | The Gate — `new AttestoMCP()` + `attestomcp.mount(app)` wires the wallet-ceremony rails and resolves a typed credential policy into a serializable `requires` manifest. | `npm install @openmobilehub/attestomcp-gate` |
-| [`@openmobilehub/attestomcp-storefront`](./packages/attestomcp-storefront) | The Storefront — `createStorefront()` stands up a runnable MCP shopping server (catalog-injected, nine tools, a widget) that the Gate mounts onto. | `npm install @openmobilehub/attestomcp-storefront @openmobilehub/attestomcp-gate` |
+| [`@openmobilehub/credentagent-gate`](./packages/credentagent-gate) | The Gate — `new CredentAgent()` + `credentagent.mount(app)` wires the wallet-ceremony rails and resolves a typed credential policy into a serializable `requires` manifest. | `npm install @openmobilehub/credentagent-gate` |
+| [`@openmobilehub/credentagent-storefront`](./packages/credentagent-storefront) | The Storefront — `createStorefront()` stands up a runnable MCP shopping server (catalog-injected, nine tools, a widget) that the Gate mounts onto. | `npm install @openmobilehub/credentagent-storefront @openmobilehub/credentagent-gate` |
 
 Both are Apache-2.0, ESM, ship their own types, and target Node ≥ 20. The Gate stands
 alone on any Express host; the Storefront is the reference host that demos the whole
@@ -38,19 +38,19 @@ flow.
 ## Quickstart
 
 A credential-gated agentic storefront in ≤ 10 lines. `createStorefront()` publishes the
-ceremony seams; `new AttestoMCP().mount(store.app)` wires the real `/attestomcp/*` rails;
+ceremony seams; `new CredentAgent().mount(store.app)` wires the real `/credentagent/*` rails;
 `store.gate()` resolves your policy on every `checkout` call (payment settles **last**):
 
 ```ts
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, age, membership, payment, required, optional } from "@openmobilehub/credentagent-gate";
 
 const store = createStorefront();                  // the storefront — one line
-const attestomcp = new AttestoMCP();                     // zero-config (defaults to http://localhost:3000)
-attestomcp.mount(store.app);                          // wires the real /attestomcp/* ceremony rails
+const credentagent = new CredentAgent();                     // zero-config (defaults to http://localhost:3000)
+credentagent.mount(store.app);                          // wires the real /credentagent/* ceremony rails
 
 store.gate((order) =>                              // resolved on every checkout
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(age.over(21).when((order) => order.lines.some((l) => l.minimumAge != null))),
     optional(membership.discount(10)),              // 10% off if a loyalty credential is presented
     required(payment.in("usd")),                    // amount derived from the order; settles last
@@ -65,13 +65,13 @@ Add the whiskey (21+) to the cart and check out → the tool returns the checkou
 authorizes payment, and the widget shows the confirmation. Add the headphones instead
 and the age gate drops — the `.when()` predicate receives the **order** and is false.
 
-For a deployment, pass your public origin: `new AttestoMCP({ walletOrigin: "https://shop.example" })`.
+For a deployment, pass your public origin: `new CredentAgent({ walletOrigin: "https://shop.example" })`.
 
 ## Documentation
 
 - **Reference** ([`docs/reference/`](./docs/reference/)):
   - [API reference](./docs/reference/api.md) — every public export of both packages
-    (`AttestoMCP`, `requirements`, `mount`, the credential builders, `defineCredential` /
+    (`CredentAgent`, `requirements`, `mount`, the credential builders, `defineCredential` /
     `dcql`, `createStorefront`).
   - [Getting started](./docs/reference/getting-started.md) — install + the ~10-line quickstart.
   - [The three execution contexts](./docs/reference/execution-contexts.md) — tool mints → page runs → poll reports.
@@ -91,7 +91,7 @@ For a deployment, pass your public origin: `new AttestoMCP({ walletOrigin: "http
 
 ## Honest status
 
-Honesty is core to AttestoMCP — it's infrastructure meant to be trusted, so we name what
+Honesty is core to CredentAgent — it's infrastructure meant to be trusted, so we name what
 binds cryptographically and what doesn't.
 
 **`trust_level: "presence-only-demo"`.** The *wire* cryptography is real — WebAuthn on
@@ -109,7 +109,7 @@ dev-signed (integrity hash), not key-signed.
 
 The honesty is carried in the **types**, not just prose: `trust_level` and `enforcedAt`
 are part of the contract. See [SECURITY-INVARIANTS.md](./SECURITY-INVARIANTS.md) and the
-Gate's [honest status](./packages/attestomcp-gate/README.md#honest-status) for the
+Gate's [honest status](./packages/credentagent-gate/README.md#honest-status) for the
 per-rail breakdown.
 
 ## Reference demo
@@ -128,6 +128,6 @@ rails and an x402 → Hedera on-chain settlement lab.
 
 Apache-2.0. See [LICENSE](./LICENSE).
 
-AttestoMCP is an **[Open Mobile Hub](https://openmobilehub.org)** project (a Linux
+CredentAgent is an **[Open Mobile Hub](https://openmobilehub.org)** project (a Linux
 Foundation / OpenWallet Foundation effort), built in collaboration with the **Multipaz**
 team, and heading to the **Global Digital Collaboration (GDC)** event.

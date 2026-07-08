@@ -7,7 +7,7 @@ schemas. It amends the design doc's §7 (see the change list at the end). Mainta
 
 ## Naming fix first (the council's rename)
 
-Two different objects were both called `transaction_id`. Renamed everywhere in AttestoMCP docs:
+Two different objects were both called `transaction_id`. Renamed everywhere in CredentAgent docs:
 
 - **`intentId`** — the TS12 `transaction_id` field's *value* at ceremony time (commits to the bounds doc).
   We never call this "transaction id" again.

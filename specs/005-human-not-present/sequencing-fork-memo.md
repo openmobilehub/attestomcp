@@ -52,14 +52,14 @@ Why B over A:
    top.
 
 Suggested build order under B (low-risk reusable core → custody layer):
-1. **Shared gate seams** in `attestomcp-gate`: draw-verification envelope, `completeOrder` draw
+1. **Shared gate seams** in `credentagent-gate`: draw-verification envelope, `completeOrder` draw
    branch, revocation store, the typed-refusal vocabulary (§9). Pure TS, testable in isolation,
    serves the demo regardless.
 2. **Settlement verifier** (UPay-style `VerifierAssistant`, ~150 lines) — the spike already proved
    this path green.
-3. **Wallet server** (`attestomcp-wallet`, Kotlin/JVM) — policy engine, draw signer, OpenID4VP
+3. **Wallet server** (`credentagent-wallet`, Kotlin/JVM) — policy engine, draw signer, OpenID4VP
    verifier, MCP connector. The single genuinely-new backend (§12.4: sibling repo, leaning).
-4. **`attestomcp-agent`** (thin, Node) last — nice-to-have for local agents.
+4. **`credentagent-agent`** (thin, Node) last — nice-to-have for local agents.
 
 Corollary (folds in the FR-002 open point): under B the **DPC rail carries the ceremony**; the
 WebAuthn/passkey rail's role from the merchant-side model **defers** — DPC-only for the connector

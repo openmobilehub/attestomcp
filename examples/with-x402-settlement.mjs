@@ -1,6 +1,6 @@
 // A credential-gated storefront whose payment SETTLES on-chain via x402 — the `settle` seam.
 //
-//   npm run build:packages                  # build the two @openmobilehub/attestomcp-* packages
+//   npm run build:packages                  # build the two @openmobilehub/credentagent-* packages
 //   node examples/with-x402-settlement.mjs   # → http://localhost:3007/mcp
 //
 // `createStorefront({ settle })` threads an optional settlement function into the gate's
@@ -16,8 +16,8 @@
 // below is the REAL Hedera/x402 wiring the reference demo uses (a fresh session wallet
 // per order, settled through the blocky402 facilitator on Hedera testnet).
 
-import { createStorefront } from "@openmobilehub/attestomcp-storefront/server";
-import { AttestoMCP, age, membership, payment, required, optional } from "@openmobilehub/attestomcp-gate";
+import { createStorefront } from "@openmobilehub/credentagent-storefront/server";
+import { CredentAgent, age, membership, payment, required, optional } from "@openmobilehub/credentagent-gate";
 
 // ── the settlement seam ──────────────────────────────────────────────────────
 // Return any record with at least { network, txId, status }; the receipt renders
@@ -48,12 +48,12 @@ const settle = async (order) => {
 //   const settle = hedera ? (order) => settleOrder(order, hedera) : undefined;
 
 const store = createStorefront({ settle, signingKey: process.env.GATE_SECRET });
-const attestomcp = new AttestoMCP();
-attestomcp.mount(store.app); // wires the /attestomcp/* ceremony rails; payment completes through completeOrder → settle
+const credentagent = new CredentAgent();
+credentagent.mount(store.app); // wires the /credentagent/* ceremony rails; payment completes through completeOrder → settle
 
 const hasAlcohol = (order) => order.lines.some((l) => l.minimumAge != null);
 store.gate((order) =>
-  attestomcp.requirements(order, [
+  credentagent.requirements(order, [
     required(age.over(21).when(hasAlcohol)),
     optional(membership.discount(10)),
     required(payment.in("usd")), // amount derived from the order; settles LAST, then `settle` runs
@@ -61,6 +61,6 @@ store.gate((order) =>
 );
 
 const { url } = await store.listen(Number(process.env.PORT ?? 3007));
-console.log(`\n  ✓ AttestoMCP storefront with x402 settlement → ${url}`);
+console.log(`\n  ✓ CredentAgent storefront with x402 settlement → ${url}`);
 console.log(`  Buy the whiskey → prove age → authorize payment; the receipt shows the on-chain settlement record.`);
 console.log(`  (Throw inside settle() to see fail-closed completion: nothing is recorded, the cart stays intact.)\n`);

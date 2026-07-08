@@ -2,5 +2,5 @@
   "name": "headless-auth-spike",
   "version": "0.1.0",
   "private": true,
-  "description": "AttestoMCP HNP §12.2 spike: can a Claude scheduled routine refresh a custom connector's OAuth token unattended for 3 days?"
+  "description": "CredentAgent HNP §12.2 spike: can a Claude scheduled routine refresh a custom connector's OAuth token unattended for 3 days?"
 }

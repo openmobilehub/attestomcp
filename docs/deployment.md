@@ -1,6 +1,6 @@
 # Deployment & troubleshooting
 
-Running AttestoMCP for real (beyond `node examples/storefront.mjs`). Most of this is about one
+Running CredentAgent for real (beyond `node examples/storefront.mjs`). Most of this is about one
 thing: **on serverless, every invocation may be a different instance**, so per-order state
 and the challenge key must be shared, not in-memory.
 
@@ -15,12 +15,12 @@ and the challenge key must be shared, not in-memory.
   issue/verify) may hit different instances. Pass a fixed `signingKey` (e.g.
   `process.env.GATE_SECRET`) so the sealed challenge / mandate verifies across instances.
   A per-process ephemeral key works only for a single process.
-- **Bind the wallet origin.** `new AttestoMCP({ walletOrigin: "https://shop.example" })` — wallet
+- **Bind the wallet origin.** `new CredentAgent({ walletOrigin: "https://shop.example" })` — wallet
   ceremonies (OpenID4VP / WebAuthn) are origin-bound; a localhost origin in production is
   refused by wallets.
 - **Ship the widget bundle.** `createStorefront()` reads its widget HTML at runtime via
   `readFile` (it is *not* import-traced). On a bundler/serverless host (e.g. Vercel
-  `includeFiles`), make sure `@openmobilehub/attestomcp-storefront`'s `dist/ui/**` is included in
+  `includeFiles`), make sure `@openmobilehub/credentagent-storefront`'s `dist/ui/**` is included in
   the function, or the widget resource 404s.
 
 ## Settlement (the `settle` seam)

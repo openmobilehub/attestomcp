@@ -2,7 +2,7 @@
 
 > All subject matter is tentative pending maintainer decisions (the design doc itself is Draft; §10's ship-order question and §12's open items are unresolved).
 
-**Council**: Merchant (senior TS/Express e-commerce dev), Agent (headless cron Node agent dev), Platform (MCP/hosted-assistant platform engineer), Security (footgun-focused security engineer), Identity (Kotlin/Multipaz/TS12 engineer), DevRel (SDK docs lead). Reviewing `specs/005-human-not-present/connector-architecture-design.md` against the shipped `packages/attestomcp-gate` API.
+**Council**: Merchant (senior TS/Express e-commerce dev), Agent (headless cron Node agent dev), Platform (MCP/hosted-assistant platform engineer), Security (footgun-focused security engineer), Identity (Kotlin/Multipaz/TS12 engineer), DevRel (SDK docs lead). Reviewing `specs/005-human-not-present/connector-architecture-design.md` against the shipped `packages/credentagent-gate` API.
 
 ---
 
@@ -13,7 +13,7 @@ This DX is ready to build toward. The council unanimously endorses the load-bear
 ## 2. Scorecard — the four success bars
 
 ### ≤3 lines for a merchant — **Met in letter, misleading as stated** (unanimous)
-The `delegation` config block is genuinely small and fits the shipped `AttestoMCPOptions` pattern. But the flagship §8 snippet does not compile against anything (`usd()` and `UTOPIA_DEMO_WALLET` exist nowhere — grep confirms), and the two real prerequisites are unpriced: **GTIN→SKU catalog mapping** (the shipped `Product` model has no GTIN field; for a real merchant this is a data project, not a line) and **obtaining a trust-list entry** for a wallet server that does not exist yet. Consensus reframe (DevRel's phrasing): *"one config key on the client you already have, given a GTIN-mapped catalog."* Security's dissent on tone: three lines that paste a demo trust anchor into production is "a bar met by cheating" — the honest count is ~6 lines with an explicit `demoWallet()` fence.
+The `delegation` config block is genuinely small and fits the shipped `CredentAgentOptions` pattern. But the flagship §8 snippet does not compile against anything (`usd()` and `UTOPIA_DEMO_WALLET` exist nowhere — grep confirms), and the two real prerequisites are unpriced: **GTIN→SKU catalog mapping** (the shipped `Product` model has no GTIN field; for a real merchant this is a data project, not a line) and **obtaining a trust-list entry** for a wallet server that does not exist yet. Consensus reframe (DevRel's phrasing): *"one config key on the client you already have, given a GTIN-mapped catalog."* Security's dissent on tone: three lines that paste a demo trust anchor into production is "a bar met by cheating" — the honest count is ~6 lines with an explicit `demoWallet()` fence.
 
 ### Storefront ships it built-in — **Most credible bar; kill the boolean** (unanimous on both halves)
 `createStorefront({ delegation: ... })` fits the existing seam-composition pattern exactly (Identity: "the most credible bar; no design changes needed"). Two conditions: (1) **`delegation: true` must die** — a boolean cannot carry a trust list, and it silently defaults the one decision that is the whole security surface (Security: "the single worst token in the document"; DevRel and Merchant concur); (2) the bar is unverifiable until the delegated-checkout MCP tool is named and schema'd (Agent, Platform).
@@ -28,7 +28,7 @@ Every persona named §9 the best DX decision in the doc. Gaps that keep it from 
 
 **1. The cross-connector redemption sequence is undefined, and §6 vs §7 contradict on `transaction_id`.** *(Agent, Platform — high; Security, Identity — medium)*
 `request_draw(intentId, {merchant, cart, amount})` cannot be signed over a settlement `transaction_id` it never receives; the merchant tool that accepts the draw is unnamed; the cart shape crossing connectors is untyped; and there are two different objects both called `transaction_id` (TS12 `transaction_id = intentId` bounds commitment vs UPay's settlement id) inside one verification chain (Identity).
-**Recommendation:** Publish the six-call sequence diagram from the agent's seat with full JSON schemas: merchant tool (name it — `checkout_delegated`) opens the settlement and returns `transactionId + amount`; `request_draw` gains `transactionId`; the merchant tool accepts the draw and returns the shared §9 union. Rename the settlement id `psp_transaction_id` in all AttestoMCP docs. Nothing else in the plan should start before this exists.
+**Recommendation:** Publish the six-call sequence diagram from the agent's seat with full JSON schemas: merchant tool (name it — `checkout_delegated`) opens the settlement and returns `transactionId + amount`; `request_draw` gains `transactionId`; the merchant tool accepts the draw and returns the shared §9 union. Rename the settlement id `psp_transaction_id` in all CredentAgent docs. Nothing else in the plan should start before this exists.
 
 **2. The trust list is load-bearing but undefined as a type, unobtainable as a value, and rotation-free — and the demo trust anchor will leak into production.** *(Merchant, Security — high; Platform — high; DevRel — medium)*
 Nothing says what a `trustedWallets` entry IS; `UTOPIA_DEMO_WALLET` exists nowhere; K_s is sealed inside DeviceKey-signed bounds, so key rotation as designed orphans every active intent (so nobody will rotate — Platform); and the shipped warn-and-fallback precedent (`client.ts:41-53`), applied to a security config, silently converts a typo into a gate the merchant didn't choose (Merchant, Security independently).
@@ -48,7 +48,7 @@ CLAUDE.md: honesty is "carried in the types, not just prose," and `issuer-verifi
 
 **6. The refusal union has gaps its own document demonstrates.** *(all six personas, medium)*
 `remaining: $70` appears in demo beat §15.2 but not in §9's `over-cap`; no enforcer attribution across four thresholds; no `resolution: "retry" | "needs-human" | "terminal"`; no reason for draws against pending/declined intents; `consumed` ambiguously means draw-replayed or intent-exhausted; no MCP encoding (structuredContent vs isError) decided; no single exported type.
-**Recommendation:** One exported `DrawRefusal` union from `@openmobilehub/attestomcp-gate`, encoded as MCP structuredContent, with the field additions in §4 below and an `explainRefusal()` helper. Single-source the schema so wallet connector (Kotlin), gate, and SDK cannot drift.
+**Recommendation:** One exported `DrawRefusal` union from `@openmobilehub/credentagent-gate`, encoded as MCP structuredContent, with the field additions in §4 below and an `explainRefusal()` helper. Single-source the schema so wallet connector (Kotlin), gate, and SDK cannot drift.
 
 **7. Intent and draw lifecycles can't express "done" and aren't idempotent — the zero-state cron pattern breaks on the first real task.** *(Agent — high; Platform — medium)*
 No terminal `exhausted`/`completed` status matching the `consumed` refusal; no client label to correlate intents to tasks; `create_intent` has no idempotency key (crash-retry mints duplicate pending intents and duplicate approveUrls); overlapping cron runs can double-purchase in-bounds; a signed-but-unsettled draw is invisible (no `void_draw`, no TTL); `create_intent`'s ~90s long-poll exceeds host tool-call timeouts.
@@ -86,7 +86,7 @@ revoke_intent(intentId)       // unchanged — endorsed
 
 **Merchant side**
 ```js
-new AttestoMCP({
+new CredentAgent({
   delegation: {
     trustedWallets: [demoWallet()],        // TrustedWallet: { id, displayName, keys: JWKS-with-kid }
                                            // demoWallet() throws in production without allowDemoTrust: true
@@ -129,7 +129,7 @@ Positions held by one persona that the maintainer should still weigh:
 - **Typed refusals as a stated success bar** (all six) — failure-path-first design; fix the gaps, keep the shape.
 - **Opt-in by default** — "no config → no HNP surface" (Security: "the single most important safe default in the doc").
 - **Reference-not-artifact custody** — the agent holds a name, not a token; `revoke_intent` only ever reduces authority; the §3 compromise-asymmetry table gives integrators reasoning, not just rules (Agent, Security).
-- **Delegation as configure-once constructor config** on the shipped `AttestoMCPOptions` pattern — a gate user will recognize it instantly (Merchant, Identity, Agent).
+- **Delegation as configure-once constructor config** on the shipped `CredentAgentOptions` pattern — a gate user will recognize it instantly (Merchant, Identity, Agent).
 - **The deliberately absent self-approval path and bound-probing helpers** (Agent, Security) — right for production; the dev-mode gap is solved by the sandbox, not by weakening this.
 - **The desk-verification discipline** — F1/F2 falsified a design assumption before schemas were committed to it, F4 adopted TS12, F6 cut issuance; the doc shows its own corrected claims (Platform, Identity, DevRel: "this candor is itself a docs asset developers will trust").
 - **§1's three-sentence explainer and the Russian-doll motif** carried consistently through §4/§6 (DevRel: best-in-class top-of-funnel).

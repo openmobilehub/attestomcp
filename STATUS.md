@@ -1,4 +1,4 @@
-# Project Status — AttestoMCP
+# Project Status — CredentAgent
 
 _Single source of truth for what's done, what's next, and what's waiting on you._
 _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #32) · CI green · 228 tests pass._
@@ -12,16 +12,16 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 ## ⏳ Decisions for you
 
 - [ ] **Publish `0.2.0` — ON HOLD pending the rename decision below (2026-07-02).** Publishing would cement
-      the `attestomcp` package names counsel just ruled non-compliant. Once renamed: add the **`NPM_TOKEN`**
+      the `credentagent` package names counsel just ruled non-compliant. Once renamed: add the **`NPM_TOKEN`**
       secret (publish rights to the `@openmobilehub` scope), then cut a **GitHub Release** →
       `.github/workflows/publish.yml` publishes **gate first, then storefront** (with provenance). Or publish
       manually in that order. See `docs/PUBLISHING.md`.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **Rename — NAME CHOSEN (team, 2026-07-08): AttestoMCP → CredentAgent.** Execution tracked in
-      [#37](https://github.com/openmobilehub/attestomcp/issues/37) (mapping table, measured scope, PR-#8
+- [ ] **Rename — NAME CHOSEN (team, 2026-07-08): CredentAgent → CredentAgent.** Execution tracked in
+      [#37](https://github.com/openmobilehub/credentagent/issues/37) (mapping table, measured scope, PR-#8
       exemption list, 6-phase plan, verification gates) + website companion
-      [attestomcp-website#7](https://github.com/openmobilehub/attestomcp-website/issues/7). Satisfies the LF
+      [credentagent-website#7](https://github.com/openmobilehub/credentagent-website/issues/7). Satisfies the LF
       counsel ruling (no "MCP" token; tagline keeps descriptive use). **Sequencing: merge #32 → #31 first,
       then rename on clean `main`.** Advisory flags from `docs/naming-clearance.md` (generic "-Agent" suffix,
       cred- neighbors) recorded in #37; **update `docs/naming-counsel-brief.md` to name CredentAgent and send
@@ -41,8 +41,8 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 
 ## 🔨 In flight / next
 
-- **AP2 v2 alignment — captured as [#39](https://github.com/openmobilehub/attestomcp/issues/39) +
-  [#40](https://github.com/openmobilehub/attestomcp/issues/40)** (2026-07-08), prompted by AP2-team feedback
+- **AP2 v2 alignment — captured as [#39](https://github.com/openmobilehub/credentagent/issues/39) +
+  [#40](https://github.com/openmobilehub/credentagent/issues/40)** (2026-07-08), prompted by AP2-team feedback
   (Yanhe Chen, Google, Discord 2026-06-02: v1-shaped mandate, unsigned amount, unverified issuer/deviceAuth).
   #39 = Node/TS v2 wire format (SD-JWT/KB-SD-JWT chain, `vct: mandate.payment.1`, minor units, constraints,
   receipts); #40 = bidirectional CI conformance against the official
@@ -50,10 +50,10 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
   swap stays #13, the issuer/device trust anchor stays #14; #12 (HNP) consumes #39's open-mandate constraints.
 - **Publish `0.2.0`** — blocked on the `NPM_TOKEN` secret (above). Pre-flight green (CI build+test).
 - **Flip the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its dependency
-  on `@openmobilehub/attestomcp-*` from the workspace to the published `^0.2.x`, and renames its own
-  `AttestoMcp` / `attestoMcpManifest` imports to `AttestoMCP` / `attestoMCPManifest` (tracked in that repo,
-  [#26](https://github.com/openmobilehub/attestomcp/issues/26)).
-- **Cart Mandate (004) `statelessOrders` — COMPLETE, in [PR #32](https://github.com/openmobilehub/attestomcp/pull/32)
+  on `@openmobilehub/credentagent-*` from the workspace to the published `^0.2.x`, and renames its own
+  `AttestoMcp` / `attestoMcpManifest` imports to `CredentAgent` / `credentAgentManifest` (tracked in that repo,
+  [#26](https://github.com/openmobilehub/credentagent/issues/26)).
+- **Cart Mandate (004) `statelessOrders` — COMPLETE, in [PR #32](https://github.com/openmobilehub/credentagent/pull/32)
   (2026-07-04).** The 004 core was already on `main`; this session finished FR-007 end-to-end: the created order
   rides in the signed Cart Mandate on the link (`?order=<id>&cart=<b64>`) instead of a created-order store, and
   the gate rails + rail page JS + the storefront `/checkout` page + place-order + every approve link + the
@@ -67,8 +67,8 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
   now the 005 docs port, rebased onto #32** (2026-07-06) so it carries **zero code diff** — the duplicate 004
   commits dropped by patch-id, leaving only the docs/specs/spike history. Both PRs are non-conflicting; #32
   merges first, then #31 auto-retargets to `main` (see `git-branch-hygiene` memory).
-- **Storefront persistence (005) — MERGED to `main`** ([#33](https://github.com/openmobilehub/attestomcp/pull/33),
-  [#27](https://github.com/openmobilehub/attestomcp/issues/27)/epic #29). `createStorefront({ storage: redisStorage(…) })`:
+- **Storefront persistence (005) — MERGED to `main`** ([#33](https://github.com/openmobilehub/credentagent/pull/33),
+  [#27](https://github.com/openmobilehub/credentagent/issues/27)/epic #29). `createStorefront({ storage: redisStorage(…) })`:
   four stores over Upstash Redis (optional peer dep, lazy-loaded), in-memory stays the zero-config default,
   per-slot injection wins, namespace isolation, fail-closed. `main` merged into #32 cleanly for this.
 - **HNP (005)** — big design day 2026-07-01 (branch `005-human-not-present`, pushed; no PR yet): the
@@ -123,7 +123,7 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 
 | What | Where |
 | :-- | :-- |
-| `AttestoMcp` → `AttestoMCP` brand-casing rename (class, `AttestoMCPOptions`, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` | [#26](https://github.com/openmobilehub/attestomcp/issues/26) |
+| `AttestoMcp` → `CredentAgent` brand-casing rename (class, `CredentAgentOptions`, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
 | Repo migrated out of `mcp-apps-shopping-demo` (history-preserved), CI green, branch protection on `main` | this repo |
 | Dev + reference docs (`docs/reference/*`, README, ARCHITECTURE, CONTRIBUTING, SECURITY-INVARIANTS) | `docs/` |
 | The full ceremony extraction (003): the demo became a thin consumer; the gate is the published library | `specs/003-…` |
