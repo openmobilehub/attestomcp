@@ -136,6 +136,23 @@ cryptography. The mandate is AP2-shaped and dev-signed (integrity hash), not key
 > **`verification_required`** envelope the agent *drives* (which credential, a per-order approve link,
 > the tool to poll) instead of completing — the retained blocking **Mode B** primitive.
 
+## Delegated draws — human-not-present seams (005, preview)
+
+The gate exposes the first HNP increment: **signer-agnostic seams** for redeeming a user-sealed
+**Intent Mandate** (a bounded, revocable delegation) with no live human — `sealIntent` / `checkDraw`
+(pure, total, typed refusals), a `RevocationStore` (per-intent + subject kill-switch, atomic
+single-use consume), and an additive, fail-closed **draw branch** in `completeOrder` that re-runs
+every bounds + revocation check server-side, writes a `delegationId`, and **suppresses settlement**.
+Age is **non-delegable** — an age-restricted cart always steps up to a live ceremony.
+
+Honesty (Principle VII, constitution v1.1.0): draws carry a **`presence`** axis (`"delegated"` /
+`"delegated-demo"`) — *when* consent happened — separate from `trust_level` — *how strongly it's
+bound*. The wire crypto is **real** (ES256 over the canonical draw; content-addressed `intentId`), but
+v0.1 has **no issuer/DeviceKey trust anchor and no per-draw proof-of-possession** — the grant is
+effectively a bearer instrument, fenced as a demo. A *real* HNP control requires `presence:
+"delegated"` **and** `trust_level: "issuer-verified"`; the HTTP intent rail + the wallet server that
+provide those are later increments.
+
 ## API surface (v0.1)
 
 ```ts
