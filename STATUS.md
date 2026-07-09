@@ -41,7 +41,8 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
   receipts); #40 = bidirectional CI conformance against the official
   [AP2 Python SDK](https://github.com/google-agentic-commerce/AP2/tree/main/code/sdk/python/ap2). The signing
   swap stays #13, the issuer/device trust anchor stays #14; #12 (HNP) consumes #39's open-mandate constraints.
-- **Publish `0.2.0`** — blocked on the `NPM_TOKEN` secret (above). Pre-flight green (CI build+test).
+- **Publish `0.2.0` — DONE (2026-07-08)**: live as `@openmobilehub/credentagent-*` via release
+  `v0.2.0-credentagent` (CI, provenance); `NPM_TOKEN` secret set; old names deprecated (see Done).
 - **Flip + slim the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its
   dependency on `@openmobilehub/credentagent-*` from the workspace to the published `^0.2.x`, renames its own
   `AttestoMcp` / `attestoMcpManifest` imports to `CredentAgent` / `credentAgentManifest`, and deletes its
