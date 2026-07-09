@@ -15,8 +15,8 @@ import express from "express";
 import request from "supertest";
 import { mountCeremony, type CeremonySeams } from "../mount.js";
 import { MemoryVerificationStore } from "../../store.js";
-import { defineCredential, dcql, gate } from "../../credentials.js";
 import type { Credential } from "../../types.js";
+import { professionalLicense } from "./__fixtures__/customCredential.js";
 import type { CeremonyCatalog, CeremonyOrder } from "../types.js";
 
 // A Licensed line makes the custom gate applicable; headphones is unrestricted.
@@ -44,16 +44,7 @@ const catalog: CeremonyCatalog = {
   },
 };
 
-// The worked pack: a professional-license gate() defined entirely by object (Principle V).
-const professionalLicense: Credential = defineCredential({
-  id: "professional_license",
-  request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
-  verify: (c) => c.license_active === true, // explicit positive claim (invariant 5)
-  effect: gate(),
-  appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
-  ui: { label: "Professional license", action: "Verify your license" },
-});
-
+// The worked pack (professional-license gate()) comes from the shared fixture (T002).
 function harness() {
   const verificationStore = new MemoryVerificationStore();
   const orders = new Map<string, CeremonyOrder>();

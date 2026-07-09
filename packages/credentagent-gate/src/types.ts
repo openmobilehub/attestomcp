@@ -143,14 +143,16 @@ export interface VerificationRecord {
   loyalty?: { applied: boolean; membershipNumber: string | null };
   /**
    * Custom gate() credentials proven for THIS order, keyed by credential id
-   * (007 / invariant 4). The generalized credential rail writes `true` here on an
-   * explicit-positive custom verify; `completeOrder` reads it to enforce every
-   * applicable custom gate. Built-in age/membership keep their dedicated fields
-   * above.
+   * (007 / invariant 4). This is the SINGLE source for custom-gate proof — the
+   * generalized credential rail writes `true` here on an explicit-positive custom
+   * verify, and `completeOrder` reads ONLY this map to enforce every applicable
+   * custom gate. Built-in age/membership keep their dedicated fields above.
+   *
+   * (There is deliberately no `[credentialId: string]: unknown` index signature: a
+   * per-id value written directly on the record would NOT be seen by the sweep, which
+   * reads `verifiedGates` — a silent un-enforcement. One representation wins.)
    */
   verifiedGates?: Record<string, true>;
-  /** Custom credential results, keyed by credential id. */
-  [credentialId: string]: unknown;
 }
 
 export interface VerificationStore {

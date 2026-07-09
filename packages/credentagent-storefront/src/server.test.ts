@@ -14,7 +14,7 @@ import { createStorefront, originFromRequest, type Storefront } from "./server.j
 import { redisStorage, type RedisLike } from "./redis.js";
 import { firestoreCatalog, type FirestoreLike } from "./firestore.js";
 import { MemoryOrderStore } from "./state.js";
-import { CredentAgent, age, membership, payment, required, optional, MemoryVerificationStore } from "@openmobilehub/credentagent-gate";
+import { CredentAgent, age, membership, payment, required, optional, defineCredential, dcql, gate, MemoryVerificationStore } from "@openmobilehub/credentagent-gate";
 import type { Request } from "express";
 
 // A Map-backed RedisLike fake so a `redisStorage(...)` provider can be exercised through
@@ -244,6 +244,79 @@ describe("GET /checkout — the shared three-gate page (renderRequirements)", ()
     expect(pay.body.completed).toBe(true);
     const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
     expect(status.body.completed).toBe(true);
+  });
+});
+
+// ── 007 end-to-end: a CUSTOM-gate order checks out, proves the credential, and the hub
+//    UNLOCKS payment. This is the flagship-flow test that was missing — it drives the real
+//    checkout tool + GET /checkout + the verify rail and would catch the age-mislabel AND
+//    the verifiedGates-invisible deadlock Diego reported. ────────────────────────────────
+describe("GET /checkout — a custom gate() completes end-to-end (007)", () => {
+  const LICENSED_CATALOG = [
+    { id: "contractor-drill", name: "ProForce Hammer Drill", price: 189, currency: "USD", image: "", category: "Licensed", description: "Licensed trade." },
+    { id: "aurora-headphones", name: "Aurora Headphones", price: 199, currency: "USD", image: "", category: "Electronics", description: "OTC." },
+  ];
+  const professionalLicense = defineCredential({
+    id: "professional_license",
+    request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
+    verify: (c) => c.license_active === true,
+    effect: gate(),
+    appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
+    ui: { label: "Professional license", action: "Verify your license" },
+  });
+  function licensedStore(): Storefront {
+    const store = createStorefront({ catalog: LICENSED_CATALOG });
+    const credentagent = new CredentAgent();
+    credentagent.mount(store.app);
+    store.gate((order) => credentagent.requirements(order, [required(professionalLicense), required(payment.in("usd"))]));
+    return store;
+  }
+  const checkoutId = async (c: Client, productId: string): Promise<string> =>
+    ((await c.callTool({ name: "checkout", arguments: { items: [{ productId, quantity: 1 }] } })).structuredContent as any).orderId;
+
+  it("the hub shows the license gate (its OWN label, not an age gate) and LOCKS payment while unproven", async () => {
+    const store = licensedStore();
+    const orderId = await checkoutId(await connect(store), "contractor-drill");
+    const res = await request(store.app).get(`/checkout?order=${orderId}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Professional license");
+    expect(res.text).not.toContain("Verify age");
+    expect(res.text).not.toContain("age-restricted");
+    expect(res.text).toContain("cred=professional_license");
+    expect(res.text).toContain("Payment is locked");
+  });
+
+  it("proving the license UNLOCKS payment on the SAME order (no age deadlock)", async () => {
+    const store = licensedStore();
+    const orderId = await checkoutId(await connect(store), "contractor-drill");
+    // The exact body the instant-demo button POSTs.
+    const v = await request(store.app).post("/credentagent/credential/verify").send({ order: orderId, cred: "professional_license", claims: { license_active: true } });
+    expect(v.body.verified).toBe(true);
+    const res = await request(store.app).get(`/checkout?order=${orderId}`);
+    expect(res.text).not.toContain("Payment is locked"); // FAILS on the pre-fix hub (verifiedGates invisible)
+    expect(res.text).toContain("✓ Professional license verified");
+    expect(res.text).toContain("/credentagent/dc-payment?order="); // the pay rail is now offered
+  });
+
+  it("the licensed order completes end-to-end (license proof → dc-payment)", async () => {
+    const store = licensedStore();
+    const orderId = await checkoutId(await connect(store), "contractor-drill");
+    await request(store.app).post("/credentagent/credential/verify").send({ order: orderId, cred: "professional_license", claims: { license_active: true } });
+    const pay = await request(store.app).post("/credentagent/dc-payment/verify").send({
+      order: orderId,
+      claims: { payment_instrument_id: "acct_demo_1", expiry_date: "2031-12-31", masked_account_reference: "•••• 4242", issuer_name: "Demo Bank", holder_name: "T" },
+    });
+    expect(pay.body.completed).toBe(true);
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(true);
+  });
+
+  it("BYPASS: the licensed order POSTed straight to place-order is refused (invariant 1), records nothing", async () => {
+    const store = licensedStore();
+    const orderId = await checkoutId(await connect(store), "contractor-drill");
+    await request(store.app).post("/checkout/place-order").type("form").send({ order: orderId }).expect(403);
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(false);
   });
 });
 

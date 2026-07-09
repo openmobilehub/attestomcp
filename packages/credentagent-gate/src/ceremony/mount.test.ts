@@ -7,8 +7,9 @@
 import { describe, it, expect } from "vitest";
 import { CredentAgent } from "../client.js";
 import { MemoryVerificationStore } from "../store.js";
-import { defineCredential, dcql, gate, required } from "../credentials.js";
+import { required } from "../credentials.js";
 import type { Credential } from "../types.js";
+import { professionalLicense } from "./credential-gate/__fixtures__/customCredential.js";
 import { mountCeremony, resolveOrder, type CeremonyApp, type CeremonyContext, type CeremonySeams } from "./mount.js";
 import { issueChallenge, verifyChallenge } from "./challengeToken.js";
 import { issueCartMandate } from "./cartMandate.js";
@@ -115,14 +116,7 @@ describe("CredentAgent.mount — back-compat + ceremony delegation (T008)", () =
 //    it — THIS suite goes through mount() + a host-shaped completion seam that reads
 //    the registry off app.locals, so it FAILS if the injection is removed. ──────────
 describe("CredentAgent.mount — publishes the registry so completion enforces custom gates (007)", () => {
-  const licenseCred: Credential = defineCredential({
-    id: "professional_license",
-    request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
-    verify: (c) => c.license_active === true,
-    effect: gate(),
-    appliesTo: (o) => o.lines.some((l) => l.category === "Licensed"),
-    ui: { label: "Professional license", action: "Verify your license" },
-  });
+  const licenseCred: Credential = professionalLicense; // shared fixture (T002)
 
   function wired() {
     const app = { locals: {} as Record<string, unknown> };

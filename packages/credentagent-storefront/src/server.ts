@@ -665,7 +665,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     // the created order (the policy reads line ids + minimumAge — the re-priced
     // `order` carries the same lines; the discounted total shows via `order` below).
     const requires = homeRequires(resolveGate?.(created) ?? [], baseUrl, statelessOrders ? cartRaw : null) as VerificationManifestEntry[];
-    const verification: RenderVerification = { ageVerified, loyaltyApplied };
+    // Pass this order's proven custom gates (007) so the hub reflects a proven custom
+    // gate and unlocks payment — without it, a proven license loops back to a locked page.
+    const verification: RenderVerification = { ageVerified, loyaltyApplied, ...(v.verifiedGates ? { verifiedGates: v.verifiedGates } : {}) };
     const paid = done ? { amount: done.amount, currency: done.currency, method: done.method } : null;
 
     // An UNGATED storefront has no payment gate, so the manifest carries no

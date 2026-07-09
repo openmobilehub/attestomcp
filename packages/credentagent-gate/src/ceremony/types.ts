@@ -30,6 +30,11 @@ export interface CeremonyOrderLine {
   minimumAge?: number;
   /** Product category — available to custom `.when()` predicates. */
   category?: string;
+  /** Prescription flag — a catalog-derived product attribute a custom `appliesTo`
+   *  may key on (e.g. the README's `prescription` gate). Preserved through re-pricing
+   *  so the completion-time custom-gate sweep sees the SAME inputs as the manifest
+   *  resolver (007 — a field the sweep can't see is a fail-OPEN bug). */
+  requiresRx?: boolean;
 }
 
 export interface CeremonyOrder {

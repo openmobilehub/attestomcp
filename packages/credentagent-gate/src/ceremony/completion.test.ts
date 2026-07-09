@@ -6,22 +6,23 @@
 import { describe, it, expect, vi } from "vitest";
 import { completeOrder, type CompletedRecord, type CompletionContext, type SettlementRecordLike } from "./completion.js";
 import { MemoryVerificationStore } from "../store.js";
-import { defineCredential, dcql, gate } from "../credentials.js";
 import type { Credential } from "../types.js";
+import { professionalLicense, prescription } from "./credential-gate/__fixtures__/customCredential.js";
 import type { CeremonyCatalog, CompletionInput } from "./types.js";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const PRODUCTS: Record<string, { price: number; minimumAge?: number; category?: string }> = {
+const PRODUCTS: Record<string, { price: number; minimumAge?: number; category?: string; requiresRx?: boolean }> = {
   widget: { price: 10 },
   wine: { price: 20, minimumAge: 21 },
   drill: { price: 50, category: "Licensed" }, // 007: the custom gate's applicable line
+  amoxicillin: { price: 30, requiresRx: true }, // 007: keyed on a NON-category field (fail-open repro)
 };
 
 const catalog: CeremonyCatalog = {
   createOrder(items, orderId, opts) {
     const lines = items.map((it) => {
       const p = PRODUCTS[it.productId] ?? { price: 0 };
-      return { id: it.productId, name: it.productId, unitPrice: p.price, currency: "USD", quantity: it.quantity, lineTotal: p.price * it.quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}), ...(p.category ? { category: p.category } : {}) };
+      return { id: it.productId, name: it.productId, unitPrice: p.price, currency: "USD", quantity: it.quantity, lineTotal: p.price * it.quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}), ...(p.category ? { category: p.category } : {}), ...(p.requiresRx ? { requiresRx: true } : {}) };
     });
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
     const discount = opts?.loyaltyApplied ? round2(subtotal * 0.1) : 0;
@@ -29,16 +30,9 @@ const catalog: CeremonyCatalog = {
   },
 };
 
-// The worked pack (007): a professional-license gate(), conditional to a Licensed line.
-const professionalLicense: Credential = defineCredential({
-  id: "professional_license",
-  request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
-  verify: (c) => c.license_active === true,
-  effect: gate(),
-  appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
-  ui: { label: "Professional license", action: "Verify your license" },
-});
+// The worked pack + the requiresRx prescription gate come from the shared fixture (T002).
 const licenseRegistry = new Map<string, Credential>([[professionalLicense.id, professionalLicense]]);
+const rxRegistry = new Map<string, Credential>([[prescription.id, prescription]]);
 
 interface Harness {
   ctx: CompletionContext;
@@ -189,5 +183,22 @@ describe("completeOrder — custom gate() enforcement (007, US2 / invariant 1)",
     const h = harness(); // no registry wired
     const res = await completeOrder(h.input([{ productId: "drill", quantity: 1 }]), h.ctx);
     expect(res.completed).toBe(true); // the sweep only runs when a registry is injected
+  });
+
+  it("BYPASS (fail-open): a gate keyed on a NON-category field (requiresRx) is enforced, not skipped", async () => {
+    const h = harness({ registry: rxRegistry });
+    // amoxicillin's re-priced line carries requiresRx; the prescription gate applies but is
+    // unproven. This FAILS (order wrongly completes) if the sweep evaluates appliesTo against
+    // a lossy projection that drops requiresRx — the fail-open Diego reported.
+    const res = await completeOrder(h.input([{ productId: "amoxicillin", quantity: 1 }]), h.ctx);
+    expect(res).toMatchObject({ completed: false, reason: "gate" });
+    expect(h.records.size).toBe(0);
+  });
+
+  it("the SAME requiresRx order completes once the prescription is proven for it", async () => {
+    const h = harness({ registry: rxRegistry });
+    await h.store.write("ORD-1", { verifiedGates: { prescription: true } });
+    const res = await completeOrder(h.input([{ productId: "amoxicillin", quantity: 1 }]), h.ctx);
+    expect(res.completed).toBe(true);
   });
 });

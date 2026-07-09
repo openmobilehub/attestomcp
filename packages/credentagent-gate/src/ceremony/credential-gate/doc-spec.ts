@@ -7,6 +7,7 @@
 import type { MdocDocSpec } from "../mdoc/mdoc-iso.js";
 import type { CredentialKind } from "./dcql.js";
 import type { DcqlQuery } from "../../types.js";
+import { claimLeaf } from "../../credentials.js";
 
 export function mdocDocSpec(kind: CredentialKind, minimumAge = 21): MdocDocSpec {
   if (kind === "age") {
@@ -37,6 +38,6 @@ export function mdocDocSpec(kind: CredentialKind, minimumAge = 21): MdocDocSpec 
 export function mdocDocSpecFromDcql(dcql: DcqlQuery): MdocDocSpec {
   const cred = dcql.credentials[0];
   const docType = cred?.meta?.doctype_value ?? cred?.id ?? "";
-  const elements = (cred?.claims ?? []).map((c) => c.path[c.path.length - 1]).filter((e): e is string => typeof e === "string");
+  const elements = (cred?.claims ?? []).map((c) => claimLeaf(c.path)).filter((e): e is string => typeof e === "string");
   return { docType, namespace: docType, elements };
 }

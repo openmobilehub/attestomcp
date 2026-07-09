@@ -44,6 +44,15 @@ export function dcql(spec: { docType: string; claims: string[] }): DcqlQuery {
   };
 }
 
+/**
+ * The claim's leaf element id — the LAST path segment (the shape `dcql()` builds:
+ * `[docType, leaf]`). One definition of the path→leaf convention so the request
+ * builder, the org-iso-mdoc doc-spec, and the instant-demo claim derivation agree.
+ */
+export function claimLeaf(path: string[]): string | undefined {
+  return path[path.length - 1];
+}
+
 // ── Credential factory (non-mutating, chainable `.when()`) ─────────────────
 
 /**

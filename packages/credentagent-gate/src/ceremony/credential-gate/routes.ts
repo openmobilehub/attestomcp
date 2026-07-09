@@ -30,7 +30,7 @@
 // (completion.ts), so every payment rail honors it.
 import { resolveOrder, type CeremonyApp, type CeremonyContext, type RailRegistrar } from "../mount.js";
 import { decodeCartMandateParam } from "../cartMandate.js";
-import { RESERVED_CREDENTIAL_IDS } from "../../credentials.js";
+import { RESERVED_CREDENTIAL_IDS, claimLeaf } from "../../credentials.js";
 import type { Credential } from "../../types.js";
 import type { RequestLike } from "../origin.js";
 import { buildCredentialRequest, buildSignedRequestForDcql } from "./request.js";
@@ -80,7 +80,7 @@ function demoClaimsFor(credential: Credential): Record<string, unknown> {
   const claims: Record<string, unknown> = {};
   for (const c of credential.request.credentials) {
     for (const cl of c.claims) {
-      const leaf = cl.path[cl.path.length - 1];
+      const leaf = claimLeaf(cl.path);
       if (typeof leaf === "string") claims[leaf] = true;
     }
   }

@@ -146,17 +146,18 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
   // dedicated enforcement above. Absent registry ⇒ this sweep no-ops (additive), so a
   // host that doesn't wire it (or has no custom gates) is unchanged.
   if (ctx.credentialRegistry) {
+    // Evaluate `appliesTo` against the FULL re-priced line — spread every field, never a
+    // hand-picked allow-list. The manifest resolver (manifest.ts) runs the SAME predicate
+    // against the host's full order; if the completion-time projection dropped a field a
+    // custom `appliesTo` reads (e.g. `requiresRx`), the gate would surface as applicable at
+    // manifest time yet be skipped here — a fail-OPEN bypass (invariant 1). The re-priced
+    // order is the catalog source of truth (invariant 2), so forwarding all of its fields
+    // is safe and keeps the two evaluations identical.
     const gateOrder: GateOrder = {
       id: repriced.id,
       total: repriced.total,
       currency: repriced.currency,
-      lines: repriced.lines.map((l) => ({
-        id: l.id,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        ...(l.minimumAge != null ? { minimumAge: l.minimumAge } : {}),
-        ...(l.category != null ? { category: l.category } : {}),
-      })),
+      lines: repriced.lines.map((l) => ({ ...l })),
     };
     const verifiedGates = (verification as { verifiedGates?: Record<string, true> } | undefined)?.verifiedGates ?? {};
     for (const cred of ctx.credentialRegistry.values()) {
