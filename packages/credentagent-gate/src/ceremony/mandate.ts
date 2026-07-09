@@ -196,6 +196,7 @@ import { webcrypto } from "node:crypto";
 import { refusal, type Refusal } from "./refusals.js";
 
 const subtle = webcrypto.subtle;
+type CryptoKey = webcrypto.CryptoKey;
 const utf8 = new TextEncoder();
 const b64url = (buf: ArrayBuffer | Uint8Array): string => Buffer.from(buf as Uint8Array).toString("base64url");
 

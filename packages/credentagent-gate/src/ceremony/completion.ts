@@ -11,7 +11,7 @@ import { verifyCartMandate, type CartMandate } from "./cartMandate.js";
 import { reconcileCartPayment } from "./reconciliation.js";
 import { checkDraw, type DrawVerifier } from "./mandate.js";
 import type { RevocationStore } from "./revocation.js";
-import { refusal, type Refusal } from "./refusals.js";
+import { refusal } from "./refusals.js";
 
 // One on-chain (demo-mode) settlement backing a completed order. Kept structural
 // so the demo's richer SettlementRecord is assignable without the package taking
