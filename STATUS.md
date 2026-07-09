@@ -1,7 +1,7 @@
 # Project Status — CredentAgent
 
 _Single source of truth for what's done, what's next, and what's waiting on you._
-_Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #32) · CI green · 228 tests pass._
+_Updated **2026-07-08** · rename shipped (#37): repos + packages live as CredentAgent · CI green · 247 tests pass._
 
 > **How this file works.** Read it at the start of every working session and update it at the end. It is
 > decisions-first: "Decisions for you" (each a checkbox + recommendation), then In flight / next, a rolling
@@ -11,21 +11,14 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 
 ## ⏳ Decisions for you
 
-- [ ] **Publish `0.2.0` — ON HOLD pending the rename decision below (2026-07-02).** Publishing would cement
-      the `credentagent` package names counsel just ruled non-compliant. Once renamed: add the **`NPM_TOKEN`**
-      secret (publish rights to the `@openmobilehub` scope), then cut a **GitHub Release** →
-      `.github/workflows/publish.yml` publishes **gate first, then storefront** (with provenance). Or publish
-      manually in that order. See `docs/PUBLISHING.md`.
+- [ ] **Send the updated naming-counsel-brief (CredentAgent) to LF counsel for the USPTO+EUIPO knockout
+      (classes 9/36/42).** The maintainer waived the publish-behind-knockout gate on 2026-07-08 (packages are
+      live as `@openmobilehub/credentagent-*`), so the knockout is now a **retroactive risk check** — advisory
+      flags from `docs/naming-clearance.md` (generic "-Agent" suffix, cred- neighbors: Credant/CredenTek) still
+      deserve the professional search. Fresh scoped packages were unpublishable-within-72h if it had surprised
+      us; that window is the accepted risk.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **Rename — NAME CHOSEN (team, 2026-07-08): CredentAgent → CredentAgent.** Execution tracked in
-      [#37](https://github.com/openmobilehub/credentagent/issues/37) (mapping table, measured scope, PR-#8
-      exemption list, 6-phase plan, verification gates) + website companion
-      [credentagent-website#7](https://github.com/openmobilehub/credentagent-website/issues/7). Satisfies the LF
-      counsel ruling (no "MCP" token; tagline keeps descriptive use). **Sequencing: merge #32 → #31 first,
-      then rename on clean `main`.** Advisory flags from `docs/naming-clearance.md` (generic "-Agent" suffix,
-      cred- neighbors) recorded in #37; **update `docs/naming-counsel-brief.md` to name CredentAgent and send
-      for the USPTO+EUIPO knockout (classes 9/36/42) — publish `0.2.0` stays behind that knockout.**
 - [ ] **005 sequencing fork — decision memo ready to ratify (2026-07-03).** Ship merchant-side v0.1
       (server-HMAC) first, or re-scope 005 to wallet-custody directly? Full analysis +
       recommendation in [`sequencing-fork-memo.md`](specs/005-human-not-present/sequencing-fork-memo.md).
@@ -49,10 +42,12 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
   [AP2 Python SDK](https://github.com/google-agentic-commerce/AP2/tree/main/code/sdk/python/ap2). The signing
   swap stays #13, the issuer/device trust anchor stays #14; #12 (HNP) consumes #39's open-mandate constraints.
 - **Publish `0.2.0`** — blocked on the `NPM_TOKEN` secret (above). Pre-flight green (CI build+test).
-- **Flip the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its dependency
-  on `@openmobilehub/credentagent-*` from the workspace to the published `^0.2.x`, and renames its own
-  `AttestoMcp` / `attestoMcpManifest` imports to `CredentAgent` / `credentAgentManifest` (tracked in that repo,
-  [#26](https://github.com/openmobilehub/credentagent/issues/26)).
+- **Flip + slim the reference demo** — once published, `openmobilehub/mcp-apps-shopping-demo` switches its
+  dependency on `@openmobilehub/credentagent-*` from the workspace to the published `^0.2.x`, renames its own
+  `AttestoMcp` / `attestoMcpManifest` imports to `CredentAgent` / `credentAgentManifest`, and deletes its
+  hand-rolled adapters (3 Redis store classes + the Firestore catalog loader) in favor of `redisStorage(…)` /
+  `firestoreCatalog(…)` — epic #29's scope A, now filed as
+  [mcp-apps-shopping-demo#27](https://github.com/openmobilehub/mcp-apps-shopping-demo/issues/27) (2026-07-08).
 - **Cart Mandate (004) `statelessOrders` — COMPLETE, in [PR #32](https://github.com/openmobilehub/credentagent/pull/32)
   (2026-07-04).** The 004 core was already on `main`; this session finished FR-007 end-to-end: the created order
   rides in the signed Cart Mandate on the link (`?order=<id>&cart=<b64>`) instead of a created-order store, and
@@ -123,7 +118,9 @@ _Updated **2026-07-06** · `005-human-not-present` (docs PR #31, rebased onto #3
 
 | What | Where |
 | :-- | :-- |
-| `AttestoMcp` → `CredentAgent` brand-casing rename (class, `CredentAgentOptions`, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
+| **Rename EXECUTED: AttestoMCP → CredentAgent (2026-07-08)** — library ([PR #38](https://github.com/openmobilehub/credentagent/pull/38), 132 files, verified live both custody modes), GitHub repos renamed (`credentagent`, `credentagent-website`), website content ([credentagent-website#8](https://github.com/openmobilehub/credentagent-website/pull/8), Pages live), #31 retrofitted via the committed rename script | [#37](https://github.com/openmobilehub/credentagent/issues/37) |
+| **Published `0.2.0` as `@openmobilehub/credentagent-*`** (release `v0.2.0-credentagent` → CI publish with provenance; `NPM_TOKEN` secret set). Full deprecation chain: `attesto-*` + `attestomcp-*` all point at `credentagent-*` | npm |
+| `AttestoMcp` → `AttestoMCP` brand-casing rename (class, options type, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` *(historical — pre-CredentAgent)* | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
 | Repo migrated out of `mcp-apps-shopping-demo` (history-preserved), CI green, branch protection on `main` | this repo |
 | Dev + reference docs (`docs/reference/*`, README, ARCHITECTURE, CONTRIBUTING, SECURITY-INVARIANTS) | `docs/` |
 | The full ceremony extraction (003): the demo became a thin consumer; the gate is the published library | `specs/003-…` |
