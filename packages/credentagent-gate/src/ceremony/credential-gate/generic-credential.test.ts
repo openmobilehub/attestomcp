@@ -1,0 +1,143 @@
+// Bypass/contract tests for the GENERALIZED credential rail (007, US1): a CUSTOM
+// credential defined by `defineCredential` completes on the mounted ceremony with no
+// new code path. Every assertion pins a control and FAILS if that control is removed:
+//   • the signed request embeds the credential's OWN doctype + claim (not age/membership);
+//   • verify runs the credential's OWN `verify` (explicit positive claim — invariant 5)
+//     and records `verifiedGates[id]` per order (invariant 4); a negative claim records
+//     nothing;
+//   • an unregistered / reserved id is refused (404 — FR-013), never served;
+//   • every custom surface states trust_level "presence-only-demo" (Principle VII / F4).
+//
+// The verify path exercised is the instant-demo claims path (the acceptance bar); the
+// real OpenID4VP/mdoc presentation shares the same `verify` and is threaded the credential.
+import { describe, it, expect } from "vitest";
+import express from "express";
+import request from "supertest";
+import { mountCeremony, type CeremonySeams } from "../mount.js";
+import { MemoryVerificationStore } from "../../store.js";
+import { defineCredential, dcql, gate } from "../../credentials.js";
+import type { Credential } from "../../types.js";
+import type { CeremonyCatalog, CeremonyOrder } from "../types.js";
+
+// A Licensed line makes the custom gate applicable; headphones is unrestricted.
+const PRODUCTS: Record<string, { price: number; category?: string }> = {
+  "contractor-drill": { price: 150, category: "Licensed" },
+  "aurora-headphones": { price: 199 },
+};
+
+const catalog: CeremonyCatalog = {
+  createOrder(items, orderId) {
+    const lines = items.map((it) => {
+      const p = PRODUCTS[it.productId] ?? { price: 0 };
+      return {
+        id: it.productId,
+        name: it.productId,
+        unitPrice: p.price,
+        currency: "USD",
+        quantity: it.quantity,
+        lineTotal: p.price * it.quantity,
+        ...(p.category ? { category: p.category } : {}),
+      };
+    });
+    const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+    return { id: orderId, lines, itemCount: lines.reduce((s, l) => s + l.quantity, 0), subtotal, discount: 0, total: subtotal, currency: "USD", createdAt: new Date().toISOString() };
+  },
+};
+
+// The worked pack: a professional-license gate() defined entirely by object (Principle V).
+const professionalLicense: Credential = defineCredential({
+  id: "professional_license",
+  request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
+  verify: (c) => c.license_active === true, // explicit positive claim (invariant 5)
+  effect: gate(),
+  appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
+  ui: { label: "Professional license", action: "Verify your license" },
+});
+
+function harness() {
+  const verificationStore = new MemoryVerificationStore();
+  const orders = new Map<string, CeremonyOrder>();
+  const registry = new Map<string, Credential>([[professionalLicense.id, professionalLicense]]);
+  const seams: CeremonySeams = {
+    verificationStore,
+    orderStore: { read: async (id) => orders.get(id) ?? null },
+    catalog,
+    completion: async () => ({ completed: true }),
+    signingKey: "stable-test-secret",
+    credentialRegistry: registry,
+  };
+  const app = express();
+  mountCeremony(app as never, seams);
+  const seed = (id: string, items: { id: string; quantity: number }[]): void => {
+    orders.set(id, catalog.createOrder(items.map((i) => ({ productId: i.id, quantity: i.quantity })), id));
+  };
+  return { app, verificationStore, seed };
+}
+
+describe("US1 — the ceremony serves a custom credential's own request (no new code path)", () => {
+  it("the signed request embeds the credential's OWN doctype + claim (not an age/membership shape)", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).get("/credentagent/credential/request").query({ order: "ORD-L", cred: "professional_license" });
+    expect(res.status).toBe(200);
+    // The OpenID4VP DCQL is the credential's own request — its doctype + claim leaf.
+    expect(res.body.dcql_query.credentials[0].meta.doctype_value).toBe("org.example.license.1");
+    const paths = res.body.dcql_query.credentials[0].claims.map((c: { path: string[] }) => c.path[c.path.length - 1]);
+    expect(paths).toContain("license_active");
+    // Both wallet protocols offered, fenced presence-only-demo (F4).
+    expect(res.body.requests.map((r: { protocol: string }) => r.protocol)).toContain("org-iso-mdoc");
+    expect(res.body.trust_level).toBe("presence-only-demo");
+  });
+
+  it("renders the gate page from the credential's ui, fenced presence-only-demo", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).get("/credentagent/credential").query({ order: "ORD-L", cred: "professional_license" });
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Professional license");
+    expect(res.text).toContain("presence-only-demo");
+  });
+});
+
+describe("US1 — verify runs the credential's OWN verify and records verifiedGates (invariants 4/5)", () => {
+  it("an explicit positive claim verifies and writes verifiedGates[id] for THIS order", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).post("/credentagent/credential/verify").send({ order: "ORD-L", cred: "professional_license", claims: { license_active: true } });
+    expect(res.body.verified).toBe(true);
+    expect(res.body.trust_level).toBe("presence-only-demo"); // F4
+    expect((await h.verificationStore.read("ORD-L"))?.verifiedGates?.professional_license).toBe(true);
+  });
+
+  it("a NEGATIVE claim does not verify and records NOTHING (control fails if verify accepted mere presence)", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).post("/credentagent/credential/verify").send({ order: "ORD-L", cred: "professional_license", claims: { license_active: false } });
+    expect(res.body.verified).toBe(false);
+    expect((await h.verificationStore.read("ORD-L"))?.verifiedGates?.professional_license).toBeUndefined();
+  });
+
+  it("an absent claim (a bare token) does not pass", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).post("/credentagent/credential/verify").send({ order: "ORD-L", cred: "professional_license", claims: { some_unrelated: "x" } });
+    expect(res.body.verified).toBe(false);
+  });
+});
+
+describe("US1 — an unregistered or reserved credential id is refused (FR-013)", () => {
+  it("the page + request routes 404 an unknown id", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    expect((await request(h.app).get("/credentagent/credential").query({ order: "ORD-L", cred: "not_registered" })).status).toBe(404);
+    expect((await request(h.app).get("/credentagent/credential/request").query({ order: "ORD-L", cred: "not_registered" })).status).toBe(404);
+  });
+
+  it("the verify route refuses an unknown id (404), recording nothing", async () => {
+    const h = harness();
+    h.seed("ORD-L", [{ id: "contractor-drill", quantity: 1 }]);
+    const res = await request(h.app).post("/credentagent/credential/verify").send({ order: "ORD-L", cred: "not_registered", claims: { license_active: true } });
+    expect(res.status).toBe(404);
+    expect(res.body.verified).toBe(false);
+  });
+});

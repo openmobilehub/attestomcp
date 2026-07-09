@@ -6,6 +6,7 @@
 // from the same credential.
 import type { MdocDocSpec } from "../mdoc/mdoc-iso.js";
 import type { CredentialKind } from "./dcql.js";
+import type { DcqlQuery } from "../../types.js";
 
 export function mdocDocSpec(kind: CredentialKind, minimumAge = 21): MdocDocSpec {
   if (kind === "age") {
@@ -22,4 +23,20 @@ export function mdocDocSpec(kind: CredentialKind, minimumAge = 21): MdocDocSpec 
     namespace: "org.multipaz.loyalty.1",
     elements: ["membership_number", "tier"],
   };
+}
+
+/**
+ * Derive the ISO org-iso-mdoc single-doctype spec for a CUSTOM credential (007) from
+ * its own `request` DcqlQuery — the `dcql()` sugar builds claim paths as
+ * `[docType, leaf]`, so the doctype is the credential option's `meta.doctype_value`
+ * and the namespace matches it (the same convention the loyalty doctype above uses),
+ * with the requested claim leaves as data elements. Keeps the iOS DeviceRequest and
+ * the richer OpenID4VP DCQL aligned to one doctype definition, exactly as the
+ * built-ins do — no second source of truth.
+ */
+export function mdocDocSpecFromDcql(dcql: DcqlQuery): MdocDocSpec {
+  const cred = dcql.credentials[0];
+  const docType = cred?.meta?.doctype_value ?? cred?.id ?? "";
+  const elements = (cred?.claims ?? []).map((c) => c.path[c.path.length - 1]).filter((e): e is string => typeof e === "string");
+  return { docType, namespace: docType, elements };
 }

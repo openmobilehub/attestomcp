@@ -2,7 +2,7 @@
 // then declarative calls. `requirements(order, policy)` resolves a policy to the
 // serializable manifest (Context 1); `mount(app)` is the Context-2 seam.
 
-import type { CredentAgentOptions, GateOrder, Step, VerificationManifestEntry, VerificationStore } from "./types.js";
+import type { Credential, CredentAgentOptions, GateOrder, Step, VerificationManifestEntry, VerificationStore } from "./types.js";
 import { resolveRequirements } from "./manifest.js";
 import { MemoryVerificationStore } from "./store.js";
 import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/mount.js";
@@ -29,6 +29,12 @@ export class CredentAgent {
   // exist on this server). `requirements()` then emits approve links that resolve
   // to those mounted routes rather than the legacy `/credential-gate/*` shape.
   private mountedRoutes = false;
+  // In-process credential registry (id → Credential), populated as `requirements()`
+  // resolves policies — register-on-resolve, so a developer registers nothing (Principle
+  // V). Injected into the ceremony context at `mount()` so the rails can serve a custom
+  // credential's own request/verify and `completeOrder` can sweep applicable custom gates
+  // (007). Holds CODE (verify/appliesTo) in-process; never serialized, never the wire.
+  private readonly registry = new Map<string, Credential>();
 
   constructor(opts: CredentAgentOptions = {}) {
     let origin = opts.walletOrigin?.trim();
@@ -62,6 +68,10 @@ export class CredentAgent {
    * payment-last; no functions cross the wire.
    */
   requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[] {
+    // Register-on-resolve (007): remember each policy credential by id so the mounted
+    // rails + `completeOrder` can reach its request/verify/appliesTo by id. Synchronous
+    // (an in-memory Map write), so `requirements()` stays sync — no public-API change.
+    for (const step of policy) this.registry.set(step.credential.id, step.credential);
     return resolveRequirements(order, policy, { walletOrigin: this.walletOrigin, mountedRoutes: this.mountedRoutes });
   }
 
@@ -81,7 +91,7 @@ export class CredentAgent {
    */
   mount(app: ExpressApp, ceremony?: MountCeremony): void {
     if (ceremony) {
-      mountCeremony(app as CeremonyApp, { ...ceremony, verificationStore: this.store });
+      mountCeremony(app as CeremonyApp, { ...ceremony, verificationStore: this.store, credentialRegistry: this.registry });
       this.mountedRoutes = true;
       return;
     }
@@ -92,7 +102,7 @@ export class CredentAgent {
     // rails write (invariant 4). Falls back to CredentAgent's own store otherwise.
     const locals = (app.locals.credentagent ?? {}) as Partial<CeremonySeams>;
     if (locals.orderStore && locals.catalog && locals.completion) {
-      mountCeremony(app as CeremonyApp, locals.verificationStore ? {} : { verificationStore: this.store });
+      mountCeremony(app as CeremonyApp, { credentialRegistry: this.registry, ...(locals.verificationStore ? {} : { verificationStore: this.store }) });
       this.mountedRoutes = true;
       return;
     }
@@ -100,6 +110,6 @@ export class CredentAgent {
     // fail-closed routes resolve verification THROUGH CredentAgent.
     const existing = app.locals.credentagent as { store?: VerificationStore } | undefined;
     if (existing?.store === this.store) return; // idempotent
-    app.locals.credentagent = { store: this.store, walletOrigin: this.walletOrigin };
+    app.locals.credentagent = { store: this.store, walletOrigin: this.walletOrigin, credentialRegistry: this.registry };
   }
 }

@@ -108,6 +108,12 @@ const prescription = defineCredential({
 never-retain by default). The three effect builders — `gate()`, `discount({ percent })`,
 `authorize()` — are the only effects the resolver interprets.
 
+A custom credential is **served by the mounted ceremony and enforced end-to-end** — no new code
+path: `requirements()` registers it by id, the credential-gate rail builds the wallet request from
+its own `request`/`verify`, and `completeOrder` enforces every applicable `gate()` on the shared
+completion path (a hard block, independent of `required`/`optional`). Worked pack:
+[`examples/professional-license.mjs`](../../examples/professional-license.mjs).
+
 ## Honest status
 
 Honesty is carried in the **types**, not prose (Principle VII):

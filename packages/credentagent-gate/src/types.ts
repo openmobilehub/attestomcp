@@ -141,6 +141,14 @@ export interface VerificationManifestEntry {
 export interface VerificationRecord {
   ageVerified?: boolean;
   loyalty?: { applied: boolean; membershipNumber: string | null };
+  /**
+   * Custom gate() credentials proven for THIS order, keyed by credential id
+   * (007 / invariant 4). The generalized credential rail writes `true` here on an
+   * explicit-positive custom verify; `completeOrder` reads it to enforce every
+   * applicable custom gate. Built-in age/membership keep their dedicated fields
+   * above.
+   */
+  verifiedGates?: Record<string, true>;
   /** Custom credential results, keyed by credential id. */
   [credentialId: string]: unknown;
 }

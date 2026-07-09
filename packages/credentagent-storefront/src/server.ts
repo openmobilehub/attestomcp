@@ -61,6 +61,7 @@ import {
   renderRequirements,
   MemoryVerificationStore,
   type CartItemRef,
+  type Credential,
   type CeremonyCatalog,
   type CeremonyOrder,
   type CeremonyOrderStore,
@@ -381,6 +382,11 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         write: async (record: CompletedRecord) => { await orderStore.write(record.orderId, record); },
       },
       cart: { clear: async () => { const sid = orderSessions.get(input.order.id); if (sid) await cartStore.write(sid, new Map()); } },
+      // Custom-gate enforcement (007): hand `completeOrder` the credential registry
+      // `credentagent.mount(store.app)` published on app.locals — read LAZILY at completion
+      // time (mount runs after this closure is defined) so an applicable custom gate() is
+      // enforced on the shared completion path (invariant 1), not only in the rendered page.
+      credentialRegistry: (app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> } | undefined)?.credentialRegistry,
       ...(opts.settle ? { settle: opts.settle } : {}),
     });
   app.locals.credentagent = {

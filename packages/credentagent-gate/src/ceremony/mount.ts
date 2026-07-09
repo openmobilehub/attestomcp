@@ -9,7 +9,7 @@
 // The package stays dependency-free: `CeremonyApp` is a minimal structural type
 // (no `express` import) carrying just `locals` + the route methods a rail needs.
 import { randomBytes } from "node:crypto";
-import type { VerificationStore } from "../types.js";
+import type { Credential, VerificationStore } from "../types.js";
 import { deriveOrigin, type Origin, type RequestLike } from "./origin.js";
 import type {
   CeremonyCatalog,
@@ -59,6 +59,12 @@ export interface CeremonySeams {
    *  `orderStore` read (FR-007 / US3). Off ⇒ the store stays the source of truth
    *  and the mandate is an additive integrity envelope only. */
   statelessOrders?: boolean;
+  /** The gate's in-process credential registry (id → Credential), populated by
+   *  `requirements()` and passed here by `CredentAgent.mount()` (007). The rails read
+   *  it to serve a custom credential's own request/verify; it is re-published on
+   *  `app.locals.credentagent` so the host's `completion` seam can hand it to
+   *  `completeOrder` for the custom-gate sweep. Holds CODE (never the wire). */
+  credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
 /** The resolved context each rail receives (every required seam present). */
@@ -74,6 +80,9 @@ export interface CeremonyContext {
    *  with no store read (absent/false — store is the source of truth). `mountCeremony`
    *  always sets it; optional here so a hand-built context literal need not. */
   statelessOrders?: boolean;
+  /** The gate's credential registry (007) — the rails read it to serve a custom
+   *  credential's own request/verify. Absent when no CredentAgent registry was passed. */
+  credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
 /** A rail attaches its routes to the host app given the resolved context. */
@@ -102,6 +111,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
   const origin = options.origin ?? locals.origin ?? deriveOrigin;
   const allowEphemeralKey = options.allowEphemeralKey ?? locals.allowEphemeralKey ?? false;
   const statelessOrders = options.statelessOrders ?? locals.statelessOrders ?? false;
+  const credentialRegistry = options.credentialRegistry ?? locals.credentialRegistry;
   let signingKey = options.signingKey ?? locals.signingKey;
 
   // Fail fast (CT2) — a load-bearing seam must never silently default. (`origin`
@@ -139,6 +149,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
     signingKey,
     origin,
     statelessOrders,
+    ...(credentialRegistry ? { credentialRegistry } : {}),
     ...(settlement ? { settlement } : {}),
   };
 

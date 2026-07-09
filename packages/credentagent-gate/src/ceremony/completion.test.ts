@@ -6,25 +6,39 @@
 import { describe, it, expect, vi } from "vitest";
 import { completeOrder, type CompletedRecord, type CompletionContext, type SettlementRecordLike } from "./completion.js";
 import { MemoryVerificationStore } from "../store.js";
+import { defineCredential, dcql, gate } from "../credentials.js";
+import type { Credential } from "../types.js";
 import type { CeremonyCatalog, CompletionInput } from "./types.js";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const PRODUCTS: Record<string, { price: number; minimumAge?: number }> = {
+const PRODUCTS: Record<string, { price: number; minimumAge?: number; category?: string }> = {
   widget: { price: 10 },
   wine: { price: 20, minimumAge: 21 },
+  drill: { price: 50, category: "Licensed" }, // 007: the custom gate's applicable line
 };
 
 const catalog: CeremonyCatalog = {
   createOrder(items, orderId, opts) {
     const lines = items.map((it) => {
       const p = PRODUCTS[it.productId] ?? { price: 0 };
-      return { id: it.productId, name: it.productId, unitPrice: p.price, currency: "USD", quantity: it.quantity, lineTotal: p.price * it.quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}) };
+      return { id: it.productId, name: it.productId, unitPrice: p.price, currency: "USD", quantity: it.quantity, lineTotal: p.price * it.quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}), ...(p.category ? { category: p.category } : {}) };
     });
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
     const discount = opts?.loyaltyApplied ? round2(subtotal * 0.1) : 0;
     return { id: orderId, lines, itemCount: lines.reduce((s, l) => s + l.quantity, 0), subtotal, discount, total: round2(subtotal - discount), currency: "USD", createdAt: new Date().toISOString() };
   },
 };
+
+// The worked pack (007): a professional-license gate(), conditional to a Licensed line.
+const professionalLicense: Credential = defineCredential({
+  id: "professional_license",
+  request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
+  verify: (c) => c.license_active === true,
+  effect: gate(),
+  appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
+  ui: { label: "Professional license", action: "Verify your license" },
+});
+const licenseRegistry = new Map<string, Credential>([[professionalLicense.id, professionalLicense]]);
 
 interface Harness {
   ctx: CompletionContext;
@@ -34,7 +48,7 @@ interface Harness {
   input: (items: { productId: string; quantity: number }[], over?: Partial<CompletionInput>) => CompletionInput;
 }
 
-function harness(opts: { settle?: CompletionContext["settle"] } = {}): Harness {
+function harness(opts: { settle?: CompletionContext["settle"]; registry?: ReadonlyMap<string, Credential> } = {}): Harness {
   const records = new Map<string, CompletedRecord>();
   const store = new MemoryVerificationStore();
   const cleared = { count: 0 };
@@ -44,6 +58,7 @@ function harness(opts: { settle?: CompletionContext["settle"] } = {}): Harness {
     records: { read: async (id) => records.get(id), write: async (rec) => void records.set(rec.orderId, rec) },
     cart: { clear: async () => void cleared.count++ },
     ...(opts.settle ? { settle: opts.settle } : {}),
+    ...(opts.registry ? { credentialRegistry: opts.registry } : {}),
   };
   const input: Harness["input"] = (items, over = {}) => {
     const order = catalog.createOrder(items, over.order?.id ?? "ORD-1", {});
@@ -121,5 +136,58 @@ describe("completeOrder — core controls (direct seam tests)", () => {
     expect(res.settlement?.txId).toBe("0.0.1@1");
     expect(h.records.get("ORD-1")?.settlement?.txId).toBe("0.0.1@1");
     expect(h.cleared.count).toBe(1);
+  });
+});
+
+// ── US2 (007): completeOrder enforces every applicable custom gate() credential ──
+// Each is a BYPASS test: it FAILS if the registry sweep is removed from completeOrder.
+describe("completeOrder — custom gate() enforcement (007, US2 / invariant 1)", () => {
+  it("BYPASS: an applicable custom gate() with no proven verification is refused (reason 'gate'), records nothing", async () => {
+    const h = harness({ registry: licenseRegistry });
+    const res = await completeOrder(h.input([{ productId: "drill", quantity: 1 }]), h.ctx); // Licensed line, verifiedGates unset
+    expect(res).toMatchObject({ completed: false, reason: "gate" }); // FAILS if the sweep is removed → wrongly completes
+    expect(h.records.size).toBe(0);
+    expect(h.cleared.count).toBe(0);
+  });
+
+  it("the SAME order completes once the custom gate is verified (so the refusal was the gate control)", async () => {
+    const h = harness({ registry: licenseRegistry });
+    await h.store.write("ORD-1", { verifiedGates: { professional_license: true } });
+    const res = await completeOrder(h.input([{ productId: "drill", quantity: 1 }]), h.ctx);
+    expect(res.completed).toBe(true);
+    expect(h.records.get("ORD-1")?.amount).toBe(50);
+  });
+
+  it("per-order scoping (invariant 4): a gate verified for ORD-A does NOT complete ORD-B (same credential)", async () => {
+    const h = harness({ registry: licenseRegistry });
+    await h.store.write("ORD-A", { verifiedGates: { professional_license: true } });
+    const orderB = catalog.createOrder([{ productId: "drill", quantity: 1 }], "ORD-B");
+    const res = await completeOrder({ order: orderB, mandateId: "m", amount: orderB.total, currency: "USD", method: "test", gates: [{ gate: "g", pass: true, detail: "" }] }, h.ctx);
+    expect(res).toMatchObject({ completed: false, reason: "gate" }); // B never unlocked by A
+  });
+
+  it("a NON-applicable custom gate does not block (appliesTo false on the re-priced order)", async () => {
+    const h = harness({ registry: licenseRegistry });
+    const res = await completeOrder(h.input([{ productId: "widget", quantity: 1 }]), h.ctx); // no Licensed line
+    expect(res.completed).toBe(true);
+  });
+
+  it("F3/FR-009: a custom gate() composed with a loyalty discount does not disturb amount binding", async () => {
+    const h = harness({ registry: licenseRegistry });
+    // Licensed drill (50) + loyalty applied ⇒ discount 5 ⇒ total 45; custom gate proven.
+    await h.store.write("ORD-1", { verifiedGates: { professional_license: true }, loyalty: { applied: true, membershipNumber: "M-1" } });
+    const order = catalog.createOrder([{ productId: "drill", quantity: 1 }], "ORD-1", { loyaltyApplied: true });
+    const lineSum = round2(order.lines.reduce((s, l) => s + l.lineTotal, 0));
+    expect(order.subtotal).toBe(lineSum);
+    expect(order.total).toBe(round2(lineSum - order.discount)); // 45
+    const res = await completeOrder({ order, mandateId: "m", amount: order.total, currency: "USD", method: "test", gates: [{ gate: "g", pass: true, detail: "" }] }, h.ctx);
+    expect(res.completed).toBe(true);
+    expect(h.records.get("ORD-1")?.amount).toBe(45); // custom gate coexists with the discount, amount reconciles
+  });
+
+  it("no registry ⇒ the custom sweep no-ops (additive): an applicable-gate order still completes", async () => {
+    const h = harness(); // no registry wired
+    const res = await completeOrder(h.input([{ productId: "drill", quantity: 1 }]), h.ctx);
+    expect(res.completed).toBe(true); // the sweep only runs when a registry is injected
   });
 });

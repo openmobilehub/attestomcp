@@ -119,6 +119,14 @@ export const payment = {
 
 // ── Extensibility ──────────────────────────────────────────────────────────
 
+/**
+ * The built-in credential ids. They stay on their existing order-parameterized
+ * ceremony + completion paths (age's per-order threshold, membership's percent);
+ * the generalized custom-credential rail + `completeOrder` sweep exclude them so a
+ * custom credential never shadows a built-in and the built-ins never regress (007).
+ */
+export const RESERVED_CREDENTIAL_IDS: ReadonlySet<string> = new Set(["age", "membership", "payment"]);
+
 /** Define a custom credential — gate ANY consequential action with ANY credential. */
 export function defineCredential(c: {
   id: string;

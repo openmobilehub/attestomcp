@@ -120,14 +120,13 @@ console.log('    "buy the amoxicillin"  → the Prescription gate is surfaced (a
 console.log('    "buy the ibuprofen"    → NO prescription gate (OTC line)');
 console.log('    "buy the whiskey"      → the built-in age 21+ gate fires instead\n');
 
-// ── Honest limit (Principle VII) ──
-// requirements() fully RESOLVES this custom gate into the manifest — appliesTo,
-// effect, ui.label, and a per-order approve link all flow through — and the agent
-// surfaces it correctly. What is NOT wired yet: the MOUNTED phone ceremony only knows
-// the built-in `age` / `membership` kinds (CredentialKind in
-// credentagent-gate/src/ceremony/credential-gate/dcql.ts is `"age" | "membership"`), so a
-// custom credential's own `request` (DCQL) / `verify` / `ui.action` are not executed
-// by the ceremony page in v0.1 — completing an arbitrary custom credential on the
-// phone is roadmap. And trust_level is "presence-only-demo": v0.1 enforces disclosure
-// + nonce binding, NOT issuer/device signatures — a flow demonstration, never a real
-// safety control yet.
+// ── What's wired (007) + the honest limit (Principle VII) ──
+// requirements() RESOLVES this custom gate into the manifest AND the MOUNTED ceremony
+// now serves it end-to-end: the credential-gate rail builds the wallet request from
+// this gate's OWN `request` (DCQL), runs its OWN `verify` server-side, and
+// `completeOrder` enforces it whenever `appliesTo` holds — so a custom `gate()`
+// completes on the phone with no new code path (see examples/professional-license.mjs
+// for the worked pack). The remaining limit is TRUST, not disclosure: trust_level is
+// "presence-only-demo" — the wire crypto is real, but there is NO issuer/device-signature
+// trust anchor yet, so a self-crafted mdoc would pass. It enforces disclosure + binding
+// + completion, never issuer trust — not a real safety control until #14 lands.
