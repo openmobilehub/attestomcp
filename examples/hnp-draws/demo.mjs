@@ -68,8 +68,10 @@ async function preApprove(sentence, { store, perOrder, perMonth }) {
     merchants: [store], currency: "USD", maxAmount: perOrder, totalAmount: perMonth,
     delegate, presence: "delegated-demo", trust_level: "server-issued-demo",
   });
+  const menu = Object.entries(PRICE).map(([i, p]) => `${i} $${p}${MIN_AGE[i] ? ` (${MIN_AGE[i]}+)` : ""}`).join(" · ");
   console.log(`\n🎫  You pre-approved once:  “${sentence}”`);
-  console.log(`    Your agent holds it; the gate stores nothing. Off to sleep. 😴\n`);
+  console.log(`    Shop (the gate's prices): ${menu}`);
+  console.log(`    Your agent holds the grant; the gate stores nothing. Off to sleep. 😴\n`);
   return {
     buy: (purchase) => buy(grant, privateKey, purchase),
     revoke: () => { gate.revocation.revoke(grant.intentId); console.log(`\n🔴  You revoked the grant from your phone.\n`); },
