@@ -18,16 +18,17 @@ async function story() {
     perMonth: 100, //  ...and no more than $100 all month
   });
 
-  // 2 — Your agent shops on its own. The gate re-checks each purchase:
-  await agent.buy("tx1", "1 coffee");                    // ✅  within your rules
-  await agent.buy("tx1", "1 coffee");                    // ⛔  the SAME charge, again
-  await agent.buy("tx2", "3 coffee");                    // ⛔  $54 — blows your $30 cap
-  await agent.buy("tx3", "1 coffee", { at: STARBUCKS }); // ⛔  a store you never approved
-  await agent.buy("tx4", "1 wine");                      // ⛔  age-restricted
+  // 2 — Your agent shops on its own. Every field is named, so each line says what it is.
+  //     The gate re-checks each purchase against your limits:
+  await agent.buy({ charge: "c1", item: "coffee" });                    // ✅  within your rules
+  await agent.buy({ charge: "c1", item: "coffee" });                    // ⛔  same charge id — sent twice
+  await agent.buy({ charge: "c2", item: "coffee", quantity: 3 });       // ⛔  $54 — over your $30 cap
+  await agent.buy({ charge: "c3", item: "coffee", store: STARBUCKS });  // ⛔  a store you never approved
+  await agent.buy({ charge: "c4", item: "wine" });                      // ⛔  age-restricted
 
   // 3 — You change your mind and revoke from your phone.
   agent.revoke();
-  await agent.buy("tx5", "1 coffee");                    // ⛔  too late — the grant is dead
+  await agent.buy({ charge: "c5", item: "coffee" });                    // ⛔  too late — the grant is dead
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -92,29 +93,29 @@ async function preApprove(sentence, { store, perOrder, perMonth }) {
   console.log(`\n🎫  You pre-approved once:  “${sentence}”`);
   console.log(`    Your agent now holds it; the gate stores nothing. Off to sleep. 😴\n`);
   return {
-    buy: (tx, spec, opts) => buy(mandate, privateKey, tx, spec, opts),
+    buy: (purchase) => buy(mandate, privateKey, purchase),
     revoke: () => { ledger.revoke(mandate.intentId); console.log(`\n🔴  You revoked the grant from your phone.\n`); },
   };
 }
 
 // buy — your agent signs ONE draw against the grant it holds, presents { grant, draw }
 // to the gate, and we print the verdict. Amount is derived from the catalog, never trusted.
-async function buy(mandate, key, tx, spec, { at = mandate.merchants[0] } = {}) {
-  const [qty, product] = spec.split(" ");
-  const order = catalog.createOrder([{ productId: product, quantity: Number(qty) }], `ORD-${++orderSeq}`);
+// `charge` is the payment's transaction id: reuse one and the gate sees a double-spend.
+async function buy(mandate, key, { charge, item, quantity = 1, store = mandate.merchants[0] }) {
+  const order = catalog.createOrder([{ productId: item, quantity }], `ORD-${++orderSeq}`);
   const draw = await signDraw(
-    { type: "credentagent.Draw/v0", intentId: mandate.intentId, paymentMandateId: tx,
-      merchant: at, amount: order.total, currency: "USD", pspTransactionId: tx },
+    { type: "credentagent.Draw/v0", intentId: mandate.intentId, paymentMandateId: charge,
+      merchant: store, amount: order.total, currency: "USD", pspTransactionId: charge },
     key,
   );
   const res = await completeOrder(
-    { order, mandateId: tx, amount: order.total, currency: "USD", method: "delegated",
+    { order, mandateId: charge, amount: order.total, currency: "USD", method: "delegated",
       gates: [{ gate: "draw", pass: true, detail: "" }], draw: { intent: mandate, draw } },
     gate,
   );
-  const what = `${spec} @ ${at.split(".")[0]}`.padEnd(22);
-  if (res.completed) { tally.ok++; console.log(`  ✅  ${tx}  ${what}  approved — $${order.total} (no real money moved)`); }
-  else { tally.no++; const code = res.refusals[0].code; console.log(`  ⛔  ${tx}  ${what}  refused — ${WHY[code] ?? code}`); }
+  const what = `${quantity} ${item} @ ${store.split(".")[0]}`.padEnd(22);
+  if (res.completed) { tally.ok++; console.log(`  ✅  ${charge}  ${what}  approved — $${order.total} (no real money moved)`); }
+  else { tally.no++; const code = res.refusals[0].code; console.log(`  ⛔  ${charge}  ${what}  refused — ${WHY[code] ?? code}`); }
 }
 
 await story();
