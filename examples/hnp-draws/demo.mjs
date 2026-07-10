@@ -19,18 +19,20 @@ const grant = await gate.preApprove({
 });
 console.log("\n🎫  Pre-approved: coffee at blue-bottle, up to $30/order. Off to sleep. 😴\n");
 
-// 3. Your agent spends against it. Each spend() returns { ok, amount, reason? } — no throwing.
+// 3. Your agent spends. Each spend() returns { ok, amount, remaining, reason? } — no throwing.
+//    Two real purchases draw the $100 down; the rest are refused, each with a reason.
 await attempt("1 coffee", { paymentId: "c1", item: "coffee" });
-await attempt("the same payment again", { paymentId: "c1", item: "coffee" });
-await attempt("3 coffees at once", { paymentId: "c2", item: "coffee", quantity: 3 });
-await attempt("coffee — different store", { paymentId: "c3", item: "coffee", merchant: "starbucks" });
-await attempt("wine — age-restricted", { paymentId: "c4", item: "wine" });
+await attempt("another coffee (new id)", { paymentId: "c2", item: "coffee" });
+await attempt("reuse c1 — double-spend", { paymentId: "c1", item: "coffee" });
+await attempt("3 coffees at once", { paymentId: "c3", item: "coffee", quantity: 3 });
+await attempt("coffee — different store", { paymentId: "c4", item: "coffee", merchant: "starbucks" });
+await attempt("wine — age-restricted", { paymentId: "c5", item: "wine" });
 await grant.revoke(); // you change your mind, from your phone
-await attempt("1 coffee — after revoke", { paymentId: "c5", item: "coffee" });
+await attempt("1 coffee — after revoke", { paymentId: "c6", item: "coffee" });
 
 // Attempt one purchase and print the verdict (demo output only — not part of the API).
 async function attempt(label, purchase) {
-  const { ok, amount, reason } = await grant.spend(purchase);
-  const verdict = ok ? "approved (no real money moved)" : `refused — ${reason}`;
-  console.log(`  ${ok ? "✅" : "⛔"}  ${label.padEnd(24)} $${String(amount).padStart(2)}   ${verdict}`);
+  const { ok, amount, remaining, reason } = await grant.spend(purchase);
+  const verdict = ok ? `approved — $${remaining} of $100 left` : `refused — ${reason}`;
+  console.log(`  ${ok ? "✅" : "⛔"}  ${label.padEnd(26)} $${String(amount).padStart(2)}   ${verdict}`);
 }

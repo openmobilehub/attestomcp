@@ -61,6 +61,9 @@ export interface SpendResult {
   ok: boolean;
   /** The amount the gate priced from the catalog (never trusted from the caller). */
   amount: number;
+  /** Headroom left on the grant's cumulative cap AFTER this spend (a completed spend
+   *  draws it down; a refused one leaves it unchanged). Reaches 0 when spent out. */
+  remaining: number;
   /** Why it was refused — present when `!ok` (e.g. "over-cap", "replay", "revoked"). */
   reason?: RefusalCode;
   /** How to recover from a refusal — the bit an unattended loop branches on:
@@ -196,9 +199,13 @@ export class DelegatedGrant {
       { order, mandateId: paymentId, amount: order.total, currency: "USD", method: "delegated", gates: [], draw: { intent: this.grant, draw } },
       this.ctx,
     );
-    if (res.completed) return { ok: true, amount: order.total, delegationId: res.delegationId };
+    // Headroom AFTER this spend: the store's committed draws now include this one iff it
+    // completed, so `total − committed` reflects the draw-down (or is unchanged on refusal).
+    const committed = await this.ctx.revocation!.priorDraws(this.grant.intentId);
+    const remaining = this.grant.totalAmount - committed.reduce((sum, d) => sum + d.amount, 0);
+    if (res.completed) return { ok: true, amount: order.total, remaining, delegationId: res.delegationId };
     const refusal = res.refusals?.[0];
-    return { ok: false, amount: order.total, reason: refusal?.code, retryable: refusal?.retryable };
+    return { ok: false, amount: order.total, remaining, reason: refusal?.code, retryable: refusal?.retryable };
   }
 
   /** Revoke the grant — the very next spend is refused, fail-closed. Async so a remote

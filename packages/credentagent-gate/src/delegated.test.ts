@@ -52,6 +52,16 @@ describe("DelegatedGate — Stripe-grade facade over the delegated seams", () =>
     expect(res).toMatchObject({ ok: false, reason: "revoked" });
   });
 
+  it("draws down the cumulative cap: remaining falls per approved spend, and over-total is refused", async () => {
+    const grant = await grantFor(new DelegatedGate({ catalog }), 30, 40); // perOrder 30, total 40
+    const a = await grant.spend({ paymentId: "c1", item: "coffee" }); // $18
+    expect(a).toMatchObject({ ok: true, remaining: 22 }); // 40 − 18
+    const b = await grant.spend({ paymentId: "c2", item: "coffee" }); // $18 more
+    expect(b).toMatchObject({ ok: true, remaining: 4 }); // 40 − 36
+    const c = await grant.spend({ paymentId: "c3", item: "coffee" }); // would be 54 > 40
+    expect(c).toMatchObject({ ok: false, reason: "over-total", remaining: 4 }); // refused; headroom unchanged
+  });
+
   // ── Regressions for the two review-found bugs ────────────────────────────────
 
   it("PER-GRANT ISOLATION: a second grant on the SAME gate is not bypassed by the first's records", async () => {
