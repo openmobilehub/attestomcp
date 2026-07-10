@@ -94,6 +94,11 @@ export { MemoryRevocationStore } from "./ceremony/revocation.js";
 export type { RevocationStore } from "./ceremony/revocation.js";
 export { refusal } from "./ceremony/refusals.js";
 export type { Refusal, RefusalCode, RefusalEnforcer, RefusalRetryable } from "./ceremony/refusals.js";
+// The Stripe-grade facade over the delegated-draw seams: configure a gate with a priced
+// catalog, preApprove() once, spend()/revoke() — the ceremony (keys, signing, stores,
+// completeOrder) is bundled. Demo-fenced today; stable surface for the wallet-server increment.
+export { DelegatedGate, DelegatedGrant } from "./delegated.js";
+export type { DelegatedGateOptions, PreApproveOptions, Purchase, SpendResult, CatalogEntry } from "./delegated.js";
 export type {
   CeremonyOrder,
   CeremonyOrderLine,
