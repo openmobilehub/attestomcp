@@ -1,7 +1,7 @@
 # Project Status — CredentAgent
 
 _Single source of truth for what's done, what's next, and what's waiting on you._
-_Updated **2026-07-08** · rename shipped (#37): repos + packages live as CredentAgent · CI green · 247 tests pass._
+_Updated **2026-07-10** · rename shipped · 0.2.0 published · 005 seams + `DelegatedGate` facade (#41, awaiting merge) · DX gate merged (#43) · constitution 1.2.0 · 288 tests pass._
 
 > **How this file works.** Read it at the start of every working session and update it at the end. It is
 > decisions-first: "Decisions for you" (each a checkbox + recommendation), then In flight / next, a rolling
@@ -19,21 +19,20 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
       us; that window is the accepted risk.
 - [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
       automated PR review (the org-managed review also covers it).
-- [ ] **005 sequencing fork — decision memo ready to ratify (2026-07-03).** Ship merchant-side v0.1
-      (server-HMAC) first, or re-scope 005 to wallet-custody directly? Full analysis +
-      recommendation in [`sequencing-fork-memo.md`](specs/005-human-not-present/sequencing-fork-memo.md).
-      **Recommendation: Option B (wallet-custody directly), seams-first** — the spike (Runs 1–5, incl. a
-      green settlement) retired Option A's de-risking rationale, so A now only ships a merchant-side minting
-      rail the wallet model obsoletes. Build the shared gate seams first (envelope, completeOrder branch,
-      revocation store, typed refusals), then the wallet server (the one new backend). Not urgent to
-      *execute* (005 builds on 004 → publish → rename, deferred a week), but ratifying unblocks the 005 plan.
-- [ ] **Confirm the 005 Group-A decisions** (D1–D3, still *tentative* per the 2026-07-01 discussion) + the
-      Decision-13 constitution amendment — both gate `/speckit-plan` → `/speckit-implement` for 005.
+- [ ] **Approve + merge [PR #41](https://github.com/openmobilehub/credentagent/pull/41)** — 005 seams +
+      `DelegatedGate` facade. All checks green (DCO · build-test · claude-review), MERGEABLE, reconciled with
+      `main` (constitution folded to 1.2.0). Blocked only on your approving review.
+- [x] **005 Group-A (D1–D3) + sequencing (Option B) + Decision-13 — RATIFIED/DONE 2026-07-08** (see Done).
 
 ---
 
 ## 🔨 In flight / next
 
+- **005 NEXT INCREMENT (after #41 merges): the HTTP intent rail → the wallet server.** The seams + facade
+  land in #41; the next pieces turn them into the live "delegate on your phone → agent buys while you sleep"
+  demo: a `ceremony/intent/` rail (mirroring the `dcql`/`request`/`verify`/`page`/`routes` split), then the
+  wallet server (`credentagent-wallet`, Kotlin/JVM — the one new backend, likely a sibling repo). Wants a
+  short `/speckit-plan` pass. Both were explicitly out of #41's scope.
 - **AP2 v2 alignment — captured as [#39](https://github.com/openmobilehub/credentagent/issues/39) +
   [#40](https://github.com/openmobilehub/credentagent/issues/40)** (2026-07-08), prompted by AP2-team feedback
   (Yanhe Chen, Google, Discord 2026-06-02: v1-shaped mandate, unsigned amount, unverified issuer/deviceAuth).
@@ -119,6 +118,9 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
 
 | What | Where |
 | :-- | :-- |
+| **DX rubric is now a BINDING review gate + constitution 1.2.0** — `architecture-principles.md` gains Principle 12 ("the example IS the DX test") + the `DelegatedGate` golden before/after; CLAUDE.md DX section at the security-invariant tier; automated review checks it. Folds with the HNP amendment (II/III/VII) into constitution v1.2.0. | [#43](https://github.com/openmobilehub/credentagent/pull/43) |
+| **005 ratified + first increment built** — Group-A D1–D3 + sequencing **Option B** + Decision-13 (constitution amendment) all ratified 2026-07-08; the shared gate seams (`checkDraw`, `RevocationStore`, `completeOrder` draw branch, typed refusals) + the Stripe-grade **`DelegatedGate`** facade + a 36-line example, **288 tests** | [PR #41](https://github.com/openmobilehub/credentagent/pull/41) (awaiting merge) |
+| **HNP §12 spikes COMPLETE** — on-device (Runs 1–5, incl. a green settlement) + headless-auth (PASS: claude.ai routines carry the unattended leg; two setup gates found) | `specs/005-…` |
 | **Rename EXECUTED: AttestoMCP → CredentAgent (2026-07-08)** — library ([PR #38](https://github.com/openmobilehub/credentagent/pull/38), 132 files, verified live both custody modes), GitHub repos renamed (`credentagent`, `credentagent-website`), website content ([credentagent-website#8](https://github.com/openmobilehub/credentagent-website/pull/8), Pages live), #31 retrofitted via the committed rename script | [#37](https://github.com/openmobilehub/credentagent/issues/37) |
 | **Published `0.2.0` as `@openmobilehub/credentagent-*`** (release `v0.2.0-credentagent` → CI publish with provenance; `NPM_TOKEN` secret set). Full deprecation chain: `attesto-*` + `attestomcp-*` all point at `credentagent-*` | npm |
 | `AttestoMcp` → `AttestoMCP` brand-casing rename (class, options type, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` *(historical — pre-CredentAgent)* | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
@@ -134,3 +136,4 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
 - **Honesty:** `trust_level` stays `presence-only-demo` for the OpenID4VP rails (real wire crypto, no issuer
   trust anchor yet) — never sold as a real safety control. A pro trademark search is advised before publish.
 - **DCO** `git commit -s` on every commit; bypass tests must fail with their control removed.
+- **DX is Stripe-grade or it's a request-changes** (constitution 1.2.0 Principle I + `docs/reference/architecture-principles.md`) — the example IS the DX test: if it needs a plumbing block, fix the API, not the example. Same blocking tier as the security invariants.
