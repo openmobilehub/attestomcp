@@ -20,16 +20,16 @@ const grant = await gate.preApprove({
 console.log("\n🎫  Pre-approved: coffee at blue-bottle, up to $30/order. Off to sleep. 😴\n");
 
 // 3. Your agent spends against it. Each spend() returns { ok, amount, reason? } — no throwing.
-await show("1 coffee", { paymentId: "c1", item: "coffee" });
-await show("the same payment again", { paymentId: "c1", item: "coffee" });
-await show("3 coffees at once", { paymentId: "c2", item: "coffee", quantity: 3 });
-await show("coffee — different store", { paymentId: "c3", item: "coffee", merchant: "starbucks" });
-await show("wine — age-restricted", { paymentId: "c4", item: "wine" });
+await attempt("1 coffee", { paymentId: "c1", item: "coffee" });
+await attempt("the same payment again", { paymentId: "c1", item: "coffee" });
+await attempt("3 coffees at once", { paymentId: "c2", item: "coffee", quantity: 3 });
+await attempt("coffee — different store", { paymentId: "c3", item: "coffee", merchant: "starbucks" });
+await attempt("wine — age-restricted", { paymentId: "c4", item: "wine" });
 await grant.revoke(); // you change your mind, from your phone
-await show("1 coffee — after revoke", { paymentId: "c5", item: "coffee" });
+await attempt("1 coffee — after revoke", { paymentId: "c5", item: "coffee" });
 
-// Pretty-print one spend (demo output only — not part of the API).
-async function show(label, purchase) {
+// Attempt one purchase and print the verdict (demo output only — not part of the API).
+async function attempt(label, purchase) {
   const { ok, amount, reason } = await grant.spend(purchase);
   const verdict = ok ? "approved (no real money moved)" : `refused — ${reason}`;
   console.log(`  ${ok ? "✅" : "⛔"}  ${label.padEnd(24)} $${String(amount).padStart(2)}   ${verdict}`);
