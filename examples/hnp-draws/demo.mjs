@@ -1,111 +1,121 @@
-// See the HNP "doorman" (PR #41) in action — no web page needed.
+// CredentAgent — a pre-approval your AI agent can spend against, but can't abuse.
 //
-// Follow the pre-approval's JOURNEY between three parties:
-//   1. YOU (phone)        — pre-approve once, then hand the mandate to your agent.
-//   2. YOUR AGENT         — HOLDS the mandate; later signs draws and presents them.
-//   3. THE GATE (server)  — stores NO mandate; re-checks each presented draw and decides.
+// You approve ONCE on your phone ("reorder my coffee, up to $30 an order"). Your
+// agent then shops on its own while you sleep — but it never holds a blank cheque:
+// the gate re-checks EVERY purchase against your limits and refuses any that breaks
+// them, in plain English. Change your mind? Revoke, and the next one dies.
 //
-// Key idea: the gate never keeps the mandate. The agent carries it and re-presents it
-// (mandate + a freshly signed draw) on every purchase; the gate only keeps a small ledger
-// (what's been revoked / already drawn) and re-verifies from scratch each time.
-//   node examples/hnp-draws/demo.mjs
+// It's a demo grant — no real money moves. Run it:  node examples/hnp-draws/demo.mjs
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  THE WHOLE POINT — reads top-to-bottom like plain English. (Plumbing is below.)
+// ═════════════════════════════════════════════════════════════════════════════
+async function story() {
+  // 1 — Pre-approve once, in plain words. Then go to sleep. 😴
+  const agent = await preApprove("Reorder coffee from Blue Bottle — up to $30 an order.", {
+    store: BLUE_BOTTLE,
+    perOrder: 30, // never a single order over $30
+    perMonth: 100, //  ...and no more than $100 all month
+  });
+
+  // 2 — Your agent shops on its own. The gate re-checks each purchase:
+  await agent.buy("tx1", "1 coffee");                    // ✅  within your rules
+  await agent.buy("tx1", "1 coffee");                    // ⛔  the SAME charge, again
+  await agent.buy("tx2", "3 coffee");                    // ⛔  $54 — blows your $30 cap
+  await agent.buy("tx3", "1 coffee", { at: STARBUCKS }); // ⛔  a store you never approved
+  await agent.buy("tx4", "1 wine");                      // ⛔  age-restricted
+
+  // 3 — You change your mind and revoke from your phone.
+  agent.revoke();
+  await agent.buy("tx5", "1 coffee");                    // ⛔  too late — the grant is dead
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  PLUMBING — the real @openmobilehub/credentagent-gate API, wired once. Skip on a
+//  first read: the two helpers the story uses (preApprove + buy) are defined here.
+// ═════════════════════════════════════════════════════════════════════════════
 import {
-  sealIntent,
-  generateDelegate,
-  signDraw,
-  completeOrder,
-  MemoryRevocationStore,
-  MemoryVerificationStore,
+  sealIntent, generateDelegate, signDraw, completeOrder,
+  MemoryRevocationStore, MemoryVerificationStore,
 } from "@openmobilehub/credentagent-gate";
 
-// ── a tiny catalog: coffee $18, wine $20 (age-restricted) ────────────────────
-const PRODUCTS = { coffee: { price: 18 }, wine: { price: 20, minimumAge: 21 } };
+// A pretend shop. Merchant scope matches on a machine id (a domain), not a brand name.
+const BLUE_BOTTLE = "blue-bottle.example";
+const STARBUCKS = "starbucks.example";
+const PRICES = { coffee: { price: 18 }, wine: { price: 20, minimumAge: 21 } };
 const catalog = {
   createOrder(items, orderId) {
-    const lines = items.map((it) => {
-      const p = PRODUCTS[it.productId];
-      return { id: it.productId, name: it.productId, unitPrice: p.price, currency: "USD", quantity: it.quantity, lineTotal: p.price * it.quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}) };
+    const lines = items.map(({ productId, quantity }) => {
+      const p = PRICES[productId];
+      return { id: productId, name: productId, unitPrice: p.price, currency: "USD", quantity,
+        lineTotal: p.price * quantity, ...(p.minimumAge ? { minimumAge: p.minimumAge } : {}) };
     });
     const total = lines.reduce((s, l) => s + l.lineTotal, 0);
     return { id: orderId, lines, itemCount: items.length, subtotal: total, discount: 0, total, currency: "USD", createdAt: new Date().toISOString() };
   },
 };
-// Merchant scope uses CANONICAL MACHINE IDS (a domain here), never display names — the
-// scope check is an exact match, so this is an identifier, not the brand "Blue Bottle".
-const BLUE_BOTTLE = "blue-bottle.example";
-const STARBUCKS = "starbucks.example";
 
-// ═════════════════════════════════════════════════════════════════════════════
-// PARTY 3 — THE GATE (the merchant's server). It holds a LEDGER (revocation +
-// single-use + per-order state) and the catalog — but NOT the mandate itself.
-// ═════════════════════════════════════════════════════════════════════════════
+// The gate keeps only a small ledger (what's revoked / already drawn) + per-order state.
+// It does NOT store your pre-approval — the agent re-presents it on every single purchase.
+const ledger = new MemoryRevocationStore();
+const records = new Map();
 const gate = {
-  ledger: new MemoryRevocationStore(), // what's revoked / already drawn — the only state it keeps
-  ctx: null,
+  catalog,
+  revocation: ledger,
+  verificationStore: new MemoryVerificationStore(),
+  records: { read: (id) => records.get(id), write: (r) => records.set(r.orderId, r) },
 };
-gate.ctx = { catalog, verificationStore: new MemoryVerificationStore(), revocation: gate.ledger, records: new Map() };
-gate.ctx.records = { store: new Map(), read(id) { return this.store.get(id); }, write(r) { this.store.set(r.orderId, r); } };
-// The gate's one job: given a presented (mandate + signed draw), re-check and decide.
-gate.receiveDraw = async (order, amount, presented) =>
-  completeOrder({ order, mandateId: presented.draw.paymentMandateId, amount, currency: "USD", method: "delegated", gates: [{ gate: "draw", pass: true, detail: "" }], draw: presented }, gate.ctx);
 
-// ═════════════════════════════════════════════════════════════════════════════
-// STEP 1 — YOU pre-approve once (the phone ceremony, faked here), then HAND the
-// mandate to your agent. After this line you can go to sleep.
-// ═════════════════════════════════════════════════════════════════════════════
-const { privateKey, delegate } = await generateDelegate();
-const mandate = await sealIntent({
-  type: "credentagent.IntentBounds/v0",
-  naturalLanguageDescription: "Reorder Blue Bottle coffee, up to $40 total, this month",
-  merchants: [BLUE_BOTTLE],
-  currency: "USD",
-  maxAmount: 40,
-  totalAmount: 40,
-  stepUpOver: 500,
-  intentExpiry: "2026-07-31T23:59:59Z",
-  delegate,
-  mayPresent: [],
-  presence: "delegated-demo",
-  trust_level: "server-issued-demo",
-});
+// The gate returns terse codes; we humanize them so the output reads like the intent.
+const WHY = {
+  replay: "the same charge, twice",
+  "over-cap": "over your per-order cap",
+  "over-total": "over your monthly cap",
+  "out-of-scope": "a store you never approved",
+  "step-up": "age-restricted — needs you there in person",
+  revoked: "you revoked this grant",
+};
+const tally = { ok: 0, no: 0 };
+let orderSeq = 0;
 
-// PARTY 2 — YOUR AGENT. It now HOLDS the mandate (+ the delegate key to sign draws).
-// This is where the mandate "went": onto the agent, which carries it from here on.
-const agent = { holds: mandate, key: privateKey };
-
-console.log(`\n🎫  STEP 1 — YOU minted ONE pre-approval and handed it to your agent:`);
-console.log(`    "${mandate.naturalLanguageDescription}"`);
-console.log(`    id ${mandate.intentId.slice(0, 22)}…  ·  presence=${mandate.presence}  trust=${mandate.trust_level}`);
-console.log(`    → the AGENT now holds it. The GATE holds nothing yet. You can go to sleep 😴\n`);
-
-// The agent makes ONE draw: it signs a purchase referencing the mandate it holds, then
-// PRESENTS (its held mandate + the signed draw) to the gate. tx ids are per-purchase.
-let n = 0;
-async function agentBuys(label, { items, merchant, amount, pspTransactionId }) {
-  const order = catalog.createOrder(items, `ORD-${++n}`);
-  const signed = await signDraw(
-    { type: "credentagent.Draw/v0", intentId: agent.holds.intentId, paymentMandateId: `d${n}`, merchant, amount, currency: "USD", pspTransactionId },
-    agent.key,
-  );
-  // ↓↓↓ the mandate travels here — the agent PRESENTS { its mandate, this draw } to the gate.
-  const presented = { intent: agent.holds, draw: signed };
-  const res = await gate.receiveDraw(order, amount, presented);
-  const tag = `[${pspTransactionId}] ${label}`;
-  if (res.completed) console.log(`✅  ${tag}\n     → gate COMPLETED it (delegationId ${res.delegationId.slice(0, 16)}… · no real money moved)\n`);
-  else console.log(`⛔  ${tag}\n     → gate REFUSED it: ${res.refusals.map((r) => r.code).join(", ")}\n`);
+// preApprove — mint ONE grant (your intent + a delegate key), hand it to your agent.
+async function preApprove(sentence, { store, perOrder, perMonth }) {
+  const { privateKey, delegate } = await generateDelegate();
+  const mandate = await sealIntent({
+    type: "credentagent.IntentBounds/v0",
+    naturalLanguageDescription: sentence,
+    merchants: [store], currency: "USD",
+    maxAmount: perOrder, totalAmount: perMonth,
+    delegate, mayPresent: [],
+    presence: "delegated-demo", trust_level: "server-issued-demo",
+  });
+  console.log(`\n🎫  You pre-approved once:  “${sentence}”`);
+  console.log(`    Your agent now holds it; the gate stores nothing. Off to sleep. 😴\n`);
+  return {
+    buy: (tx, spec, opts) => buy(mandate, privateKey, tx, spec, opts),
+    revoke: () => { ledger.revoke(mandate.intentId); console.log(`\n🔴  You revoked the grant from your phone.\n`); },
+  };
 }
 
-console.log("─".repeat(72));
-console.log("STEP 2 — while you're away, the AGENT presents draws; the GATE re-checks each\n");
-await agentBuys("reorder 1 bag of coffee ($18) from blue-bottle", { items: [{ productId: "coffee", quantity: 1 }], merchant: BLUE_BOTTLE, amount: 18, pspTransactionId: "tx_1" });
-await agentBuys("re-submit tx_1 — the SAME transaction again (double-spend)", { items: [{ productId: "coffee", quantity: 1 }], merchant: BLUE_BOTTLE, amount: 18, pspTransactionId: "tx_1" });
-await agentBuys("a $54 cart — 3 bags — over the $40 cap", { items: [{ productId: "coffee", quantity: 3 }], merchant: BLUE_BOTTLE, amount: 54, pspTransactionId: "tx_2" });
-await agentBuys("a purchase at a DIFFERENT store (starbucks, not approved)", { items: [{ productId: "coffee", quantity: 1 }], merchant: STARBUCKS, amount: 18, pspTransactionId: "tx_3" });
-await agentBuys("buy WINE (age-restricted) on this coffee pre-approval", { items: [{ productId: "wine", quantity: 1 }], merchant: BLUE_BOTTLE, amount: 20, pspTransactionId: "tx_4" });
+// buy — your agent signs ONE draw against the grant it holds, presents { grant, draw }
+// to the gate, and we print the verdict. Amount is derived from the catalog, never trusted.
+async function buy(mandate, key, tx, spec, { at = mandate.merchants[0] } = {}) {
+  const [qty, product] = spec.split(" ");
+  const order = catalog.createOrder([{ productId: product, quantity: Number(qty) }], `ORD-${++orderSeq}`);
+  const draw = await signDraw(
+    { type: "credentagent.Draw/v0", intentId: mandate.intentId, paymentMandateId: tx,
+      merchant: at, amount: order.total, currency: "USD", pspTransactionId: tx },
+    key,
+  );
+  const res = await completeOrder(
+    { order, mandateId: tx, amount: order.total, currency: "USD", method: "delegated",
+      gates: [{ gate: "draw", pass: true, detail: "" }], draw: { intent: mandate, draw } },
+    gate,
+  );
+  const what = `${spec} @ ${at.split(".")[0]}`.padEnd(22);
+  if (res.completed) { tally.ok++; console.log(`  ✅  ${tx}  ${what}  approved — $${order.total} (no real money moved)`); }
+  else { tally.no++; const code = res.refusals[0].code; console.log(`  ⛔  ${tx}  ${what}  refused — ${WHY[code] ?? code}`); }
+}
 
-console.log("🔴  STEP 3 — you revoke the pre-approval from your phone (the gate's ledger flips)…\n");
-gate.ledger.revoke(agent.holds.intentId); // the agent still HOLDS the mandate — but the gate now refuses it
-await agentBuys("another coffee reorder, after revocation", { items: [{ productId: "coffee", quantity: 1 }], merchant: BLUE_BOTTLE, amount: 18, pspTransactionId: "tx_5" });
-console.log("─".repeat(72));
-console.log("\nThe agent kept holding the mandate the whole time — the GATE decided every draw.");
-console.log("1 legit draw through, 5 refused with reasons, 0 real money moved.\n");
+await story();
+console.log(`\n  ${tally.ok} purchase through · ${tally.no} refused, each with a reason · $0 real money moved.\n`);
