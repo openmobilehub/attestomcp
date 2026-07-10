@@ -271,8 +271,8 @@ export function canonical(value: unknown): string {
 
 /** intentId = "int_" + b64url(SHA-256(canonical(bounds \ intentId))) — no circularity,
  *  and it transitively commits to EVERY other field. */
-export async function contentAddressId(bounds: Record<string, unknown>): Promise<string> {
-  const { intentId: _omit, ...rest } = bounds;
+export async function contentAddressId(bounds: object): Promise<string> {
+  const { intentId: _omit, ...rest } = bounds as Record<string, unknown>;
   const digest = await subtle.digest("SHA-256", utf8.encode(canonical(rest)));
   return "int_" + b64url(digest);
 }
