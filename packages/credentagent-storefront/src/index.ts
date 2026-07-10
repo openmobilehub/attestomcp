@@ -31,6 +31,8 @@ export interface Product {
   description: string;
   /** Minimum age to purchase (e.g. 21). Absent = no age restriction. */
   minimumAge?: number;
+  /** Requires a prescription to purchase — a custom `appliesTo` flag (e.g. the prescription gate). */
+  requiresRx?: boolean;
 }
 
 export interface CartItemInput {
@@ -53,6 +55,9 @@ export interface PricedCartLine {
   minimumAge?: number;
   /** Product category, carried through for custom `.when()` / `appliesTo` predicates. */
   category?: string;
+  /** Prescription flag, re-derived onto the line so a custom `appliesTo` (e.g. the prescription
+   *  gate) sees the SAME field at manifest time and at the completion sweep — else it fails open. */
+  requiresRx?: boolean;
 }
 
 export interface PricedCart {
@@ -117,6 +122,7 @@ export function priceCart(items: CartItemInput[], catalog: Product[], opts: Pric
       // Re-derived onto the line so a priced Order is gate-ready (inv #2).
       ...(product.minimumAge != null ? { minimumAge: product.minimumAge } : {}),
       category: product.category,
+      ...(product.requiresRx ? { requiresRx: true } : {}),
     });
   }
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);

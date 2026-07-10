@@ -57,10 +57,10 @@ describe("priceCart", () => {
   // (and Product must carry it) for the documented example to be enforceable end-to-end.
   it("forwards requiresRx from the product onto the priced line (finding 2)", () => {
     const rxCatalog: Product[] = [
-      { id: "amoxicillin", name: "Amoxicillin 500mg", price: 30, currency: "USD", image: "", category: "Pharmacy", description: "Rx antibiotic", requiresRx: true } as unknown as Product,
+      { id: "amoxicillin", name: "Amoxicillin 500mg", price: 30, currency: "USD", image: "", category: "Pharmacy", description: "Rx antibiotic", requiresRx: true },
     ];
     const c = priceCart([{ productId: "amoxicillin", quantity: 1 }], rxCatalog);
-    expect((c.lines[0] as { requiresRx?: boolean }).requiresRx).toBe(true);
+    expect(c.lines[0].requiresRx).toBe(true);
   });
 });
 

@@ -145,6 +145,16 @@ export function defineCredential(c: {
   appliesTo?: (order: GateOrder) => boolean;
   ui: { label: string; action: string };
 }): Credential {
+  // A reserved id would be silently shadowed: resolveCred routes age/membership to the built-in
+  // ceremony and the completion sweep skips any reserved id (RESERVED_CREDENTIAL_IDS), so a custom
+  // `gate()` here would never run its own verify and would fail OPEN. Reject it at construction —
+  // fail-fast beats accepting a policy the seam cannot honor (Principle III / IV).
+  if (RESERVED_CREDENTIAL_IDS.has(c.id)) {
+    throw new Error(
+      `defineCredential: "${c.id}" is a reserved built-in credential id (age / membership / payment). ` +
+        `Choose a different id — a custom credential cannot reuse a built-in's id.`,
+    );
+  }
   return makeCredential({
     id: c.id,
     request: c.request,
