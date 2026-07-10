@@ -48,29 +48,45 @@ user's biometric — the wallet-server line.
 
 ## The HTTP surface (DX-first — the whole point above the plumbing)
 
-Mounted under `/credentagent/intent/*`. Two audiences, two shapes:
+Mounted under `/credentagent/intents/*` — the HTTP surface MIRRORS the `DelegatedGate`
+facade verb-for-verb so an agent that learned the SDK already knows the wire. The DX
+audit's timing point is load-bearing: the rail is unbuilt, so it costs nothing to pick
+the facade's nouns/verbs now and everything to retrofit them later. Two rules:
 
-**The human (browser) — delegate + manage:**
+1. **`intents` is the resource** (RESTful, plural). Never `/intent/grants` — that leaf
+   contradicts its own root. `grant` stays a prose synonym; it collides with OAuth
+   grants in the wallet-server system, so it is not a path or type name.
+2. **The verbs match the SDK**: `preApprove` mints, `spend` draws, `revoke` cancels —
+   NOT `delegate`/`redeem` (which fork the vocabulary and overload the delegate-key noun).
+
+**The human (browser) — pre-approve + manage:**
 ```
-GET  /credentagent/intent                      → the delegate page: shows the bounds, one live-ceremony approve
-POST /credentagent/intent/delegate             → mint the grant (instant-demo approval OR a real live-rail proof)
-GET  /credentagent/intent/grants?subject=…     → active grants (the audit surface)
-POST /credentagent/intent/revoke               → revoke one grant id (or a subject kill-switch)
+GET  /credentagent/intents/new                 → the pre-approval page: shows the bounds, one live-ceremony approve
+POST /credentagent/intents                      → mint a grant  (mirrors gate.preApprove(); create = POST the collection)
+GET  /credentagent/intents?subject=…            → active grants (the audit surface)
+POST /credentagent/intents/:id/revoke           → revoke one grant (or ?subject= kill-switch)
 ```
 
-**The agent (machine) — redeem, human NOT present:**
+**The agent (machine) — spend, human NOT present:**
 ```
-POST /credentagent/intent/redeem               → present a SIGNED draw; gate re-checks + completes
+POST /credentagent/intents/:id/spend            → present a SIGNED draw; gate re-checks + completes  (mirrors grant.spend())
 ```
 
-Redeem request/response — the same typed shapes as `DelegatedGate.spend`, so the mental model carries:
+Spend request/response — the SAME typed shapes as `DelegatedGate.spend`, so the mental
+model carries from SDK to wire unchanged. The `:id` in the path is the intent id; the
+gate re-loads the sealed bounds for it (grants store — see the open item below) and
+re-checks the draw:
 ```jsonc
-// → POST /credentagent/intent/redeem
-{ "intentId": "int_…", "draw": { /* delegate-signed Draw */ } }
+// → POST /credentagent/intents/int_…/spend
+{ "draw": { /* delegate-signed Draw */ } }
 // ← 200
 { "ok": true,  "amount": 18, "remaining": 82, "delegationId": "int_…" }
 { "ok": false, "amount": 54, "remaining": 82, "reason": "over-cap", "retryable": "terminal" }
 ```
+> **Field naming (deferred, breaking):** `delegationId` IS the intent id — the SDK and
+> wire should eventually rename it `intentId`, emitting both behind a deprecated alias.
+> Kept as `delegationId` here so the wire does not fork from the shipped facade before
+> that coordinated rename lands. See the DX punch-list.
 
 ## Mount integration (real glue, not zero-glue — FR-010)
 
@@ -88,15 +104,16 @@ first-class seam, mirroring how `verificationStore` is threaded:
 
 ```
 ceremony/intent/
-├── mint.ts     — compose + seal the bounds into an Intent Mandate (v0.1: server-composed), reusing sealIntent
-├── page.ts     — the delegate approve page + its JS (shows bounds; instant-demo + live-rail hooks)
-├── routes.ts   — register the 5 endpoints; redeem runs checkDraw + completeOrder; NEVER a rail-local completion
-└── intent.test.ts + redeem.test.ts — bypass tests, each red-when-removed
+├── mint.ts     — compose + seal the bounds into an Intent Mandate (v0.1: server-composed), reusing sealIntent  ✅ built
+├── redeem.ts   — redeemDraw() runs the draw THROUGH ctx.completion (never a rail-local completion) + running balance  ✅ built
+├── page.ts     — the pre-approval page + its JS (shows bounds; instant-demo + live-rail hooks)                 ⬜ deferred
+├── routes.ts   — register the endpoints above; /spend runs the draw through completeOrder; NEVER a rail-local completion  ⬜ deferred
+└── mint.test.ts + redeem.test.ts — bypass tests, each red-when-removed  ✅ built (11 tests green)
 ```
 
 ## Bypass tests (mandatory, load-bearing)
 
-Each control gets a test that fails when the control is deleted — submitted **directly to the redeem endpoint /
+Each control gets a test that fails when the control is deleted — submitted **directly to the /spend endpoint /
 completeOrder**, not only the happy path:
 - unsigned / tampered-signature draw → refused (`signature`)
 - over-cap / out-of-scope / expired / replay / consumed → refused with the distinct reason

@@ -3,37 +3,47 @@
 **Design**: [intent-rail-design.md](intent-rail-design.md). Branch `005-intent-rail` (off the seams). TDD;
 bypass tests red-when-removed; review-before-commit; draft PR (no merge).
 
-## Phase A — mount glue (the revocation seam)
-- [ ] **T101** `CeremonySeams` + `CeremonyContext` gain `revocation` (default `MemoryRevocationStore` behind the
-  `allowEphemeralKey` single-process fence; shared CAS store for real deploys). Thread through `mountCeremony`.
-  Test: mount without a revocation store on a single-process app → gets the memory default; the seam is on ctx.
+**Status (autonomous slice):** Phases A–C built + tested (11 bypass tests green, full gate suite 224/224,
+independently reviewed before commit). Phases D–E deferred for maintainer review (HTTP wiring returns `K_s`
+to the agent; the `IntentStore` seam is a prerequisite — see the DX punch-list #9).
 
-## Phase B — mint (compose + seal the grant)
-- [ ] **T102** `ceremony/intent/mint.ts`: `mintGrant(opts, ctx) -> { grant, delegateKey }` — compose the
-  v0.1 server bounds (merchant, perOrder, total, window?, honesty labels), `generateDelegate` + `sealIntent`.
-  Test: bounds content-address; honesty labels present (`delegated-demo` / `server-issued-demo`).
+## Phase A — mount glue (the revocation seam)  ✅ built
+- [x] **T101** `CeremonySeams` + `CeremonyContext` gain `revocation` (default `MemoryRevocationStore` behind the
+  single-process fence; shared CAS store for real deploys). Threaded through `mountCeremony`. Green.
 
-## Phase C — the agent-facing operations (the testable core)
-- [ ] **T103** `ceremony/intent/redeem.ts`: `redeemDraw({ intent, draw }, ctx) -> SpendResult` — fail-closed if
-  no revocation store → isRevoked → checkDraw (via the shared verifier) → run the draw through **the shared
-  completion seam** → typed result. Never a rail-local completion path (invariant 1 / choke point).
-- [ ] **T104** Revoke + list: `revokeGrant(intentId, ctx)`, `activeGrants(subject?, ctx)` over the store.
-- [ ] **T105** Bypass tests (`redeem.test.ts`) — each red-when-removed, submitted straight to the handler:
-  unsigned/tampered → `signature`; over-cap/out-of-scope/expired/replay/consumed distinct; age → always
-  `step-up`; revoked → refused; store-unreachable → fail-closed; TOCTOU; concurrent single-use → exactly one.
+## Phase B — mint (compose + seal the grant)  ✅ built
+- [x] **T102** `ceremony/intent/mint.ts`: `mintGrant(opts) -> { grant, delegateKey }` — composes the v0.1 server
+  bounds, `generateDelegate` + `sealIntent`. Tests: bounds content-address; honesty labels present
+  (`delegated-demo` / `server-issued-demo`) as **checked literals** (honesty-in-types, punch-list #4).
 
-## Phase D — HTTP surface
-- [ ] **T106** `ceremony/intent/routes.ts`: `registerIntentRail(app, ctx)` — the 5 endpoints wiring B/C;
-  redeem/revoke/grants as JSON; delegate page GET. Thread `?cart=` on every hop. Add to `RAILS[]` in mount.
-- [ ] **T107** `ceremony/intent/page.ts`: minimal delegate approve page (shows the bounds; instant-demo mint).
-- [ ] **T108** Route-level tests (supertest): redeem endpoint refuses a bad draw with the right JSON; a good
-  draw completes; revoke then redeem → refused.
+## Phase C — the agent-facing operations (the testable core)  ✅ built
+- [x] **T103** `ceremony/intent/redeem.ts`: `redeemDraw({ intent, order, draw }, ctx) -> RedeemResult` — runs the
+  draw through **the shared completion seam** (the authority: re-verifies signature/bounds, re-checks revocation
+  fail-closed/TOCTOU-safe, atomic single-use consume, suppresses settlement), adds only the running balance.
+  Never a rail-local completion path (invariant 1 / choke point).
+- [x] **T104a** Revoke: `revokeGrant(intentId, ctx)` + `revokeSubject(subject, ctx)` over the store.
+- [ ] **T104b** List: `activeGrants(subject?)` — **deferred**, not implementable over the current
+  `RevocationStore` (it tracks revoked-ids + committed draws, not the minted set). Needs the `IntentStore` seam
+  (punch-list #9). Flagged in `redeem.ts`.
+- [x] **T105** Bypass tests (`redeem.test.ts`, 9) — each red-when-removed, over a real `completeOrder`:
+  tampered → `signature`; over-cap / out-of-scope / replay / over-total distinct; age → always `step-up`;
+  revoked → refused; store-unreachable → fail-closed. (TOCTOU + concurrent single-use covered at the seam.)
 
-## Phase E — surface + docs
+## Phase D — HTTP surface  ⬜ deferred (maintainer review — key custody over HTTP)
+- [ ] **T106** `ceremony/intent/routes.ts`: `registerIntentRail(app, ctx)` — endpoints under
+  `/credentagent/intents/*` mirroring the SDK verbs: `POST /intents` (preApprove), `POST /intents/:id/spend`,
+  `POST /intents/:id/revoke`, `GET /intents` (needs `IntentStore`), `GET /intents/new`. Thread `?cart=` on every
+  hop. Add to `RAILS[]`. **Bake the `Idempotency-Key` contract in (punch-list #1) before this ships.**
+- [ ] **T107** `ceremony/intent/page.ts`: minimal pre-approval page (shows the bounds; instant-demo mint).
+- [ ] **T108** Route-level tests (supertest): `/spend` refuses a bad draw with the right JSON; a good draw
+  completes; revoke then spend → refused.
+
+## Phase E — surface + docs  ⬜ deferred
 - [ ] **T109** Export the agent-facing types/functions; gate README + `docs/reference/api.md` gain the rail;
   an `examples/hnp-rail/` snippet at the Stripe-grade bar. Full build + test green; review-before-commit; PR.
 
 **One open integration decision for the reviewed build** (flagged in the design): how the host binds
 `completeOrder`'s ctx so the rail's `ctx.revocation` and the completion's revocation are the SAME instance
-(single-use must be atomic across both). Options: mount injects a shared store into a mount-built completion,
-or the host wires it. Resolve with the maintainer — do not guess in the autonomous slice.
+(single-use must be atomic across both). The revocation seam (T101) is built with this contract documented on
+`RedeemContext`; the wiring itself (mount injects a shared store into a mount-built completion, or the host
+wires it) is the D-phase decision. Resolve with the maintainer — not guessed in the autonomous slice.
