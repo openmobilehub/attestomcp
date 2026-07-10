@@ -1,15 +1,19 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0 (2026-07-08)
-- Bump rationale: MINOR — materially expanded guidance on Principles II, III, VII for Human-Not-Present
-  (HNP) delegation (005 Decision 13, ratified by the maintainer 2026-07-08 per
-  specs/005-human-not-present/constitution-amendment-draft.md). No principle removed or redefined
-  incompatibly — every pre-existing rule remains true for human-present flows.
-- Amended: II (Context 1 may VERIFY a pre-existing delegation grant; redeeming is not a ceremony) ·
-  III (consolidation for HNP = one delegate ceremony + full server-side gate chain on every redemption) ·
-  VII (orthogonal `presence` axis; `trust_level` gains `server-issued-demo`, weaker than
-  `presence-only-demo`; `enforcedAt` gains `"intent"`).
-- Added sections: Terminology & Retained-Primitive Rulings (envelope vs grant; Mode-B gated() retained).
+- Version change: 1.1.0 → 1.2.0 (2026-07-10) — folds two independent, additive MINOR amendments developed
+  concurrently off 1.0.0 (the reconciliation both branches anticipated): the HNP amendment (via PR #41) and
+  the DX-gate amendment (via PR #43). No principle removed or redefined; every pre-existing rule holds.
+- HNP amendment (Principles II, III, VII — 005 Decision 13, ratified 2026-07-08): II (Context 1 may VERIFY a
+  pre-existing delegation grant; redeeming is not a ceremony) · III (HNP consolidation = one delegate ceremony
+  + full server-side gate chain on every redemption) · VII (orthogonal `presence` axis; `trust_level` gains
+  `server-issued-demo`, weaker than `presence-only-demo`; `enforcedAt` gains `"intent"`). Added: Terminology &
+  Retained-Primitive Rulings (envelope vs grant; Mode-B gated() retained).
+- DX-gate amendment (Principle I, ratified 2026-07-10): the example IS the acceptance test for ergonomics
+  ("fix the API, not the example"); the DX rubric (docs/reference/architecture-principles.md) is a BINDING
+  review lens at the Security-Requirements tier.
+- ── prior entry ──
+- Version change: (unratified template) → 1.0.0 — initial ratification (Principles I–VII; Security
+  Requirements; Development Workflow & Quality Gates; Governance).
 - Templates checked for alignment:
     ✅ plan-template.md — Constitution Check instantiated per-plan; 005's plan already reflects the
        amended II/III/VII rows
@@ -34,6 +38,13 @@ calls. Examples MUST show the MCP `inputSchema` inline so a handler's destructur
 every value's origin MUST be visible on the page — NO injected-callback grab-bags, hidden config
 variables, or mystery handler parameters. Rationale: a developer reads it once and understands it; the
 benchmark is `stripe-node`.
+
+**The example IS the acceptance test for the API's ergonomics:** write it first, from the caller's side, and
+if it needs a plumbing block (assembling stores/context, calling a low-level primitive by hand), fix the API —
+NOT the example (the `DelegatedGate` facade exists for exactly this reason). The concrete, binding review
+rubric — exemplars, the 12-principle checklist, and honest open gaps — lives in
+`docs/reference/architecture-principles.md`. It MUST be applied in every Constitution Check and PR review; a
+DX regression is **blocking, at the same tier as the Security Requirements**.
 
 ### II. The three execution contexts are sacred
 Every example and design decision MUST respect the split (spec §0): (1) the MCP tool handler runs ONCE when
@@ -137,4 +148,4 @@ Versioning (semantic): **MAJOR** — backward-incompatible principle removal or 
 new principle/section or materially expanded guidance; **PATCH** — clarifications and wording. Runtime
 guidance for agents lives in `CLAUDE.md` and `specs/001-attesto-sdk/spec.md`.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-25 | **Last Amended**: 2026-07-08
+**Version**: 1.2.0 | **Ratified**: 2026-06-25 | **Last Amended**: 2026-07-10
