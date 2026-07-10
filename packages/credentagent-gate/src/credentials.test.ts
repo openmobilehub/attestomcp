@@ -54,3 +54,24 @@ describe("CT5 — custom credential via defineCredential (appliesTo)", () => {
     expect(q.credentials[0].claims[0].intent_to_retain).toBe(false);
   });
 });
+
+// Regression (PR #42 review — finding 1). A custom credential whose id collides with a reserved
+// built-in (age/membership/payment) is silently shadowed: resolveCred routes it to the built-in
+// path and the completion sweep skips it (RESERVED_CREDENTIAL_IDS), so a declared hard `gate()`
+// becomes a fail-OPEN no-op (an order completes unproven) with no error at define/mount time.
+// The fix is to reject a reserved id at construction — fail-fast beats a policy the seam can't honor.
+describe("defineCredential rejects a reserved built-in id (finding 1 — fail-open guard)", () => {
+  for (const id of ["age", "membership", "payment"]) {
+    it(`throws on id="${id}" instead of silently shadowing the built-in`, () => {
+      expect(() =>
+        defineCredential({
+          id,
+          request: dcql({ docType: "org.example.x.1", claims: ["ok"] }),
+          verify: () => true,
+          effect: gate(),
+          ui: { label: "Custom", action: "Prove" },
+        }),
+      ).toThrow(/reserved/i);
+    });
+  }
+});
