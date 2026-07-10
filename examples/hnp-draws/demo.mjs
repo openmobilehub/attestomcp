@@ -17,7 +17,7 @@ async function story() {
   // catalog — the agent gives a quantity, never an amount.)
   await agent.buy({ charge: "c1", item: "coffee" });                   // ✅  within your rules
   await agent.buy({ charge: "c1", item: "coffee" });                   // ⛔  reused charge — the same payment, twice
-  await agent.buy({ charge: "c2", item: "coffee", quantity: 3 });      // ⛔  3 × $18 = $54, over your $30 cap
+  await agent.buy({ charge: "c2", item: "coffee", quantity: 3 });      // ⛔  3 coffees — over your $30 cap (the gate prices it)
   await agent.buy({ charge: "c3", item: "coffee", store: STARBUCKS }); // ⛔  a store you never approved
   await agent.buy({ charge: "c4", item: "wine" });                     // ⛔  age-restricted
   agent.revoke();                                                      // change your mind, from your phone
