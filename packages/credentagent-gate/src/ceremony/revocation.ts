@@ -3,14 +3,21 @@
 // kill-switch. Consulted FAIL-CLOSED at the completion seam: a store that errors
 // refuses the draw (revocation-unavailable), never allows it.
 //
-// `commitDraw` is the single-use / replay control and MUST be atomic
-// (check-and-append): `completeOrder`'s idempotency is keyed by ORDER id, so two
-// concurrent redemptions producing two order ids would otherwise both pass. The
-// in-memory default is single-instance only (Node's single-threaded event loop
-// makes the check-and-append atomic per tick); multi-instance deploys MUST inject
-// a shared CAS-capable store (Redis SETNX/Lua), mirroring VerificationStore.
+// `commitDraw` is the single-use/replay AND cumulative-cap control, and MUST be atomic:
+// it makes BOTH decisions (unused pspTransactionId AND committed-sum + amount ≤ totalAmount)
+// in one check-and-append. checkDraw's own `over-total` / `replay` gates are a fast pre-check,
+// but they read `priorDraws` and commit separately — so two concurrent draws with different
+// psp ids can both pass those gates and, without an atomic cap decision here, both commit and
+// breach the cumulative cap. Likewise `completeOrder`'s idempotency is keyed by ORDER id, so
+// two redemptions minting two order ids would both pass without the atomic per-intent consume.
+// The in-memory default is single-instance only (Node's single-threaded event loop makes the
+// check-and-append atomic per tick); multi-instance deploys MUST inject a shared CAS-capable
+// store (Redis Lua doing both checks), mirroring VerificationStore.
 import type { MaybePromise } from "./types.js";
 import type { CommittedDraw } from "./mandate.js";
+
+/** The atomic result: committed, or rejected for a specific, cap-or-single-use reason. */
+export type CommitResult = { ok: true } | { ok: false; reason: "consumed" | "over-total" };
 
 export interface RevocationStore {
   /** Is this grant (or its subject, via the kill-switch) revoked? */
@@ -18,12 +25,13 @@ export interface RevocationStore {
   revoke(intentId: string): MaybePromise<void>;
   /** Kill-switch: revoke every grant carrying this subject. */
   revokeSubject(subject: string): MaybePromise<void>;
-  /** Committed draws for the intent (feeds checkDraw's cumulative + replay gates). */
+  /** Committed draws for the intent (feeds checkDraw's cumulative + replay pre-checks). */
   priorDraws(intentId: string): MaybePromise<CommittedDraw[]>;
-  /** Atomically commit a draw iff its pspTransactionId is unused for this intent.
-   *  Returns false (commits nothing) on a duplicate — exactly one of N concurrent
-   *  draws with one pspTransactionId may win. */
-  commitDraw(intentId: string, draw: CommittedDraw): MaybePromise<boolean>;
+  /** Atomically commit a draw iff (a) its pspTransactionId is unused for this intent AND
+   *  (b) the already-committed sum + this amount does NOT exceed `totalAmount`. Both the
+   *  single-use and the cumulative-cap decision are made here so concurrent draws cannot
+   *  race past either. `consumed` = duplicate txid; `over-total` = would breach the cap. */
+  commitDraw(intentId: string, draw: CommittedDraw, opts: { totalAmount: number }): MaybePromise<CommitResult>;
 }
 
 export class MemoryRevocationStore implements RevocationStore {
@@ -43,11 +51,13 @@ export class MemoryRevocationStore implements RevocationStore {
   priorDraws(intentId: string): CommittedDraw[] {
     return this.draws.get(intentId) ?? [];
   }
-  commitDraw(intentId: string, draw: CommittedDraw): boolean {
+  commitDraw(intentId: string, draw: CommittedDraw, opts: { totalAmount: number }): CommitResult {
     const list = this.draws.get(intentId) ?? [];
-    if (list.some((d) => d.pspTransactionId === draw.pspTransactionId)) return false;
+    if (list.some((d) => d.pspTransactionId === draw.pspTransactionId)) return { ok: false, reason: "consumed" };
+    const spent = list.reduce((s, d) => s + d.amount, 0);
+    if (spent + draw.amount > opts.totalAmount) return { ok: false, reason: "over-total" };
     list.push(draw);
     this.draws.set(intentId, list);
-    return true;
+    return { ok: true };
   }
 }

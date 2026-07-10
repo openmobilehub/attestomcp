@@ -178,16 +178,22 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
       return { completed: false, reason: "draw", refusals: [refusal("over-cap", { pricedAt: repriced.total, amount: draw.amount })] };
     }
 
-    // Atomic single-use consume — keyed per intent (NOT per order: completeOrder's own
-    // idempotency is order-keyed, so two concurrent redemptions minting two order ids would
-    // both pass without this). Exactly one of N racing draws with one pspTransactionId wins.
-    let committed: boolean;
+    // Atomic consume — keyed per intent (NOT per order: completeOrder's own idempotency is
+    // order-keyed, so two concurrent redemptions minting two order ids would both pass without
+    // this). The store makes BOTH the single-use AND the cumulative-cap decision atomically, so
+    // concurrent draws with distinct pspTransactionIds cannot both slip past checkDraw's
+    // (non-atomic) over-total pre-check and breach the cap. `consumed` = replayed txid;
+    // `over-total` = would breach the cumulative cap at commit time.
+    let commit: import("./revocation.js").CommitResult;
     try {
-      committed = await store.commitDraw(intent.intentId, { amount: draw.amount, pspTransactionId: draw.pspTransactionId });
+      commit = await store.commitDraw(intent.intentId, { amount: draw.amount, pspTransactionId: draw.pspTransactionId }, { totalAmount: intent.totalAmount });
     } catch {
       return { completed: false, reason: "draw", refusals: [refusal("revocation-unavailable")] };
     }
-    if (!committed) return { completed: false, reason: "draw", refusals: [refusal("consumed", { pspTransactionId: draw.pspTransactionId })] };
+    if (!commit.ok) {
+      const detail = commit.reason === "consumed" ? { pspTransactionId: draw.pspTransactionId } : { total: intent.totalAmount };
+      return { completed: false, reason: "draw", refusals: [refusal(commit.reason, detail)] };
+    }
 
     // The draw is authorized. Record it with the delegationId audit link and SUPPRESS real
     // settlement (the honesty control — a demo-fenced draw never moves real value, spec FR-014).

@@ -342,10 +342,17 @@ export async function checkDraw(intent: IntentBounds, draw: Draw, ctx: CheckDraw
   const verify = ctx.verify ?? verifyDrawEs256;
   const refusals: Refusal[] = [];
 
+  // 0. INTEGRITY: the intent's own fields must hash to its intentId. Content-addressing is
+  // the whole trust root — without recomputing it here, `intentId` is a bare string label,
+  // and a caller could keep a victim's id while swapping `delegate` / `maxAmount` / `merchants`
+  // and signing the draw with the substituted key (every check below would then run against
+  // bounds the user never approved). Recompute and refuse on mismatch.
+  if ((await contentAddressId(intent)) !== intent.intentId) refusals.push(refusal("bounds-tampered"));
+
   // 1. binds to THIS intent
   if (draw.intentId !== intent.intentId) refusals.push(refusal("intent-mismatch"));
 
-  // 2. signed by the delegate key named in the (content-addressed) bounds
+  // 2. signed by the delegate key named in the (content-addressed, integrity-checked) bounds
   if (!(await verify(draw, intent.delegate))) refusals.push(refusal("signature"));
 
   // 3. currency

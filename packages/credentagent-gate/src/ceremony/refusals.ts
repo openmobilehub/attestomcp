@@ -13,6 +13,7 @@
  *  log precisely; surfaces MAY coarsen (e.g. `not-yet-valid`/`expired` → "expired"). */
 export type RefusalCode =
   | "signature" // draw not signed by the delegate key named in the bounds
+  | "bounds-tampered" // intent's fields don't hash to its own intentId — bounds mutated after sealing
   | "intent-mismatch" // draw binds to a different intentId
   | "currency-mismatch"
   | "over-cap" // per-draw cap (TS12 max_amount) — absolute ceiling, tolerance 0

@@ -139,6 +139,24 @@ describe("checkDraw — the deterministic gates", () => {
     expect(codes(await checkDraw(intent, other, { now: JUL15 }))).toEqual(["intent-mismatch"]);
   });
 
+  it("bounds-tampered: mutated bounds under a victim's intentId are refused (content-address integrity)", async () => {
+    const { intent, draw } = await fixture();
+    // The attack (Codex P1): keep the victim's intentId, but swap the delegate key to the
+    // attacker's, raise the cap, and change the merchant — then sign the draw with the
+    // ATTACKER's key. Signature/cap/scope all pass against the mutated bounds; only the
+    // content-address self-check catches that these bounds never produced this intentId.
+    const attacker = await generateDelegate();
+    // Inflate every bound so the forged draw would sail through signature/cap/scope/window —
+    // then the ONLY thing that can refuse it is the content-address integrity check.
+    const tampered = { ...intent, maxAmount: 100000, totalAmount: 100000, stepUpOver: 100000, merchants: ["attacker.example"], delegate: attacker.delegate };
+    const forged = await signDraw({ ...draw, merchant: "attacker.example", amount: 9999 }, attacker.privateKey);
+    const r = await checkDraw(tampered, forged, { now: JUL15 });
+    expect(r.ok).toBe(false);
+    // load-bearing: bounds-tampered is the SOLE refusal — remove the check and this forged
+    // draw (attacker's key, inflated cap + scope) would pass every other gate.
+    expect(codes(r)).toEqual(["bounds-tampered"]);
+  });
+
   it("multiple violations accumulate (typed refusal list, not first-fail)", async () => {
     const { intent, draw, privateKey } = await fixture();
     const bad = await signDraw({ ...draw, amount: 200, currency: "EUR", merchant: "sketchy.example" }, privateKey);

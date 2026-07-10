@@ -213,7 +213,7 @@ describe("completeOrder — HNP delegated-draw branch (bypass tests)", () => {
 
   it("FAIL-CLOSED: an unreachable revocation store refuses (never fail-open)", async () => {
     const h = harness();
-    const throwing = { isRevoked: () => { throw new Error("down"); }, revoke() {}, revokeSubject() {}, priorDraws() { return []; }, commitDraw() { return true; } };
+    const throwing = { isRevoked: () => { throw new Error("down"); }, revoke() {}, revokeSubject() {}, priorDraws() { return []; }, commitDraw() { return { ok: true } as const; } };
     const { intent, mkDraw } = await drawFixture();
     const res = await completeOrder(h.input([{ productId: "widget", quantity: 2 }], { amount: 20, draw: { intent, draw: await mkDraw(20) } }), { ...h.ctx, revocation: throwing });
     expect(res.completed).toBe(false);
@@ -252,6 +252,18 @@ describe("completeOrder — HNP delegated-draw branch (bypass tests)", () => {
     const res = await completeOrder(h.input([{ productId: "wine", quantity: 1 }], { amount: 20, draw: { intent, draw } }), { ...h.ctx, revocation: rev });
     expect(res.completed).toBe(false);
     expect(res.refusals?.[0]?.code).toBe("step-up"); // …a grant NEVER completes an age gate
+  });
+
+  it("ATOMIC cumulative cap: an over-total verdict from commitDraw refuses at the seam", async () => {
+    // The store makes the cap decision atomically (Codex P1). If commitDraw reports the
+    // committed sum would breach the cap, the seam must refuse — not complete.
+    const h = harness();
+    const { intent, mkDraw } = await drawFixture();
+    const capBreaching = { isRevoked: () => false, revoke() {}, revokeSubject() {}, priorDraws() { return []; }, commitDraw() { return { ok: false, reason: "over-total" } as const; } };
+    const res = await completeOrder(h.input([{ productId: "widget", quantity: 2 }], { amount: 20, draw: { intent, draw: await mkDraw(20) } }), { ...h.ctx, revocation: capBreaching });
+    expect(res.completed).toBe(false);
+    expect(res.refusals?.[0]?.code).toBe("over-total");
+    expect(h.records.size).toBe(0);
   });
 
   it("BYPASS: draw.amount ≠ catalog re-priced total is refused (grant never carries the price)", async () => {
