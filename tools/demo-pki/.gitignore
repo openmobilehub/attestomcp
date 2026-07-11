@@ -1,0 +1,5 @@
+# Private keys never leave this machine. gen-pki.sh writes them here.
+keys/
+*.csr
+# macOS cruft
+.DS_Store
