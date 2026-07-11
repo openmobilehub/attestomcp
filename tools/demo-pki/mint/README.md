@@ -48,3 +48,20 @@ certificate subjects. Every credential's `x5chain` should show
 
 **Unverified:** the `.mpzpass` files have NOT been imported into a real wallet.
 That is Diego's device step (#51).
+
+## Trust lists (VICAL / RICAL)
+
+`DemoTrustListTest.kt` builds `../out/utopia.vical` (wraps the demo IACA as a
+trusted issuer for the four doctypes) and `../out/utopia.rical` (wraps the demo
+reader cert as a trusted verifier), both COSE_Sign1-signed by the demo trust-list
+signer. Place it in the same jvmTest dir and run:
+
+```
+cd ~/tools/git/multipaz && ./gradlew :multipaz:jvmTest \
+  --tests "org.multipaz.mpzpass.DemoTrustListTest" --rerun-tasks
+```
+
+The test round-trip-parses both lists with signature verification on. It wraps
+the **same IACA** that signed the credentials, so run it AFTER mint and do NOT
+re-run `gen-pki.sh` in between (that would mint new keys and orphan the lists).
+
