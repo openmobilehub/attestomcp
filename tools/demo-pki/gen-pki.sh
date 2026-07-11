@@ -27,14 +27,28 @@ cd "$HERE"
 
 OPENSSL="${OPENSSL:-/opt/homebrew/opt/openssl@3/bin/openssl}"
 BASE_URL="${BASE_URL:-https://credentagent-demo.example}"
-READER_DNS="${READER_DNS:-credentagent-demo.example}"
+# READER_DNS is a LIST of hostnames baked into the reader cert's SubjectAltName —
+# the reader is trusted when the gate is served from ANY of them. Space- or
+# comma-separated. `localhost` covers local testing (gate at localhost:3007 via
+# `adb reverse`); add your hosted gate's STABLE host to avoid a later re-mint.
+# Changing this regenerates the reader cert → you must rebuild the RICAL and
+# re-import it on the phone (see README.md "Wire the verifier").
+READER_DNS="${READER_DNS:-localhost credentagent-demo.example}"
 
 # URIs referenced by openssl.cnf via ${ENV::...}. IssuerAltName + CRL endpoints.
 # They need not resolve for a demo; they must merely be present & well-formed.
 export IACA_IAN_URI="${BASE_URL}/pki/iaca"
 export IACA_CRL_URI="${BASE_URL}/pki/iaca.crl"
 export READER_CRL_URI="${BASE_URL}/pki/reader-root.crl"
-export READER_DNS
+
+# Build the OpenSSL SAN value ("DNS:a, DNS:b") from the READER_DNS list, so the
+# reader leaf can name multiple origins. openssl.cnf's [v3_reader] reads $READER_SAN.
+READER_SAN=""
+for _h in ${READER_DNS//,/ }; do
+  [ -n "$_h" ] || continue
+  READER_SAN="${READER_SAN:+$READER_SAN, }DNS:${_h}"
+done
+export READER_DNS READER_SAN
 
 CURVE="P-256"
 CA_DAYS=3650   # 10y for the self-signed roots (IACA / reader root / list signer)
@@ -54,7 +68,7 @@ rand_serial() { echo "0x$("$OPENSSL" rand -hex 16)"; }
 genkey() { "$OPENSSL" genpkey -algorithm EC -pkeyopt "ec_paramgen_curve:${CURVE}" -out "$1"; }
 
 echo ">> OpenSSL: $("$OPENSSL" version)"
-echo ">> BASE_URL=$BASE_URL  READER_DNS=$READER_DNS"
+echo ">> BASE_URL=$BASE_URL  reader SAN=[$READER_SAN]"
 
 # ---- 1. IACA root (self-signed) ----
 genkey keys/iaca-key.pem

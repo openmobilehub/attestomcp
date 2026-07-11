@@ -56,14 +56,16 @@ basicConstraints       = critical, CA:TRUE, pathlen:0
 crlDistributionPoints  = URI:${ENV::READER_CRL_URI}
 
 # ---- Reader leaf (issued by reader root) : generateReaderCertificate ----
-# EKU critical = mDL Reader Auth (1.0.18013.5.1.6). Optional dNSName SAN binds
-# the reader to its origin host. CRL copied from reader root.
+# EKU critical = mDL Reader Auth (1.0.18013.5.1.6). dNSName SAN(s) bind the reader
+# to its origin host(s): gen-pki.sh builds $READER_SAN ("DNS:a, DNS:b") from the
+# READER_DNS list, so one reader cert can serve localhost + a hosted origin. The
+# wallet trusts it when the request's origin matches ANY listed name. CRL from root.
 [ v3_reader ]
 subjectKeyIdentifier   = hash
 authorityKeyIdentifier = keyid:always
 keyUsage               = critical, digitalSignature
 extendedKeyUsage       = critical, 1.0.18013.5.1.6
-subjectAltName         = DNS:${ENV::READER_DNS}
+subjectAltName         = ${ENV::READER_SAN}
 crlDistributionPoints  = URI:${ENV::READER_CRL_URI}
 
 # ---- VICAL/RICAL list signer (self-signed leaf identity) ----
