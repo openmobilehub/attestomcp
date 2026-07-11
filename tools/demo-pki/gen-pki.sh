@@ -39,7 +39,13 @@ export READER_DNS
 CURVE="P-256"
 CA_DAYS=3650   # 10y for the self-signed roots (IACA / reader root / list signer)
 DS_DAYS=455    # ISO 18013-5 Table B.3 caps the DS validity at 457 days; stay under it
+BACKDATE_DAYS=2  # notBefore backdated so an MSO "signed" ~now-1d stays inside DS validity
 SUBJ_BASE="/C=US/ST=CA/O=Utopia (Demo)"
+
+# Explicit notBefore/notAfter (UTC, [CC]YYMMDDHHMMSSZ). macOS `date -v` syntax.
+NB="$(date -u -v-${BACKDATE_DAYS}d +%Y%m%d%H%M%SZ)"
+CA_NA="$(date -u -v+${CA_DAYS}d +%Y%m%d%H%M%SZ)"
+DS_NA="$(date -u -v+${DS_DAYS}d +%Y%m%d%H%M%SZ)"
 
 mkdir -p keys certs
 chmod 700 keys
@@ -52,7 +58,7 @@ echo ">> BASE_URL=$BASE_URL  READER_DNS=$READER_DNS"
 
 # ---- 1. IACA root (self-signed) ----
 genkey keys/iaca-key.pem
-"$OPENSSL" req -new -x509 -key keys/iaca-key.pem -sha256 -days "$CA_DAYS" \
+"$OPENSSL" req -new -x509 -key keys/iaca-key.pem -sha256 -not_before "$NB" -not_after "$CA_NA" \
   -config openssl.cnf -extensions v3_iaca \
   -subj "${SUBJ_BASE}/CN=Utopia Demo IACA" \
   -out certs/iaca-cert.pem
@@ -62,7 +68,7 @@ echo ">> IACA root        -> certs/iaca-cert.pem"
 genkey keys/ds-key.pem
 "$OPENSSL" req -new -key keys/ds-key.pem \
   -subj "${SUBJ_BASE}/CN=Utopia Demo Document Signer" -out keys/ds.csr
-"$OPENSSL" x509 -req -in keys/ds.csr -sha256 -days "$DS_DAYS" \
+"$OPENSSL" x509 -req -in keys/ds.csr -sha256 -not_before "$NB" -not_after "$DS_NA" \
   -CA certs/iaca-cert.pem -CAkey keys/iaca-key.pem -set_serial "$(rand_serial)" \
   -extfile openssl.cnf -extensions v3_ds \
   -out certs/ds-cert.pem
@@ -71,7 +77,7 @@ echo ">> Document Signer  -> certs/ds-cert.pem (${DS_DAYS}d)"
 
 # ---- 3. Reader root (self-signed) ----
 genkey keys/reader-root-key.pem
-"$OPENSSL" req -new -x509 -key keys/reader-root-key.pem -sha256 -days "$CA_DAYS" \
+"$OPENSSL" req -new -x509 -key keys/reader-root-key.pem -sha256 -not_before "$NB" -not_after "$CA_NA" \
   -config openssl.cnf -extensions v3_reader_root \
   -subj "${SUBJ_BASE}/CN=Utopia Demo Reader Root" \
   -out certs/reader-root-cert.pem
@@ -81,7 +87,7 @@ echo ">> Reader root      -> certs/reader-root-cert.pem"
 genkey keys/reader-key.pem
 "$OPENSSL" req -new -key keys/reader-key.pem \
   -subj "${SUBJ_BASE}/CN=Utopia Demo Reader" -out keys/reader.csr
-"$OPENSSL" x509 -req -in keys/reader.csr -sha256 -days "$DS_DAYS" \
+"$OPENSSL" x509 -req -in keys/reader.csr -sha256 -not_before "$NB" -not_after "$DS_NA" \
   -CA certs/reader-root-cert.pem -CAkey keys/reader-root-key.pem -set_serial "$(rand_serial)" \
   -extfile openssl.cnf -extensions v3_reader \
   -out certs/reader-cert.pem
@@ -90,7 +96,7 @@ echo ">> Reader leaf      -> certs/reader-cert.pem (${DS_DAYS}d)"
 
 # ---- 5. Trust-list signer (self-signed) ----
 genkey keys/list-signer-key.pem
-"$OPENSSL" req -new -x509 -key keys/list-signer-key.pem -sha256 -days "$CA_DAYS" \
+"$OPENSSL" req -new -x509 -key keys/list-signer-key.pem -sha256 -not_before "$NB" -not_after "$CA_NA" \
   -config openssl.cnf -extensions v3_list_signer \
   -subj "${SUBJ_BASE}/CN=Utopia Demo Trust List Signer" \
   -out certs/list-signer-cert.pem

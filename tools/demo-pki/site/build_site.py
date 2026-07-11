@@ -46,11 +46,14 @@ CREDS = [
          desc="ISO mobile driving licence. Carries age_over_21=true and "
               "age_over_65=true, so one card satisfies both age gates."),
     dict(title="Digital Payment", art="card-payment.png", file="payment.mpzpass",
-         doctype="org.example.payment.1",
-         desc="Payment credential for the amount-bound payment gate."),
+         doctype="org.multipaz.payment.sca.1",
+         desc="Payment instrument for the amount-bound dc-payment gate. Carries "
+              "the issuer-signed instrument claims; the amount is bound live at "
+              "ceremony time by the wallet's device signature."),
     dict(title="Membership", art="card-membership.png", file="membership.mpzpass",
-         doctype="org.example.membership.1",
-         desc="Utopia loyalty membership for the membership gate."),
+         doctype="org.multipaz.loyalty.1",
+         desc="Utopia loyalty membership (membership_number + tier) for the "
+              "membership gate."),
     dict(title="Professional License", art="card-professional.png",
          file="professional-license.mpzpass", doctype="org.example.license.1",
          desc="Licensed-trade credential (license_active=true)."),
