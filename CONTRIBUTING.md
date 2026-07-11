@@ -130,6 +130,27 @@ gate as a real safety control.** Issuer-verified trust (`trust_level: "issuer-ve
 v0.2 line — if a change relies on cryptographic mdoc trust that doesn't exist yet, it must be fenced
 behind an explicit demo-only mode and labeled as such.
 
+## Fix it or flag it — never leave it unremarked
+
+If you notice something broken while working — even if it's outside your change, not your ticket,
+or code you didn't write — **do not scroll past it.** Silently ignoring a defect you saw is the one
+thing we don't do here.
+
+- **Small and safe → fix it** in your PR (a one-line guard, an obvious typo, a mislabeled string).
+- **Bigger, risky, or out of scope → open an issue** (or leave a review comment) that names it. The
+  bar for surfacing is deliberately low: a one-sentence "spotted this, out of scope, filed #NN" is
+  enough. The point is that nothing broken goes **unrecorded**.
+
+The guardrail is to **keep PRs focused** — don't balloon your change to chase everything you find.
+The issue tracker is the pressure valve: fix the small thing inline, spin the rest into its own issue.
+The two are not in tension.
+
+You mostly find these by **actually running the thing** — driving the flow end-to-end, not just
+watching the tests go green. A hardcoded stepper or a page that doesn't refresh is invisible in a
+unit test and obvious the moment you use the feature. So run what you ship (see the bypass-tests and
+[DX rubric](docs/reference/architecture-principles.md) sections) — and when running it turns up
+something off, fix it or flag it.
+
 ## Checklist before you open a PR
 
 - [ ] `npm run build` passes (both packages build, typecheck, server builds).
@@ -137,5 +158,6 @@ behind an explicit demo-only mode and labeled as such.
 - [ ] Every commit is signed off (`git commit -s`); the DCO check will be green.
 - [ ] You pushed a branch to this repo (not a fork) so the automated review can run.
 - [ ] No presence-only gate is presented as a real safety control.
+- [ ] Anything broken you noticed along the way is fixed or filed — never silently ignored.
 
 Apache-2.0 · part of [Open Mobile Hub](https://openmobilehub.org) (Linux Foundation).
