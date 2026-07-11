@@ -173,8 +173,9 @@ Reminder: the gate's serving origin must match a name in the reader SAN (step 1)
 
 Open the deployed site on the phone → import the **VICAL + RICAL first** (so cards
 land already-trusted) → then open each **`.mpzpass`**. Then run a ceremony and
-confirm **no red trust warning**. Detailed device steps + the adb fallback are in
-**#51** and the wallet-import runbook.
+confirm **no red trust warning**. Detailed device steps + the adb fallback live in
+the guide: [`docs/guides/testing-on-device.md`](../../docs/guides/testing-on-device.md)
+(and the verifier-warning caveat is #51).
 
 **Done when:** a ceremony (e.g. the `age_over_65` senior-discount flow) completes
 against the gate with no red issuer *or* verifier warning.

@@ -134,6 +134,10 @@ Open the checkout link to complete the gates end-to-end on the `/credentagent/*`
 prove age → present membership → authorize payment — recorded so the agent's
 `get-order-status` poll reflects the (discounted) confirmation.
 
+> **Completing on a real phone?** You need demo credentials the wallet trusts. See
+> **[Trusted demo credentials](../guides/trusted-demo-credentials.md)** to load them, then
+> **[Testing on a device](../guides/testing-on-device.md)** to run the ceremony over `adb`.
+
 ## How the flow is split (the three execution contexts)
 
 The split is load-bearing — CredentAgent enforces it, and conflating the contexts is the
@@ -211,6 +215,8 @@ in the reference repo (`npm run build:packages` first, then `node examples/<file
 
 ## Learn more
 
+- **[Guides](../guides/)** — hands-on how-tos: load [demo credentials a real wallet
+  trusts](../guides/trusted-demo-credentials.md) and [test on a device](../guides/testing-on-device.md).
 - Package READMEs:
   [`@openmobilehub/credentagent-gate`](https://www.npmjs.com/package/@openmobilehub/credentagent-gate) ·
   [`@openmobilehub/credentagent-storefront`](https://www.npmjs.com/package/@openmobilehub/credentagent-storefront)

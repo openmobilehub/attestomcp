@@ -132,6 +132,11 @@ The three rails `mount()` serves differ in how much crypto is real today:
 The OpenID4VP plumbing is scaffolded; cryptographic mdoc trust is the integration step, not new
 cryptography. The mandate is AP2-shaped and dev-signed (integrity hash), not key-signed.
 
+> **Testing on a real phone?** A self-generated demo PKI can make the wallet *trust* these
+> credentials (clearing the "untrusted issuer" warning) — the concrete
+> `presence-only-demo → issuer-verified (demo PKI)` step, still demo trust. See
+> **[Trusted demo credentials](../../docs/guides/trusted-demo-credentials.md)**.
+
 > **A refused tool call is a protocol, not a wall.** For a page-less tool, `gated()` returns a typed
 > **`verification_required`** envelope the agent *drives* (which credential, a per-order approve link,
 > the tool to poll) instead of completing — the retained blocking **Mode B** primitive.
