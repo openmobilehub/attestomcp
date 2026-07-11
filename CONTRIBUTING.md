@@ -145,16 +145,20 @@ The guardrail is to **keep PRs focused** — don't balloon your change to chase 
 The issue tracker is the pressure valve: fix the small thing inline, spin the rest into its own issue.
 The two are not in tension.
 
-You mostly find these by **actually running the thing** — driving the flow end-to-end, not just
-watching the tests go green. A hardcoded stepper or a page that doesn't refresh is invisible in a
-unit test and obvious the moment you use the feature. So run what you ship (see the bypass-tests and
-[DX rubric](docs/reference/architecture-principles.md) sections) — and when running it turns up
-something off, fix it or flag it.
+You mostly find these by **actually running the thing** — and *running it* means **reading every
+screen critically**, not just confirming the happy path finishes. A stepper that claims steps the
+buyer never did, or a page that stays "Payment locked" for an order the server already marked paid,
+is invisible in a unit test, sails through a "does it complete?" click-through, and is obvious the
+moment you *look* at what the UI is saying. "Did you test it visually? yes" is not the bar —
+**does every screen tell the truth?** is. So run what you ship (see the bypass-tests and
+[DX rubric](docs/reference/architecture-principles.md) sections), read what it shows, and when it
+turns up something off, fix it or flag it.
 
 ## Checklist before you open a PR
 
 - [ ] `npm run build` passes (both packages build, typecheck, server builds).
 - [ ] `npm run test` passes, and new tests cover the security-critical / bypass paths.
+- [ ] For any UI/flow change: you drove the real UI end-to-end and confirmed **every screen tells the truth** — not just that the happy path completes (no stale/locked page for a paid order, no step or label claiming something that didn't happen).
 - [ ] Every commit is signed off (`git commit -s`); the DCO check will be green.
 - [ ] You pushed a branch to this repo (not a fork) so the automated review can run.
 - [ ] No presence-only gate is presented as a real safety control.
