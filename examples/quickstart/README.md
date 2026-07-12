@@ -78,6 +78,7 @@ Optional persistence: attach Upstash/Vercel KV and set `KV_REST_API_URL` + `KV_R
 | c | headphones checkout → no `age` entry |
 | d | direct POST of a gated order (no ceremony) → **403** |
 | e | tampered cart mandate → refused; the untampered one completes |
+| f | paying an age-gated order without age proof → refused (`reason: "age"`) |
 
 ## Honest status
 

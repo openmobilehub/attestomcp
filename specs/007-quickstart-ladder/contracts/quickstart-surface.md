@@ -21,6 +21,7 @@ form of this contract; a change that breaks a row is a breaking change to the de
 | c | headphones checkout → no `age` entry | predicate stuck-on (over-gating) |
 | d | unverified completion POST → 403/refused | server-side enforcement removed (Security Req. 1) |
 | e | tampered cart mandate → refused | signature check removed (Security Req. 2 / spec 004) |
+| f | payment-only verify of an age-gated order → refused, `reason: "age"` | cross-gate enforcement removed from the payment rail (Security Req. 1) |
 
 Runs three ways with the same script: CI (`npm run smoke`), local dev, and `SMOKE_URL=<prod>` for
 the FR-009.2 cutover gate.

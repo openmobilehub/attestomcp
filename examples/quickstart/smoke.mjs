@@ -72,20 +72,29 @@ try {
   ok("(c) headphones checkout has no age requirement",
     !(ungated.requires ?? []).some((e) => e.credential === "age"), JSON.stringify(ungated.requires));
 
-  // (d) unverified completion of a GATED order → refused server-side (403)
-  const d = await placeOrder(gated.orderId, gated.cart);
-  ok("(d) unverified place-order of gated order → 403", d.status === 403, `got ${d.status}`);
-  ok("(d′) gated order stays incomplete", (await completed(gated.orderId)) === false);
-
-  // (e) the payment rail: tampered cart mandate refused, untampered completes.
-  // (place-order is the wrong door here — every quickstart order requires payment, so (d)
-  // proves that path always 403s; stateless completion happens on the dc-payment rail.)
   const CLAIMS = { issuer_name: "Demo Bank", payment_instrument_id: "pi-SMOKE", holder_name: "Smoke Buyer", expiry_date: "2032-09-01" };
   const railVerify = (order, cartB64) =>
     fetch(`${base}/credentagent/dc-payment/verify`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ order, cartMandate: JSON.parse(Buffer.from(cartB64, "base64url").toString()), claims: CLAIMS }),
     }).then((r) => r.json());
+
+  // (d) unverified completion of a GATED order → refused server-side (403)
+  const d = await placeOrder(gated.orderId, gated.cart);
+  ok("(d) unverified place-order of gated order → 403", d.status === 403, `got ${d.status}`);
+  ok("(d′) gated order stays incomplete", (await completed(gated.orderId)) === false);
+
+  // (f) enforce on EVERY completion path: paying for an age-gated order whose age is
+  // still unverified must be refused by the payment rail itself, with the typed reason.
+  if (gated.cart) {
+    const f = await railVerify(gated.orderId, gated.cart);
+    ok("(f) payment-only verify of age-gated order → refused (reason: age)",
+      f.completed !== true && f.reason === "age" && (await completed(gated.orderId)) === false, JSON.stringify(f));
+  }
+
+  // (e) the payment rail: tampered cart mandate refused, untampered completes.
+  // (place-order is the wrong door here — every quickstart order requires payment, so (d)
+  // proves that path always 403s; stateless completion happens on the dc-payment rail.)
   const victim = await checkout([{ productId: "aurora-headphones", quantity: 1 }]);
   const attacked = await checkout([{ productId: "aurora-headphones", quantity: 1 }]);
   if (victim.cart) {
