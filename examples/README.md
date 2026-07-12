@@ -1,5 +1,12 @@
 # CredentAgent examples
 
+## [`quickstart/`](./quickstart/) — start here: the 5-minute ladder
+
+The standalone quickstart: try the **hosted demo** (paste one URL into Claude / ChatGPT /
+Goose), run it locally against the **published** packages (`npm i && npm start` — no monorepo
+build), or **Deploy-to-Vercel** your own copy in one click. Ships its own security smoke
+(`npm run smoke`). See [`quickstart/README.md`](./quickstart/README.md).
+
 ## `storefront.mjs` — a credential-gated storefront in ~8 lines
 
 A minimal, runnable agentic storefront you add to **Goose** (or any MCP host) as an HTTP connector and
@@ -25,7 +32,7 @@ const { url } = await store.listen(3005);          // → http://localhost:3005/
 
 ```bash
 npm install
-npm run build:packages          # build the two @openmobilehub/credentagent-* packages
+npm run build                   # build the two @openmobilehub/credentagent-* packages
 node examples/storefront.mjs     # → http://localhost:3005/mcp
 ```
 
@@ -85,7 +92,7 @@ store.gate((order) => credentagent.requirements(order, [
 ### Run it
 
 ```bash
-npm run build:packages              # build the two @openmobilehub/credentagent-* packages
+npm run build                       # build the two @openmobilehub/credentagent-* packages
 node examples/custom-credential.mjs  # → http://localhost:3006/mcp
 ```
 
@@ -129,7 +136,7 @@ const store = createStorefront({ settle });   // ← the only new line vs storef
 ### Run it
 
 ```bash
-npm run build:packages
+npm run build
 node examples/with-x402-settlement.mjs   # → http://localhost:3007/mcp
 ```
 

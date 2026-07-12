@@ -11,7 +11,7 @@ security-bearing — a smoke that would still pass with the control removed is a
 
 ## Phase 1: Setup
 
-- [ ] T001 Scaffold `examples/quickstart/package.json` — `"type": "module"`, scripts `start`
+- [X] T001 Scaffold `examples/quickstart/package.json` — `"type": "module"`, scripts `start`
       (`node server.mjs`) and `smoke` (`node smoke.mjs`), dependencies
       `@openmobilehub/credentagent-gate@^0.2` + `@openmobilehub/credentagent-storefront@^0.2`
       (registry only — FR-001), devDependency `@modelcontextprotocol/sdk`; run `npm i` inside the
@@ -19,7 +19,7 @@ security-bearing — a smoke that would still pass with the control removed is a
 
 ## Phase 2: Foundational (blocking all stories)
 
-- [ ] T002 Write the hero file `examples/quickstart/server.mjs`: deployed-mode split
+- [X] T002 Write the hero file `examples/quickstart/server.mjs`: deployed-mode split
       (`!!process.env.VERCEL`; fail-fast without `GATE_SECRET` incl. the
       `openssl rand -hex 32` recipe — R1/US3.3), `createStorefront({ signingKey, storage })`
       with env-conditional `redisStorage` (R5, ≤3 lines), `new CredentAgent({ statelessOrders:
@@ -27,7 +27,7 @@ security-bearing — a smoke that would still pass with the control removed is a
       `mount(store.app)`, the FR-002 policy array (age→membership→payment, payment last —
       Constitution IV), `export const app`, `listen(PORT ?? 3005)` only when local. Budget ≤ ~35
       lines.
-- [ ] T003 [P] Add `examples/quickstart/api/index.mjs` (2 lines: import `app`, default-export)
+- [X] T003 [P] Add `examples/quickstart/api/index.mjs` (2 lines: import `app`, default-export)
       and `examples/quickstart/vercel.json` (rewrite `/(.*)` → `/api`, `maxDuration: 60`) per R4.
 
 **Checkpoint**: `cd examples/quickstart && npm i && npm start` boots from a clean clone with no
@@ -39,17 +39,17 @@ repo-root build (US2 acceptance 1).
 **Independent test**: `npm run smoke` green locally; whiskey vs headphones script observable in an
 MCP host.
 
-- [ ] T004 [US1] Write `examples/quickstart/smoke.mjs` — spawns `server.mjs` (or targets
+- [X] T004 [US1] Write `examples/quickstart/smoke.mjs` — spawns `server.mjs` (or targets
       `SMOKE_URL` when set — R3) and asserts contract rows **a–c**: MCP `initialize` via SDK
       `Client` + `StreamableHTTPClientTransport` (pattern: `examples/_smoke.mjs`); whiskey
       checkout → `requires` contains `age` (`required: true`, `minAge: 21`, payment last);
       headphones checkout → no `age` entry. Non-zero exit on any failure.
-- [ ] T005 [US1] Extend `examples/quickstart/smoke.mjs` with security rows **d–e**: unverified
+- [X] T005 [US1] Extend `examples/quickstart/smoke.mjs` with security rows **d–e**: unverified
       completion POST → 403/refused (Security Req. 1); tampered cart mandate (mutate a line,
       replay — technique from `examples/stateless-orders/demo.sh`, R6) → refused. Verify each
       assertion FAILS when its control is bypassed (e.g. run once against a build with the gate
       policy emptied) before trusting it.
-- [ ] T006 [US1] Manual pass per `quickstart.md` rung-2 script: add `http://localhost:3005/mcp`
+- [X] T006 [US1] Manual pass per `quickstart.md` rung-2 script: add `http://localhost:3005/mcp`
       to Claude Code or Goose; whiskey surfaces age-21+, headphones doesn't (SC-004); hero file
       line-count ≤ ~35 (SC-006).
 
@@ -61,18 +61,18 @@ MCP host.
 **Independent test**: `quickstart-smoke` CI job green on a runner that never runs the monorepo
 build.
 
-- [ ] T007 [P] [US2] Write `examples/quickstart/README.md` — the three-rung ladder with time
+- [X] T007 [P] [US2] Write `examples/quickstart/README.md` — the three-rung ladder with time
       budgets, per-host connect instructions (Claude custom connector, Claude Code
       `claude mcp add --transport http shop <url>`, ChatGPT, Goose Streamable-HTTP), the
       whiskey-vs-headphones script, the **honesty fencing** (presence-only-demo — binding,
       Constitution VII), and "going further" links (`custom-credential.mjs`,
       `storefront-redis.mjs` + tunnel, `with-x402-settlement.mjs`) per
       `contracts/quickstart-surface.md` copy constraints.
-- [ ] T008 [P] [US2] Add the `quickstart-smoke` job to `.github/workflows/ci.yml` — independent
+- [X] T008 [P] [US2] Add the `quickstart-smoke` job to `.github/workflows/ci.yml` — independent
       of `build-test`: checkout → setup-node 22 (cache keyed on
       `examples/quickstart/package-lock.json`) → `cd examples/quickstart && npm ci && npm run
       smoke`.
-- [ ] T009 [P] [US2] Root `README.md`: quickstart section leads with rung 1 (hosted URL) and
+- [X] T009 [P] [US2] Root `README.md`: quickstart section leads with rung 1 (hosted URL) and
       links `examples/quickstart/README.md`; fix stale `npm run build:packages` → `npm run
       build` in `examples/README.md` and add the quickstart to its index (FR-008).
 
@@ -83,10 +83,10 @@ build.
 **Goal**: one click → their own gated storefront; serverless correctness enforced.
 **Independent test**: a fresh Vercel deployment passes `SMOKE_URL=<url> npm run smoke` (a–e).
 
-- [ ] T010 [US3] Add the Deploy button to `examples/quickstart/README.md` using the exact
+- [X] T010 [US3] Add the Deploy button to `examples/quickstart/README.md` using the exact
       clone-URL from `contracts/quickstart-surface.md` (`root-directory=examples/quickstart`,
       `env=GATE_SECRET`, `envDescription` recipe, `envLink` → #own-it anchor).
-- [ ] T011 [US3] Add the fail-fast check to the smoke or a tiny assert step: `VERCEL=1 node
+- [X] T011 [US3] Add the fail-fast check to the smoke or a tiny assert step: `VERCEL=1 node
       server.mjs` without `GATE_SECRET` exits non-zero with the actionable message (US3.3) —
       wire it into `npm run smoke` so CI covers it.
 - [ ] T012 [US3] **Maintainer-gated**: create Vercel project `credentagent-demo` (root
