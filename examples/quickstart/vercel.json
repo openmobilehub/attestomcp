@@ -1,7 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "",
   "functions": {
-    "api/index.mjs": { "maxDuration": 60 }
+    "api/index.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@simplewebauthn/browser/**"
+    }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
