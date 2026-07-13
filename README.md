@@ -6,10 +6,8 @@ action — a payment, an age gate, an access grant — CredentAgent makes it pro
 one application** — `age.over(21)`, a loyalty membership, a prescription, and
 `payment.in("usd")` are all just credentials in the same policy.
 
-> **Design preview / v0.1.** These packages are real, tested, and `npm`-installable,
-> extracted from the working reference server
-> ([mcp-apps-shopping-demo](https://github.com/openmobilehub/mcp-apps-shopping-demo)).
-> Read the [honest status](#honest-status) below before treating any gate as a safety control.
+> **v0.2 — real, tested, and published on npm.** Start with the
+> [quickstart](./examples/quickstart) — try it, run it, own it in ~5 minutes.
 
 ## What it is
 
@@ -119,15 +117,15 @@ per-rail breakdown.
 
 ## Reference demo
 
-The reference server these packages were extracted from — the agentic shopping app that
-runs on every surface (Claude native app, claude.ai, Claude Desktop, ChatGPT, Goose,
-the Claude Code terminal) — lives in its own repo:
+The runnable reference is **[`examples/quickstart`](./examples/quickstart)** — a thin
+consumer of the published packages you can try hosted, run locally, or deploy your own in
+~5 minutes. It demonstrates the full browse → cart → credential gate → checkout →
+settlement flow, including the passkey (same-device + cross-device caBLE) and
+Digital-Credentials payment rails and an x402 → Hedera on-chain settlement lab.
 
-**[openmobilehub/mcp-apps-shopping-demo](https://github.com/openmobilehub/mcp-apps-shopping-demo)**
-
-It demonstrates the full browse → cart → credential gate → checkout → settlement flow,
-including the passkey (same-device + cross-device caBLE) and Digital-Credentials payment
-rails and an x402 → Hedera on-chain settlement lab.
+These packages were originally extracted from the agentic shopping app in
+[openmobilehub/mcp-apps-shopping-demo](https://github.com/openmobilehub/mcp-apps-shopping-demo)
+(now **archived**, kept read-only for its demo videos and history).
 
 ## License & project
 
