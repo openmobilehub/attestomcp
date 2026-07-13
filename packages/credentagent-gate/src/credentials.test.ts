@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { CredentAgent } from "./client.js";
-import { defineCredential, dcql, gate, required } from "./credentials.js";
+import { defineCredential, dcql, gate, required, optional, age, membership, payment } from "./credentials.js";
 import type { GateOrder } from "./types.js";
 
 const credentagent = new CredentAgent({ walletOrigin: "https://shop.example" });
@@ -74,4 +74,39 @@ describe("defineCredential rejects a reserved built-in id (finding 1 — fail-op
       ).toThrow(/reserved/i);
     });
   }
+});
+
+// Regression (PR #42 review — item 4). required()/optional() must reject a policy the ceremony
+// seam cannot honor. optional(gate())/optional(payment) surfaces a BLOCKING credential the
+// completion sweep only enforces when required — so an "optional gate" checks out unproven
+// (fail-OPEN). required(discount()) asks the seam to block completion on a benefit that never
+// blocks. Reject both at construction — fail-fast, same posture as finding 1.
+describe("required/optional reject a policy the seam can't honor (item 4)", () => {
+  const customGate = defineCredential({
+    id: "prescription",
+    request: dcql({ docType: "org.hl7.prescription.1", claims: ["rx_valid"] }),
+    verify: (c) => c.rx_valid === true,
+    effect: gate(),
+    ui: { label: "Prescription", action: "Verify prescription" },
+  });
+
+  it("optional(gate()) throws — a hard gate declared optional is surfaced but never enforced (fail-open)", () => {
+    expect(() => optional(age.over(21))).toThrow(/must be required/i);
+    expect(() => optional(customGate)).toThrow(/must be required/i);
+  });
+
+  it("optional(payment) throws — an authorize gate declared optional would never settle", () => {
+    expect(() => optional(payment.in("usd"))).toThrow(/must be required/i);
+  });
+
+  it("required(discount()) throws — a discount is a benefit, not a blocking requirement", () => {
+    expect(() => required(membership.discount(10))).toThrow(/must be optional/i);
+  });
+
+  it("still accepts every valid combination (required gate/authorize, optional discount)", () => {
+    expect(() => required(age.over(21))).not.toThrow();
+    expect(() => required(customGate)).not.toThrow();
+    expect(() => required(payment.in("usd"))).not.toThrow();
+    expect(() => optional(membership.discount(10))).not.toThrow();
+  });
 });

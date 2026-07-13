@@ -167,11 +167,30 @@ export function defineCredential(c: {
 
 // ── Policy entries ─────────────────────────────────────────────────────────
 
+// The effect kind fixes how a step MUST be declared, and a mismatch is a policy the
+// ceremony seam cannot honor (item 4 — fail-fast, like finding 1):
+//   • gate / authorize are BLOCKING — the completion sweep enforces them only when
+//     required, so an optional() one is surfaced but never enforced (fail-OPEN).
+//   • discount is a BENEFIT applied when the credential is presented — it never blocks
+//     completion, so required() asks the seam to gate on something it can't.
+
 /** A required gate — present in the manifest whenever it applies. */
 export function required(c: Credential): Step {
+  if (c.effect.kind === "discount") {
+    throw new Error(
+      `required(${c.id}): a discount is a benefit applied when the credential is presented, ` +
+        `not a blocking requirement — it must be optional(), not required().`,
+    );
+  }
   return { credential: c, required: true };
 }
 /** An optional gate — surfaced but never blocking. */
 export function optional(c: Credential): Step {
+  if (c.effect.kind === "gate" || c.effect.kind === "authorize") {
+    throw new Error(
+      `optional(${c.id}): a ${c.effect.kind} credential is blocking and must be required(), ` +
+        `not optional() — an optional blocking credential is surfaced but never enforced (it would fail open).`,
+    );
+  }
   return { credential: c, required: false };
 }
