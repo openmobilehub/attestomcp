@@ -14,6 +14,10 @@ store.gate((order) => credentagent.requirements(order, [
 
 Three rungs — stop at whichever satisfies you.
 
+## See it in action
+
+[▶︎ **Full flow — multi-credential checkout + x402 on-chain settlement**](https://www.youtube.com/watch?v=biTqHo2dL7M) (3 min) — an agent completes a gated checkout: age proof, loyalty credential, and passkey payment settling on-chain (Hedera testnet). Same-surface shorts: [Claude native app](https://youtube.com/shorts/JA91c2d2DhQ) · [ChatGPT](https://youtube.com/shorts/8rMx5P1AOgI) · [Goose + passkey checkout](https://youtu.be/qAXgxuihbA8).
+
 ## Try it (~1 min)
 
 Paste the hosted demo into your agent host — nothing to install:
