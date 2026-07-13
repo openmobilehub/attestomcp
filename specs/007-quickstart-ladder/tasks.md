@@ -117,10 +117,10 @@ build.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T015 [P] File the R5 DX follow-up issue on `openmobilehub/credentagent`: storefront
+- [X] T015 [P] File the R5 DX follow-up issue on `openmobilehub/credentagent`: storefront
       "storage from standard env" convenience so the hero loses its 3 Redis lines
-      (Principle I — fix the API, not the example).
-- [ ] T016 Update `STATUS.md` per house rules: 007 into Done log with linked commits; add the
+      (Principle I — fix the API, not the example). Filed: #54 (DX) + #55 (bundle-version 'dev' footgun).
+- [X] T016 Update `STATUS.md` per house rules: 007 into Done log with linked commits; add the
       cutover decisions (T012/T013/T014 maintainer gates) to "Decisions for you" until executed.
 - [ ] T017 Open the PR from `007-quickstart-ladder` (same-repo branch — automated review runs),
       confirm `claude-review` + `ci` (incl. `quickstart-smoke`) green, request human review.
