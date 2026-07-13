@@ -1,4 +1,4 @@
-# CredentAgent quickstart — the 5-minute ladder
+# CredentAgent quickstart — try it, run it, own it
 
 A credential-gated agentic storefront: an AI agent can browse and cart, but a **consequential
 checkout only completes after the buyer proves a credential** — age for the whiskey, a passkey
@@ -12,7 +12,7 @@ store.gate((order) => credentagent.requirements(order, [
 ]));
 ```
 
-Three rungs — stop at whichever satisfies you.
+Three ways in, from zero setup to your own deployment — stop at whichever fits.
 
 ## See it in action
 
