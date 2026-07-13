@@ -37,7 +37,7 @@ import { buildCredentialRequest, buildSignedRequestForDcql } from "./request.js"
 import { evaluateCredential, evaluateCustom, requiredAgeForOrder, verifyCredentialPresentation, type CredentialKind, type CredGateResult } from "./verify.js";
 import { verifyMdocPresentation } from "./mdoc-verify.js";
 import { buildMdocRequestParts, sealMdocContext } from "../mdoc/mdoc-iso.js";
-import { mdocDocSpec, mdocDocSpecFromDcql } from "./doc-spec.js";
+import { mdocDocSpec, mdocDocSpecsFromDcql } from "./doc-spec.js";
 import { renderCredentialPage } from "./page.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
@@ -202,7 +202,7 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
         ? await buildSignedRequestForDcql(resolved.credential.request, reqOrigin, ctx.signingKey)
         : await buildCredentialRequest(resolved.kind, reqOrigin, ctx.signingKey, { minimumAge: resolved.kind === "age" ? requiredAgeForOrder(order) ?? 21 : undefined });
       const docSpec = resolved.credential
-        ? mdocDocSpecFromDcql(resolved.credential.request)
+        ? mdocDocSpecsFromDcql(resolved.credential.request) // every credential → one iOS doc spec (item 6)
         : mdocDocSpec(resolved.kind, resolved.kind === "age" ? requiredAgeForOrder(order) ?? 21 : 21);
       const mdoc = await buildMdocRequestParts(docSpec, reqOrigin.origin, signed);
       const mdocContextToken = await sealMdocContext(
