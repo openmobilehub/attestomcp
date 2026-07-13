@@ -6,6 +6,24 @@ on:
   pull_request:
 
 jobs:
+  # Proves the quickstart example works against the PUBLISHED packages from a clean
+  # checkout — no workspace build. Red = registry/example drift or a security
+  # assertion regressed (specs/007-quickstart-ladder/contracts/quickstart-surface.md).
+  quickstart-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/quickstart
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: examples/quickstart/package-lock.json
+      - run: npm ci
+      - run: npm run smoke
+
   build-test:
     runs-on: ubuntu-latest
     steps:
