@@ -54,6 +54,20 @@ try {
   await mcp.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`)));
   ok("(a) MCP initialize handshake", true);
 
+  // (g) the widget bundle actually loads — the ui:// resource read must return HTML,
+  // not "widget bundle not found". A Node client calling tools never exercises this, so
+  // a missing bundle (e.g. not in the serverless includeFiles) slips past every other
+  // assertion; this is the one that catches it.
+  try {
+    const list = await mcp.listResources();
+    const ui = list.resources.find((r) => r.uri.startsWith("ui://"));
+    const doc = ui ? await mcp.readResource({ uri: ui.uri }) : null;
+    const html = doc?.contents?.[0]?.text ?? "";
+    ok("(g) widget ui:// resource loads (HTML bundle present)", !!ui && html.includes("<") && html.length > 1000, `uri=${ui?.uri} len=${html.length}`);
+  } catch (e) {
+    ok("(g) widget ui:// resource loads (HTML bundle present)", false, e.message.slice(0, 80));
+  }
+
   const checkout = async (items) => {
     const r = await mcp.callTool({ name: "checkout", arguments: { items } });
     const sc = r.structuredContent ?? {};

@@ -4,7 +4,7 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 60,
-      "includeFiles": "node_modules/@simplewebauthn/browser/**"
+      "includeFiles": "node_modules/{@openmobilehub/credentagent-storefront/dist/ui,@simplewebauthn/browser}/**"
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
