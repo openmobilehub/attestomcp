@@ -3,8 +3,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { CredentAgent } from "./client.js";
-import { age, required } from "./credentials.js";
-import type { GateOrder } from "./types.js";
+import { age, required, defineCredential, dcql, gate } from "./credentials.js";
+import type { Credential, GateOrder } from "./types.js";
 
 const order: GateOrder = {
   id: "ORD-9",
@@ -70,5 +70,34 @@ describe("CredentAgent.mount", () => {
     const a = new CredentAgent({ walletOrigin: "https://a.example" });
     const b = new CredentAgent({ walletOrigin: "https://b.example" });
     expect(a.store).not.toBe(b.store);
+  });
+});
+
+// Regression (PR #42 review — item 5). register-on-resolve populates the credential registry
+// only when requirements() runs. A serverless / multi-worker completion instance may never run
+// it (checkout ran elsewhere), leaving the registry empty so the completion sweep no-ops — an
+// applicable custom gate() checks out UNPROVEN (fail-OPEN). Declaring credentials up front
+// populates the registry at construction, so EVERY instance enforces the gate from boot.
+describe("CredentAgent — eager credential registration (item 5, cold-instance fail-open)", () => {
+  const prescription = defineCredential({
+    id: "prescription",
+    request: dcql({ docType: "org.hl7.prescription.1", claims: ["rx_valid"] }),
+    verify: (c) => c.rx_valid === true,
+    effect: gate(),
+    ui: { label: "Prescription", action: "Verify prescription" },
+  });
+  const registryOf = (agent: CredentAgent): ReadonlyMap<string, Credential> | undefined => {
+    const app = { locals: {} as Record<string, unknown> };
+    agent.mount(app); // publishes the registry onto app.locals.credentagent
+    return (app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> }).credentialRegistry;
+  };
+
+  it("registers credentials passed at construction — before any requirements() call", () => {
+    const agent = new CredentAgent({ credentials: [prescription] });
+    expect(registryOf(agent)?.get("prescription")).toBe(prescription);
+  });
+
+  it("without declaring them, a fresh instance's registry has no custom gate until requirements() runs", () => {
+    expect(registryOf(new CredentAgent())?.get("prescription")).toBeUndefined();
   });
 });

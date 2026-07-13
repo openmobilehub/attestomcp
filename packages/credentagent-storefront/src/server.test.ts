@@ -14,6 +14,7 @@ import { createStorefront, originFromRequest, type Storefront } from "./server.j
 import { redisStorage, type RedisLike } from "./redis.js";
 import { firestoreCatalog, type FirestoreLike } from "./firestore.js";
 import { MemoryOrderStore } from "./state.js";
+import type { Order } from "./index.js";
 import { CredentAgent, age, membership, payment, required, optional, defineCredential, dcql, gate, MemoryVerificationStore } from "@openmobilehub/credentagent-gate";
 import type { Request } from "express";
 
@@ -408,6 +409,56 @@ describe("GET /checkout — a custom gate keys on an ARBITRARY catalog field (fi
       claims: { payment_instrument_id: "acct_demo_1", expiry_date: "2031-12-31", masked_account_reference: "•••• 4242", issuer_name: "Demo Bank", holder_name: "T" },
     });
     expect(pay.body.completed).toBe(true);
+  });
+});
+
+// Regression (PR #42 review — item 5). register-on-resolve populates the credential registry
+// only when requirements() runs. In a serverless / multi-worker deploy the instance that
+// COMPLETES an order is often not the one that ran checkout, so its registry is empty and the
+// completion sweep no-ops — an applicable custom gate() checks out UNPROVEN (fail-OPEN).
+// Declaring the credential up front (new CredentAgent({ credentials })) populates the registry
+// at boot, so ANY instance enforces the gate.
+describe("cold-instance custom-gate enforcement (item 5 — register-on-resolve fail-open)", () => {
+  const REGION_CATALOG = [
+    { id: "eu-only-bottle", name: "EU-Only Reserve", price: 90, currency: "USD", image: "", category: "Beverages", description: "Region-restricted.", region: "EU" },
+  ];
+  const euResidency = defineCredential({
+    id: "eu_residency",
+    request: dcql({ docType: "org.example.residency.1", claims: ["resident_eu"] }),
+    verify: (c) => c.resident_eu === true,
+    effect: gate(),
+    appliesTo: (order) => order.lines.some((l) => l.region === "EU"),
+    ui: { label: "EU residency", action: "Verify your residency" },
+  });
+
+  it("an instance that NEVER ran requirements() still refuses the unproven order at the ceremony completion (declared up front)", async () => {
+    // Instance A creates the order (checkout runs requirements HERE). Instance B — a separate
+    // gate that declared the credential but NEVER ran requirements() (store.gate never set) —
+    // drives the CEREMONY completion path (dc-payment/verify → completeOrder → the custom-gate
+    // sweep) over the SHARED created-order store. That sweep reads the credential REGISTRY; on a
+    // cold instance the registry is populated ONLY by eager registration, not requirements().
+    const sharedOrders = new MemoryOrderStore<Order>();
+
+    const storeA = createStorefront({ catalog: REGION_CATALOG, createdOrderStore: sharedOrders });
+    const agentA = new CredentAgent();
+    agentA.mount(storeA.app);
+    storeA.gate((order) => agentA.requirements(order, [required(euResidency), required(payment.in("usd"))]));
+
+    const storeB = createStorefront({ catalog: REGION_CATALOG, createdOrderStore: sharedOrders });
+    const agentB = new CredentAgent({ credentials: [euResidency] }); // declared; requirements() NEVER runs on B
+    agentB.mount(storeB.app);
+
+    const orderId = ((await (await connect(storeA)).callTool({ name: "checkout", arguments: { items: [{ productId: "eu-only-bottle", quantity: 1 }] } })).structuredContent as any).orderId;
+
+    // B settles the order it never checked out, WITHOUT the eu_residency proof. The completion
+    // sweep must refuse (reason "gate") on the eagerly-registered credential — not fail open.
+    const pay = await request(storeB.app).post("/credentagent/dc-payment/verify").send({
+      order: orderId,
+      claims: { payment_instrument_id: "acct_demo_1", expiry_date: "2031-12-31", masked_account_reference: "•••• 4242", issuer_name: "Demo Bank", holder_name: "T" },
+    });
+    expect(pay.body.completed).toBe(false); // WITHOUT eager registration this is `true` — the fail-open
+    const status = await request(storeB.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(status.body.completed).toBe(false);
   });
 });
 

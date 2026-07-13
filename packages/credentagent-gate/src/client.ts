@@ -60,6 +60,13 @@ export class CredentAgent {
     }
     this.walletOrigin = origin.replace(/\/$/, "");
     this.store = opts.store ?? new MemoryVerificationStore();
+    // Item 5: register any credentials declared up front so EVERY instance enforces them from
+    // boot — not only after requirements() ran on THIS instance. A serverless / multi-worker
+    // completion instance may never run requirements() (checkout landed elsewhere), leaving the
+    // registry empty and the completion sweep a no-op → an applicable gate() completes UNPROVEN
+    // (fail-open). register-on-resolve stays for zero-config dev; this makes multi-instance
+    // deploys fail-closed. Reserved ids are inert here (the sweep + resolveCred skip them).
+    for (const c of opts.credentials ?? []) this.registry.set(c.id, c);
   }
 
   /**

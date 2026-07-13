@@ -114,6 +114,12 @@ its own `request`/`verify`, and `completeOrder` enforces every applicable `gate(
 completion path (a hard block, independent of `required`/`optional`). Worked pack:
 [`examples/professional-license.mjs`](../../examples/professional-license.mjs).
 
+> **Multi-instance / serverless:** register-on-resolve is enough for one long-lived process, but
+> where checkout and completion can land on different instances (serverless, multiple workers) an
+> instance that never ran `requirements()` has a cold registry — its completion sweep would no-op
+> and an applicable `gate()` could complete unproven. Declare your custom credentials up front so
+> every instance enforces them from boot: `new CredentAgent({ credentials: [prescription] })`.
+
 ## Honest status
 
 Honesty is carried in the **types**, not prose (Principle VII):
@@ -147,7 +153,7 @@ cryptography. The mandate is AP2-shaped and dev-signed (integrity hash), not key
 ```ts
 // Client (configure once, then declarative calls)
 class CredentAgent {
-  constructor(opts?: { walletOrigin?: string; store?: VerificationStore });
+  constructor(opts?: { walletOrigin?: string; store?: VerificationStore; credentials?: Credential[] });
   requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[];   // Context 1
   mount(app: ExpressApp, ceremony?: MountCeremony): void;                        // Context 2
 }

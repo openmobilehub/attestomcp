@@ -175,4 +175,15 @@ export interface CredentAgentOptions {
   walletOrigin?: string;
   /** Per-order verification state; default in-memory, pluggable (Redis). */
   store?: VerificationStore;
+  /**
+   * Custom credentials to register at construction, so EVERY instance can enforce them
+   * from boot — independent of whether `requirements()` ran on this instance (007 / item 5).
+   *
+   * `requirements()` also registers each policy credential lazily (register-on-resolve), which
+   * is enough for a single long-lived process. But in a serverless / multi-worker deploy the
+   * instance that COMPLETES an order is often not the one that ran checkout, so its registry is
+   * empty and the completion sweep would no-op — an applicable `gate()` checking out UNPROVEN
+   * (fail-open). Declare your custom credentials here and every instance enforces them.
+   */
+  credentials?: Credential[];
 }
