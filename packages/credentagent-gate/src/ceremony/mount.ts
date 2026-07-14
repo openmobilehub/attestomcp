@@ -9,7 +9,7 @@
 // The package stays dependency-free: `CeremonyApp` is a minimal structural type
 // (no `express` import) carrying just `locals` + the route methods a rail needs.
 import { randomBytes } from "node:crypto";
-import type { VerificationStore } from "../types.js";
+import type { ReaderIdentity, VerificationStore } from "../types.js";
 import { deriveOrigin, type Origin, type RequestLike } from "./origin.js";
 import type {
   CeremonyCatalog,
@@ -59,6 +59,10 @@ export interface CeremonySeams {
    *  `orderStore` read (FR-007 / US3). Off ⇒ the store stays the source of truth
    *  and the mandate is an additive integrity envelope only. */
   statelessOrders?: boolean;
+  /** Stable reader identity the rails present in their OpenID4VP request (clears
+   *  the wallet's "unknown verifier" warning). Absent ⇒ per-request self-signed
+   *  reader (presence-only). Normally set once on `new CredentAgent({ readerIdentity })`. */
+  readerIdentity?: ReaderIdentity;
 }
 
 /** The resolved context each rail receives (every required seam present). */
@@ -74,6 +78,8 @@ export interface CeremonyContext {
    *  with no store read (absent/false — store is the source of truth). `mountCeremony`
    *  always sets it; optional here so a hand-built context literal need not. */
   statelessOrders?: boolean;
+  /** Stable reader identity the rails present (absent ⇒ per-request self-signed). */
+  readerIdentity?: ReaderIdentity;
 }
 
 /** A rail attaches its routes to the host app given the resolved context. */
@@ -102,6 +108,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
   const origin = options.origin ?? locals.origin ?? deriveOrigin;
   const allowEphemeralKey = options.allowEphemeralKey ?? locals.allowEphemeralKey ?? false;
   const statelessOrders = options.statelessOrders ?? locals.statelessOrders ?? false;
+  const readerIdentity = options.readerIdentity ?? locals.readerIdentity;
   let signingKey = options.signingKey ?? locals.signingKey;
 
   // Fail fast (CT2) — a load-bearing seam must never silently default. (`origin`
@@ -140,6 +147,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
     origin,
     statelessOrders,
     ...(settlement ? { settlement } : {}),
+    ...(readerIdentity ? { readerIdentity } : {}),
   };
 
   // Re-expose the resolved seams on app.locals so the storefront's gate routes

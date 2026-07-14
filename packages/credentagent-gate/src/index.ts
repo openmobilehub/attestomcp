@@ -86,6 +86,7 @@ export type {
 // ── Public types ───────────────────────────────────────────────────────────
 export type {
   CredentAgentOptions,
+  ReaderIdentity,
   GateOrder,
   OrderLine,
   Credential,

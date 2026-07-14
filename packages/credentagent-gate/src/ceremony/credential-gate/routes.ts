@@ -139,7 +139,7 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
     try {
       const minimumAge = kind === "age" ? requiredAgeForOrder(order) ?? 21 : undefined;
       const reqOrigin = originOf(ctx, req);
-      const oid = await buildCredentialRequest(kind, reqOrigin, ctx.signingKey, { minimumAge });
+      const oid = await buildCredentialRequest(kind, reqOrigin, ctx.signingKey, { minimumAge }, ctx.readerIdentity);
       // Signed (reader-authenticated) by default — required by iOS. ?signed=0 forces
       // the unsigned path for diagnostics.
       const signed = req.query.signed !== "0";

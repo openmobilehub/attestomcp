@@ -15,7 +15,7 @@ import type { Origin } from "../origin.js";
 import { makeReaderCert, makeEncryptionKey } from "../mdoc/reader.js";
 import { sealReaderContext } from "../mdoc/readerContext.js";
 import { buildCredentialDcql, type CredentialDcqlOpts, type CredentialKind } from "./dcql.js";
-import type { DcqlQuery } from "../../types.js";
+import type { DcqlQuery, ReaderIdentity } from "../../types.js";
 
 export interface SignedCredentialRequest {
   protocol: "openid4vp-v1-signed";
@@ -34,8 +34,9 @@ export async function buildCredentialRequest(
   origin: Origin,
   secret: string,
   opts: CredentialDcqlOpts = {},
+  readerIdentity?: ReaderIdentity,
 ): Promise<SignedCredentialRequest> {
-  const { x5c, privateKey } = await makeReaderCert(origin.rpID);
+  const { x5c, privateKey } = await makeReaderCert(origin.rpID, readerIdentity);
   const { encJwk, ecdhPrivateJwk } = await makeEncryptionKey();
   const nonce = jose.base64url.encode(crypto.getRandomValues(new Uint8Array(16)));
   const dcql = buildCredentialDcql(kind, opts);
@@ -54,7 +55,7 @@ export async function buildCredentialRequest(
   };
 
   const request = await new jose.SignJWT(requestObject)
-    .setProtectedHeader({ alg: "ES256", typ: "oauth-authz-req+jwt", x5c: [x5c] })
+    .setProtectedHeader({ alg: "ES256", typ: "oauth-authz-req+jwt", x5c })
     .setIssuedAt()
     .sign(privateKey as unknown as jose.KeyLike);
 
