@@ -98,6 +98,39 @@ describe("renderRequirements — payment lock (presentation only)", () => {
   });
 });
 
+// ── 007: a CUSTOM gate renders from its own label and unlocks on verifiedGates ──
+// Pins the checkout-hub blockers Diego reported: a custom gate must NOT render as an age
+// gate, and its per-order proof (verifiedGates) must clear the lock. Each assertion fails
+// against the pre-007 age-only hub.
+describe("renderRequirements — custom gate (007)", () => {
+  const customManifest: VerificationManifestEntry[] = [
+    { credential: "professional_license", required: true, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Professional license", approveUrl: "/credentagent/credential?order=ORD-T030&cred=professional_license" },
+    { credential: "payment", required: true, effect: "authorize", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Pay (USD)", approveUrl: "/credentagent/dc-payment?order=ORD-T030" },
+  ];
+  const payment: PaymentOptions = { methods: [{ value: "passkey", name: "Pay with passkey", desc: "Authorize.", href: "/pay/passkey", checked: true }], orderToken: "TOK" };
+
+  it("renders the credential's OWN label, not an age gate, and links to its approveUrl", () => {
+    const html = renderRequirements(order, customManifest, {}, { payment });
+    expect(html).toContain("Professional license");
+    expect(html).not.toContain("Verify age");
+    expect(html).not.toContain("age-restricted");
+    expect(html).toContain("/credentagent/credential?order=ORD-T030&amp;cred=professional_license");
+  });
+
+  it("BLOCKS payment while the custom gate is unproven", () => {
+    const html = renderRequirements(order, customManifest, {}, { payment });
+    expect(html).toContain("Payment is locked");
+    expect(html).not.toContain('type="radio" name="pm"');
+  });
+
+  it("UNLOCKS payment and flips the gate to ✓ once verifiedGates records the proof", () => {
+    const html = renderRequirements(order, customManifest, { verifiedGates: { professional_license: true } }, { payment });
+    expect(html).not.toContain("Payment is locked"); // FAILS on the pre-007 age-only isSatisfied
+    expect(html).toContain('type="radio" name="pm"');
+    expect(html).toContain("✓ Professional license verified");
+  });
+});
+
 describe("renderRequirements — discount, total, honesty", () => {
   it("reflects the membership discount in the total (host re-prices, renderer shows)", () => {
     const discounted: RenderOrder = { ...order, discount: 12.4, total: 111.6 };

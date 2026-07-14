@@ -30,6 +30,14 @@ export interface CeremonyOrderLine {
   minimumAge?: number;
   /** Product category — available to custom `.when()` predicates. */
   category?: string;
+  /** Prescription flag — a catalog-derived product attribute a custom `appliesTo`
+   *  may key on (e.g. the README's `prescription` gate). Preserved through re-pricing
+   *  so the completion-time custom-gate sweep sees the SAME inputs as the manifest
+   *  resolver (007 — a field the sweep can't see is a fail-OPEN bug). */
+  requiresRx?: boolean;
+  /** Any custom catalog attribute preserved through re-pricing (see `OrderLine`), so the
+   *  completion sweep's `appliesTo` sees the SAME arbitrary fields the manifest resolver did. */
+  [attribute: string]: unknown;
 }
 
 export interface CeremonyOrder {
@@ -108,9 +116,10 @@ export interface CompletionResult {
   /** Why a non-completion happened — a failed ceremony ("gates"), a tampered/replayed/
    *  expired Cart Mandate ("cart-mandate"), a tampered token re-priced against the
    *  catalog ("reprice"), a signed Cart Mandate and signed Payment Mandate that
-   *  disagree on order/amount/currency ("reconcile"), or an age-restricted order with
-   *  no proven per-order age claim ("age"). */
-  reason?: "gates" | "cart-mandate" | "reprice" | "reconcile" | "age";
+   *  disagree on order/amount/currency ("reconcile"), an age-restricted order with
+   *  no proven per-order age claim ("age"), or an applicable custom gate() credential
+   *  with no proven per-order verification ("gate" — 007). */
+  reason?: "gates" | "cart-mandate" | "reprice" | "reconcile" | "age" | "gate";
 }
 
 /**

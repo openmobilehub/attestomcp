@@ -56,7 +56,7 @@ export async function buildDcPaymentRequest(order: CeremonyOrder, origin: Origin
   const request = await new jose.SignJWT(requestObject)
     .setProtectedHeader({ alg: "ES256", typ: "oauth-authz-req+jwt", x5c: [x5c] })
     .setIssuedAt()
-    .sign(privateKey as unknown as jose.KeyLike);
+    .sign(privateKey as unknown as Parameters<InstanceType<typeof jose.SignJWT>["sign"]>[0]);
 
   const readerContextToken = await sealReaderContext({ ecdhPrivateJwk, transactionDataB64: txDataB64, nonce }, secret);
   return {

@@ -61,6 +61,7 @@ import {
   renderRequirements,
   MemoryVerificationStore,
   type CartItemRef,
+  type Credential,
   type CeremonyCatalog,
   type CeremonyOrder,
   type CeremonyOrderStore,
@@ -393,6 +394,11 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         write: async (record: CompletedRecord) => { await orderStore.write(record.orderId, record); },
       },
       cart: { clear: async () => { const sid = orderSessions.get(input.order.id); if (sid) await cartStore.write(sid, new Map()); } },
+      // Custom-gate enforcement (007): hand `completeOrder` the credential registry
+      // `credentagent.mount(store.app)` published on app.locals — read LAZILY at completion
+      // time (mount runs after this closure is defined) so an applicable custom gate() is
+      // enforced on the shared completion path (invariant 1), not only in the rendered page.
+      credentialRegistry: (app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> } | undefined)?.credentialRegistry,
       ...(opts.settle ? { settle: opts.settle } : {}),
     });
   app.locals.credentagent = {
@@ -687,7 +693,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     // the created order (the policy reads line ids + minimumAge — the re-priced
     // `order` carries the same lines; the discounted total shows via `order` below).
     const requires = homeRequires(resolveGate?.(created) ?? [], baseUrl, statelessOrders ? cartRaw : null) as VerificationManifestEntry[];
-    const verification: RenderVerification = { ageVerified, loyaltyApplied };
+    // Pass this order's proven custom gates (007) so the hub reflects a proven custom
+    // gate and unlocks payment — without it, a proven license loops back to a locked page.
+    const verification: RenderVerification = { ageVerified, loyaltyApplied, ...(v.verifiedGates ? { verifiedGates: v.verifiedGates } : {}) };
     const paid = done ? { amount: done.amount, currency: done.currency, method: done.method } : null;
 
     // An UNGATED storefront has no payment gate, so the manifest carries no
