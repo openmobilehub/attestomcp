@@ -46,13 +46,14 @@ badge.
 
 ## 3. Run a ceremony
 
-1. Start the demo gate (from the `feat/demo-pki` checkout — it has the #51 reader-identity
-   wiring and the demo certs). It mounts the gate with the demo `readerIdentity`
-   (`certs/reader-cert.pem`, SAN=`localhost`) and one demo order (`ORD-DEMO`):
+1. Start the demo gate (from the `feat/demo-pki` checkout). It's the **real storefront**
+   quickstart (`createStorefront` + `mount` + `store.gate`) plus the demo `readerIdentity`
+   (`certs/reader-cert.pem`, SAN=`localhost`) and one **seeded order** (`ORD-DEMO`):
 
    ```bash
-   (cd packages/credentagent-gate && npm run build)   # once — builds dist/
-   node tools/demo-pki/run-gate.mjs                    # gate on :3007, prints the URLs
+   (cd packages/credentagent-gate && npm run build)        # once
+   (cd packages/credentagent-storefront && npm run build)  # once
+   node tools/demo-pki/run-gate.mjs                         # gate on :3007 (~5s to boot)
    ```
 2. Reverse-tunnel the port so the phone sees it as `localhost` (this is why the demo reader
    cert's SAN is `localhost`; `localhost` is also a secure context, so the DC-API works over
@@ -61,9 +62,15 @@ badge.
    ```bash
    adb reverse tcp:3007 tcp:3007
    ```
-3. On the phone, open one of the URLs the gate printed and drive the ceremony:
-   - **Age gate** — `http://localhost:3007/credentagent/credential?cred=age&order=ORD-DEMO` (presents the mDL)
-   - **Payment gate** — `http://localhost:3007/credentagent/dc-payment?order=ORD-DEMO` (presents the payment credential)
+3. On the phone, open the checkout link and drive the whole flow (age → pay → done):
+
+   ```
+   http://localhost:3007/checkout?order=ORD-DEMO
+   ```
+
+   It's the real storefront checkout page — it sequences the gates and shows each as it
+   completes. (The individual rails are still at `/credentagent/credential?cred=age&order=ORD-DEMO`
+   and `/credentagent/dc-payment?order=ORD-DEMO` if you want to hit one directly.)
 
 **Pass criteria:** the picker offers the right card, the order completes, and **no red trust
 warnings** appear — issuer (via the imported **VICAL**) *and* verifier (via the imported
