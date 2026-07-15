@@ -36,7 +36,7 @@ import { evaluateCredential, requiredAgeForOrder, verifyCredentialPresentation, 
 import { verifyMdocPresentation } from "./mdoc-verify.js";
 import { buildMdocRequestParts, sealMdocContext } from "../mdoc/mdoc-iso.js";
 import { mdocDocSpec } from "./doc-spec.js";
-import { renderCredentialPage } from "./page.js";
+import { renderCredentialPage, renderPendingGatePage } from "./page.js";
 import { checkoutRail } from "../theme.js";
 import { renderManifestRail } from "../checkout-page.js";
 
@@ -115,7 +115,20 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
   // GET the gate page — re-priced order, presence-only honesty banner.
   get("/credentagent/credential", async (req, res) => {
     const kind = parseKind(req.query.cred);
-    if (!kind) { res.status(404).type("html").send("<!doctype html><h1>Unknown credential</h1>"); return; }
+    if (!kind) {
+      // Not a built-in ceremony kind. If it's a DEFINED gate in the policy (via resolveGate),
+      // be honest that its ceremony isn't mounted yet (roadmap) instead of claiming it's unknown.
+      const cred = typeof req.query.cred === "string" ? req.query.cred : "";
+      const pendingOrder = await resolveOrder(ctx, typeof req.query.order === "string" ? req.query.order : undefined, { cartMandate: decodeCartMandateParam(req.query.cart) });
+      const entry = pendingOrder ? (ctx.resolveGate?.(pendingOrder) ?? []).find((e) => e.credential === cred) : undefined;
+      if (entry) {
+        const back = `/checkout?order=${encodeURIComponent(pendingOrder!.id)}${typeof req.query.cart === "string" ? `&cart=${req.query.cart}` : ""}`;
+        res.status(200).type("html").send(renderPendingGatePage(entry.label, entry.action ?? `Verify ${entry.label}`, back));
+        return;
+      }
+      res.status(404).type("html").send("<!doctype html><h1>Unknown credential</h1>");
+      return;
+    }
     const order = await resolveOrder(ctx, typeof req.query.order === "string" ? req.query.order : undefined, { cartMandate: decodeCartMandateParam(req.query.cart) });
     if (!order) { res.status(404).type("html").send("<!doctype html><h1>Order not found</h1>"); return; }
     const ageVerified = (await ctx.verificationStore.read(order.id))?.ageVerified === true;

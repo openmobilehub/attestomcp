@@ -44,6 +44,32 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Honest page for a gate that's DEFINED in the policy (so it displays across checkout) but
+ * whose wallet ceremony isn't mounted on this build — i.e. a custom credential. Beats a bare
+ * "Unknown credential" (which is a lie: the gate IS known). Completing it is the generic
+ * credential rail (roadmap), not a wiring bug.
+ */
+export function renderPendingGatePage(label: string, action: string, returnUrl: string): string {
+  return `<!doctype html>
+<html lang="en">
+${pageHead(label)}
+<body>
+  <div class="wrap">
+  ${brandHeader({ h1: label, tagline: "Not presentable yet" })}
+  <div class="card">
+    <p class="lede">This gate is <strong>defined and shown across checkout</strong>, but presenting a
+    &ldquo;${escapeHtml(label)}&rdquo; credential (${escapeHtml(action)}) isn&rsquo;t wired into the ceremony
+    on this build — arbitrary credential types are on the roadmap (the generic credential rail). The
+    built-in gates (age, membership, payment) complete today.</p>
+    <a class="btn btn-secondary" href="${escapeHtml(returnUrl)}">&larr; Back to checkout</a>
+  </div>
+  ${trustFooter()}
+  </div>
+</body>
+</html>`;
+}
+
 export function renderCredentialPage(args: CredentialPageArgs): string {
   const minimumAge = args.minimumAge ?? 21;
   const percent = args.percent ?? 10;
