@@ -218,6 +218,16 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
       if (out.completed) {
         goDc.disabled = true;
         btn.textContent = "Authorized ✓";
+        // Mark the Pay step done in the progress rail — the server rendered it as the
+        // current step (a number); on completion it should show ✓ like the other done gates.
+        const railStepEls = document.querySelectorAll(".rail-step");
+        const payStep = railStepEls[railStepEls.length - 1];
+        if (payStep) {
+          payStep.classList.remove("current");
+          payStep.classList.add("done");
+          const payDot = payStep.querySelector(".rail-dot");
+          if (payDot) payDot.textContent = "✓";
+        }
       }
     }
   </script>
