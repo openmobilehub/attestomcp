@@ -319,6 +319,31 @@ export function progressRail(steps: RailStep[], currentIndex: number): string {
   return `<div class="rail" role="list" aria-label="Progress">${dots}</div>`;
 }
 
+/**
+ * The checkout progress rail for THIS order — includes ONLY the gates that actually
+ * apply: age when the cart is age-restricted, membership when a discount is in play,
+ * pay when there's an amount. `current` is highlighted and prior steps show ✓. Derived
+ * from the re-priced order (invariant 2), so the rail can't promise a step the order
+ * doesn't have — e.g. a membership-less order shows no Membership step. The `current`
+ * gate is always included even if its `applies` check is false (you're on its page).
+ */
+export function checkoutRail(
+  order: { lines: { minimumAge?: number }[]; discount: number; total: number },
+  current: "age" | "membership" | "pay",
+): string {
+  const gates: { key: "age" | "membership" | "pay"; label: string; applies: boolean }[] = [
+    { key: "age", label: "Age", applies: order.lines.some((l) => typeof l.minimumAge === "number" && l.minimumAge > 0) },
+    { key: "membership", label: "Membership", applies: order.discount > 0 },
+    { key: "pay", label: "Pay", applies: order.total > 0 },
+  ];
+  const steps = gates.filter((g) => g.applies || g.key === current);
+  const currentIndex = steps.findIndex((g) => g.key === current);
+  return progressRail(
+    steps.map((g, i) => ({ label: g.label, done: currentIndex >= 0 && i < currentIndex })),
+    currentIndex,
+  );
+}
+
 // ── Trust footer ────────────────────────────────────────────────────────────
 
 /**

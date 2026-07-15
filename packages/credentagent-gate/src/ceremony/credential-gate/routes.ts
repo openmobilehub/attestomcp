@@ -37,6 +37,7 @@ import { verifyMdocPresentation } from "./mdoc-verify.js";
 import { buildMdocRequestParts, sealMdocContext } from "../mdoc/mdoc-iso.js";
 import { mdocDocSpec } from "./doc-spec.js";
 import { renderCredentialPage } from "./page.js";
+import { checkoutRail } from "../theme.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
 // them, so the package never imports express.
@@ -119,6 +120,7 @@ export const registerCredentialGate: RailRegistrar = (app: CeremonyApp, ctx: Cer
     res.status(200).type("html").send(
       renderCredentialPage({
         kind,
+        rail: checkoutRail(order, kind === "age" ? "age" : "membership"),
         order: order.id,
         minimumAge: requiredAgeForOrder(order) ?? undefined,
         total: order.total,

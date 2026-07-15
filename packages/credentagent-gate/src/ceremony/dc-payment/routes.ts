@@ -28,6 +28,7 @@ import type { CompletionInput } from "../types.js";
 import { buildDcPaymentRequest } from "./request.js";
 import { buildDcMandate, runDcGates, verifyDcPresentation, type DcMandate, type GateResult } from "./verify.js";
 import { renderDcPaymentPage } from "./page.js";
+import { checkoutRail } from "../theme.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
 // them, so the package never imports express.
@@ -84,6 +85,7 @@ export const registerDcPaymentGate: RailRegistrar = (app: CeremonyApp, ctx: Cere
     if (!order) { res.status(404).type("html").send("<!doctype html><h1>Order not found</h1>"); return; }
     res.status(200).type("html").send(
       renderDcPaymentPage({
+        rail: checkoutRail(order, "pay"),
         order: order.id,
         total: order.total,
         currency: order.currency,
