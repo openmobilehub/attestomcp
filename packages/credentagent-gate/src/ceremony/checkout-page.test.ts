@@ -62,6 +62,21 @@ describe("renderRequirements — numbered gates + live status", () => {
     expect(done).toContain("✓ Age verified — 21+");
     expect(done).not.toContain("Verify age (21+)");
   });
+
+  it("renders a CUSTOM gate with its OWN label/action (never age copy) + in the stepper (#46)", () => {
+    const withCustom: VerificationManifestEntry[] = [
+      manifest[0], // age
+      { credential: "liquor-license", required: false, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Liquor license", action: "Verify license", approveUrl: "/credentagent/credential?order=ORD-T030&cred=liquor-license" },
+      manifest[1], // membership
+      manifest[2], // payment
+    ];
+    const html = renderRequirements(order, withCustom, { ageVerified: false });
+    expect(html).toContain("Verify license"); // the custom gate's OWN action verb
+    expect(html).toContain("Liquor license required to continue."); // its own copy, not age's
+    expect(html).toContain('rail-label">Liquor license'); // and a stepper step for it
+    // The bug rendered the custom gate as a SECOND age gate — assert exactly one age button.
+    expect((html.match(/Verify age/g) ?? []).length).toBe(1);
+  });
 });
 
 describe("renderRequirements — payment lock (presentation only)", () => {

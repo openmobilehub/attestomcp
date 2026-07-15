@@ -87,6 +87,7 @@ export function resolveRequirements(
         enforcedAt,
         trust_level,
         label: c.ui.label,
+        action: c.ui.action,
       };
       if (c.params?.minAge != null) entry.minAge = c.params.minAge;
       if (effect === "discount" && c.params?.percent != null) entry.discountPct = c.params.percent;

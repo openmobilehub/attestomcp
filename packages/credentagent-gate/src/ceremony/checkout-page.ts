@@ -121,9 +121,10 @@ function trustNote(entries: VerificationManifestEntry[]): string {
   return trustFooter();
 }
 
-// Map the manifest to the three-step progress rail (Age · Membership · Pay) with live
-// status, so the hub mirrors the same stepper the gate pages render. A gate the manifest
-// doesn't carry simply doesn't appear; payment is always the trailing step.
+// Map the manifest to the progress rail with live status — ONE step per gate the manifest
+// actually carries (so a custom gate appears too, not just Age/Membership), payment always
+// the trailing step. Age/membership keep their short labels; any other gate uses its own
+// `ui.label`. A gate the manifest doesn't carry simply doesn't appear.
 function railSteps(
   gateEntries: VerificationManifestEntry[],
   ageVerified: boolean,
@@ -132,8 +133,9 @@ function railSteps(
 ): RailStep[] {
   const steps: RailStep[] = [];
   for (const e of gateEntries) {
-    if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
-    else if (e.effect === "discount") steps.push({ label: "Membership", done: loyaltyApplied || paid });
+    if (e.effect === "discount") steps.push({ label: "Membership", done: loyaltyApplied || paid });
+    else if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
+    else if (e.effect === "gate") steps.push({ label: e.label, done: paid }); // custom gate — its own label
   }
   steps.push({ label: "Pay", done: paid });
   return steps;
@@ -280,15 +282,27 @@ function renderGate(entry: VerificationManifestEntry, n: number, satisfied: bool
         ? `<div class="card"><a class="btn btn-secondary" href="${escapeHtml(entry.approveUrl)}">${no} Apply loyalty discount${pct != null ? ` (${pct}% off)` : ""}</a></div>`
         : "";
   }
-  // gate effect (age):
-  const age = entry.minAge ?? 21;
+  // gate effect — age keeps its rich, specific copy; ANY other gate uses its OWN
+  // ui.label / ui.action (never age copy), so a custom gate renders truthfully.
+  if (entry.credential === "age") {
+    const age = entry.minAge ?? 21;
+    if (satisfied) {
+      return `<div class="card"><div class="row-ok">${no} ✓ Age verified — ${age}+</div></div>`;
+    }
+    const link = entry.approveUrl
+      ? `<a class="btn btn-primary" href="${escapeHtml(entry.approveUrl)}">Verify age (${age}+)</a>`
+      : "";
+    return `<div class="card"><div class="row-pending">${no} 🔒 This order contains age-restricted items. Verify you're ${age} or older to continue.</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
+  }
+  const label = entry.label;
+  const action = entry.action ?? `Verify ${label}`;
   if (satisfied) {
-    return `<div class="card"><div class="row-ok">${no} ✓ Age verified — ${age}+</div></div>`;
+    return `<div class="card"><div class="row-ok">${no} ✓ ${escapeHtml(label)} verified</div></div>`;
   }
   const link = entry.approveUrl
-    ? `<a class="btn btn-primary" href="${escapeHtml(entry.approveUrl)}">Verify age (${age}+)</a>`
+    ? `<a class="btn btn-primary" href="${escapeHtml(entry.approveUrl)}">${escapeHtml(action)}</a>`
     : "";
-  return `<div class="card"><div class="row-pending">${no} 🔒 This order contains age-restricted items. Verify you're ${age} or older to continue.</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
+  return `<div class="card"><div class="row-pending">${no} 🔒 ${escapeHtml(label)} required to continue.</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
 }
 
 // The Shopify-style payment-method group (one radio group, one Pay CTA). The methods

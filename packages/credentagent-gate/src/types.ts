@@ -128,6 +128,8 @@ export interface VerificationManifestEntry {
   trust_level: TrustLevel;
   /** From `ui.label`; human-readable for agent / widget. */
   label: string;
+  /** From `ui.action`; the button verb the checkout renders (e.g. "Verify license"). */
+  action?: string;
   /** age only. */
   minAge?: number;
   /** discount only. */
