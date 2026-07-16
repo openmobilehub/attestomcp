@@ -110,6 +110,13 @@ export interface RenderRequirementsOptions {
    *  a manual refresh (#63). Route-agnostic — the host owns the URL, same as
    *  `payment.placeOrderPath`. Omitted ⇒ no poll (unchanged for hosts without one). */
   statusUrl?: string;
+  /** An opaque signature of THIS order's current verification state, baked into the poll.
+   *  When the status endpoint returns a `revision` that differs, the page is stale (a step
+   *  was made on another device — age verified, loyalty applied) and reloads to mirror it,
+   *  not only on final completion (#73). Route-agnostic — the host decides what the revision
+   *  encodes and returns the matching `revision` from `statusUrl`. Omitted ⇒ completion-only
+   *  (unchanged; #63). */
+  statusRevision?: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -268,7 +275,7 @@ export function renderRequirements(
   // Live-completion poll (#63): while the order isn't paid, poll the host's status endpoint
   // and reload once it reports completion (the reload re-renders the paid banner). A GET poll
   // + reload is idempotent — completion re-reads the recorded order, so no double charge.
-  const livePoll = !paid && opts.statusUrl ? renderPollScript(opts.statusUrl) : "";
+  const livePoll = !paid && opts.statusUrl ? renderPollScript(opts.statusUrl, opts.statusRevision) : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -420,18 +427,31 @@ function renderPlaceScript(order: RenderOrder, methods: PaymentMethod[], payment
 // locked" until a manual refresh. While the order isn't paid, poll the host's status endpoint
 // (`{ completed: boolean }`) and reload once it reports completion — the reload re-renders the
 // paid banner. A GET poll + reload is idempotent (completion re-reads the recorded order).
-function renderPollScript(statusUrl: string): string {
+function renderPollScript(statusUrl: string, revision?: string): string {
+  // `revision` (#73): the page bakes its CURRENT verification signature; when the endpoint
+  // returns a differing `revision`, an intermediate step happened elsewhere (age verified,
+  // loyalty applied) and the tab is stale ⇒ reload. Absent ⇒ completion-only (#63). The
+  // reload is idempotent (a GET poll + full-page reload; completion re-reads the recorded
+  // order). Route-agnostic — the host owns what the revision encodes.
+  const revDecl = revision != null ? `var rev = ${JSON.stringify(revision)};` : "";
+  const changed = revision != null ? `(data.revision != null && data.revision !== rev)` : "false";
   return `<script>
     (function () {
       var url = ${JSON.stringify(statusUrl)};
+      ${revDecl}
       function check() {
         return fetch(url, { headers: { accept: "application/json" } })
           .then(function (res) { return res.ok ? res.json() : null; })
-          .then(function (data) { if (data && data.completed) { clearInterval(timer); location.reload(); } })
+          .then(function (data) {
+            if (!data) return;
+            // Completion (#63) OR an intermediate step changed elsewhere (#73) ⇒ reload to
+            // reflect current server state (paid banner, Age ✓, discounted total, unlocked pay).
+            if (data.completed || ${changed}) { clearInterval(timer); location.reload(); }
+          })
           .catch(function () { /* transient — keep polling */ });
       }
       var timer = setInterval(check, 4000);
-      // The buyer typically pays on another tab/device, so this tab is backgrounded;
+      // The buyer typically acts on another tab/device, so this tab is backgrounded;
       // check immediately when they return so it flips without waiting for the next tick.
       document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
     })();

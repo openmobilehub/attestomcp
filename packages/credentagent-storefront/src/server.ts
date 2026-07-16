@@ -241,6 +241,20 @@ export function originFromRequest(req: Request): string {
   return host ? `${proto}://${host}`.replace(/\/+$/, "") : "";
 }
 
+/**
+ * A stable, opaque signature of an order's verification state (#73). The checkout page
+ * bakes the current one (`statusRevision`) and `/checkout/order-status` returns it; when
+ * they differ, a step was made elsewhere (age verified, loyalty applied) and the standing
+ * tab reloads to mirror it — not only on final completion (#63). Changes iff a tracked
+ * field changes; order-insensitive across custom gates.
+ */
+export function verificationRevision(v: VerificationRecord | null | undefined): string {
+  const age = v?.ageVerified === true ? 1 : 0;
+  const loyalty = v?.loyalty?.applied === true ? 1 : 0;
+  const gates = Object.keys(v?.verifiedGates ?? {}).sort().join(",");
+  return `a${age}|l${loyalty}|g:${gates}`;
+}
+
 // Re-home a mounted-ceremony approve link (`/credentagent/*`) onto THIS server's origin —
 // the same base the checkout link uses — so the gate links and the checkout link
 // share an origin (the rails are registered on this same app). Links to any other
@@ -729,7 +743,10 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     // rail — the page polls this order's status endpoint and reloads on completion (the same
     // signal the widget polls). Route-agnostic: the gate renders whatever URL we pass.
     const statusUrl = `/checkout/order-status?orderId=${encodeURIComponent(order.id)}`;
-    res.type("html").send(renderRequirements(order, requires, verification, { ...(payment ? { payment } : {}), paid, statusUrl }));
+    // #73: bake THIS order's current verification signature so a standing tab reloads when a
+    // step is made elsewhere (age verified, loyalty applied), not only on final completion.
+    const statusRevision = verificationRevision(v);
+    res.type("html").send(renderRequirements(order, requires, verification, { ...(payment ? { payment } : {}), paid, statusUrl, statusRevision }));
   });
   app.post("/checkout/place-order", async (req: Request, res: Response) => {
     // statelessOrders: reconstruct + verify from the body's `cart` mandate; else the store.
@@ -761,7 +778,10 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     res.setHeader("Access-Control-Allow-Origin", "*");
     const orderId = typeof req.query.orderId === "string" ? req.query.orderId : "";
     const order = orderId ? await orderStore.read(orderId) : null;
-    res.json({ completed: !!order, order });
+    // #73: return this order's current verification signature so a standing checkout tab can
+    // reload the moment a step is made on another device — not only when payment completes.
+    const v = orderId ? (((await verificationStore.read(orderId)) ?? null) as VerificationRecord | null) : null;
+    res.json({ completed: !!order, revision: verificationRevision(v), order });
   });
 
   return {

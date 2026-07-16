@@ -258,3 +258,27 @@ describe("renderRequirements — hub stepper agrees with the ceremony rail (#46)
     expect(railLabels(html)).toEqual(["Age", "Membership", "Pay"]); // …so the stepper must show it too
   });
 });
+
+// ── #73: live cross-device mirror — the standing tab reflects INTERMEDIATE steps ─────
+// #63 reloads a standing checkout tab on completion. #73 extends it: when the host also
+// bakes a `statusRevision` (a signature of this order's verification state) and the status
+// endpoint returns a DIFFERING `revision`, the tab reloads mid-ceremony — so age verified /
+// loyalty applied on another device shows here without a manual refresh. Route-agnostic +
+// backward-compatible: no statusRevision ⇒ completion-only (#63).
+describe("renderRequirements — live cross-device status mirror (#73)", () => {
+  const statusUrl = "/checkout/order-status?orderId=ORD-T030";
+
+  it("reloads on a revision change when the host bakes a statusRevision", () => {
+    const html = renderRequirements(order, manifest, {}, { statusUrl, statusRevision: "age0|loy0" });
+    expect(html).toContain("age0|loy0");         // the current revision is baked into the page
+    expect(html).toContain("data.revision");     // …and the poll compares it to the endpoint's
+    expect(html).toContain("location.reload()");
+  });
+
+  it("reloads ONLY on completion when no statusRevision is supplied (backward-compatible with #63)", () => {
+    const html = renderRequirements(order, manifest, {}, { statusUrl });
+    expect(html).toContain("setInterval");        // the poll is present
+    expect(html).toContain("data.completed");     // and still reloads on completion
+    expect(html).not.toContain("data.revision");  // but does NOT compare revisions
+  });
+});

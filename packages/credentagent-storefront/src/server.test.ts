@@ -10,7 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
-import { createStorefront, originFromRequest, type Storefront } from "./server.js";
+import { createStorefront, originFromRequest, verificationRevision, type Storefront } from "./server.js";
 import { redisStorage, type RedisLike } from "./redis.js";
 import { firestoreCatalog, type FirestoreLike } from "./firestore.js";
 import { MemoryOrderStore } from "./state.js";
@@ -808,5 +808,47 @@ describe("statelessOrders — requires a stable signingKey (fail fast)", () => {
   });
   it("stateful (default) never requires a key", () => {
     expect(() => createStorefront({})).not.toThrow();
+  });
+});
+
+// #73: live cross-device mirror. #63 reloaded a standing tab only on COMPLETION; this makes
+// /checkout/order-status also carry a `revision` (a signature of the order's verification
+// state) and /checkout bake the matching one, so the tab reloads the moment a step is made
+// on another device (age verified, loyalty applied) — not only when payment lands.
+describe("live cross-device status mirror (#73)", () => {
+  const orderIdOf = async (c: Client, productId: string): Promise<string> =>
+    ((await c.callTool({ name: "checkout", arguments: { items: [{ productId, quantity: 1 }] } })).structuredContent as { orderId: string }).orderId;
+
+  it("verificationRevision is stable for equal state and changes when a tracked field changes", () => {
+    const base = verificationRevision({});
+    expect(verificationRevision(undefined)).toBe(base);
+    expect(verificationRevision({ ageVerified: true })).not.toBe(base);
+    expect(verificationRevision({ loyalty: { applied: true, membershipNumber: null } })).not.toBe(base);
+    expect(verificationRevision({ verifiedGates: { license: true } })).not.toBe(base);
+    // distinct fields yield distinct revisions (not merely "changed vs base")
+    expect(verificationRevision({ ageVerified: true }))
+      .not.toBe(verificationRevision({ loyalty: { applied: true, membershipNumber: null } }));
+  });
+
+  it("/checkout bakes a statusRevision that matches /checkout/order-status's revision (no spurious reload)", async () => {
+    const store = createStorefront();
+    const orderId = await orderIdOf(await connect(store), "oak-whiskey");
+    const page = await request(store.app).get(`/checkout?order=${orderId}`);
+    const status = await request(store.app).get(`/checkout/order-status?orderId=${orderId}`);
+    expect(typeof status.body.revision).toBe("string");
+    expect(status.body.revision.length).toBeGreaterThan(0);
+    expect(page.text).toContain(status.body.revision); // the page baked the current revision
+  });
+
+  it("order-status revision advances when this order's verification changes — the live-mirror signal", async () => {
+    // Inject the verification store the endpoint reads, then simulate a step made on another
+    // device (age verified). The revision must change so the standing tab's poll reloads.
+    const vstore = new MemoryVerificationStore();
+    const store = createStorefront({ verificationStore: vstore });
+    const orderId = await orderIdOf(await connect(store), "oak-whiskey");
+    const before = (await request(store.app).get(`/checkout/order-status?orderId=${orderId}`)).body.revision;
+    await vstore.write(orderId, { ageVerified: true });
+    const after = (await request(store.app).get(`/checkout/order-status?orderId=${orderId}`)).body.revision;
+    expect(after).not.toBe(before);
   });
 });
