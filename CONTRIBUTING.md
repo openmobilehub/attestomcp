@@ -19,7 +19,7 @@ Use it to see the packages in action; contribute library changes here.
 
 ## Dev setup
 
-You need **Node ≥ 20** (CI pins Node 20; both packages declare `engines.node >= 20`).
+You need **Node ≥ 20** (CI runs Node 22; both packages declare `engines.node >= 20`).
 
 ```bash
 npm install        # installs the workspace + dev deps (use `npm ci` for a clean, lockfile-exact install)
@@ -77,7 +77,9 @@ you push to a branch here, you get that review for free.
 
 ## Code review
 
-PRs get both automated and human review.
+PRs get both automated and human review. The checklist both run is
+[`REVIEW.md`](REVIEW.md) (repo root) — read it before opening a PR to know exactly what
+your diff will be held against.
 
 ### Automated Claude review
 
