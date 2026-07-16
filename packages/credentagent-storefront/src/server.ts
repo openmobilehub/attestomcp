@@ -725,7 +725,11 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
           ],
         };
 
-    res.type("html").send(renderRequirements(order, requires, verification, { ...(payment ? { payment } : {}), paid }));
+    // #63: let a standing checkout tab reflect a completion made on another tab / device /
+    // rail — the page polls this order's status endpoint and reloads on completion (the same
+    // signal the widget polls). Route-agnostic: the gate renders whatever URL we pass.
+    const statusUrl = `/checkout/order-status?orderId=${encodeURIComponent(order.id)}`;
+    res.type("html").send(renderRequirements(order, requires, verification, { ...(payment ? { payment } : {}), paid, statusUrl }));
   });
   app.post("/checkout/place-order", async (req: Request, res: Response) => {
     // statelessOrders: reconstruct + verify from the body's `cart` mandate; else the store.

@@ -104,6 +104,12 @@ export interface RenderRequirementsOptions {
   payment?: PaymentOptions;
   /** A recorded completion for THIS order ⇒ render the paid state, not the methods. */
   paid?: RenderPaid | null;
+  /** A host status endpoint for THIS order returning `{ completed: boolean }`. When set
+   *  and the order is not yet paid, the page polls it and reloads on completion, so a
+   *  standing checkout tab reflects a payment made on another tab / device / rail without
+   *  a manual refresh (#63). Route-agnostic — the host owns the URL, same as
+   *  `payment.placeOrderPath`. Omitted ⇒ no poll (unchanged for hosts without one). */
+  statusUrl?: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -251,6 +257,11 @@ export function renderRequirements(
   // (the paid banner, not the picker).
   const bfcacheGuard = `<script>window.addEventListener("pageshow",function(e){if(e.persisted)location.reload();});</script>`;
 
+  // Live-completion poll (#63): while the order isn't paid, poll the host's status endpoint
+  // and reload once it reports completion (the reload re-renders the paid banner). A GET poll
+  // + reload is idempotent — completion re-reads the recorded order, so no double charge.
+  const livePoll = !paid && opts.statusUrl ? renderPollScript(opts.statusUrl) : "";
+
   return `<!doctype html>
 <html lang="en">
 ${pageHead(`Checkout · ${order.id}`)}
@@ -272,6 +283,7 @@ ${pageHead(`Checkout · ${order.id}`)}
   ${placeScript}
   ${paid ? "" : trustNote(manifest)}
   ${bfcacheGuard}
+  ${livePoll}
   </div>
 </body>
 </html>`;
@@ -392,6 +404,29 @@ function renderPlaceScript(order: RenderOrder, methods: PaymentMethod[], payment
         }
       });
     }
+  </script>`;
+}
+
+// Live-completion poll (#63). A standing checkout tab is server-rendered once; if the buyer
+// completes payment on another tab / device / rail, this tab would keep showing "Payment is
+// locked" until a manual refresh. While the order isn't paid, poll the host's status endpoint
+// (`{ completed: boolean }`) and reload once it reports completion — the reload re-renders the
+// paid banner. A GET poll + reload is idempotent (completion re-reads the recorded order).
+function renderPollScript(statusUrl: string): string {
+  return `<script>
+    (function () {
+      var url = ${JSON.stringify(statusUrl)};
+      function check() {
+        return fetch(url, { headers: { accept: "application/json" } })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) { if (data && data.completed) { clearInterval(timer); location.reload(); } })
+          .catch(function () { /* transient — keep polling */ });
+      }
+      var timer = setInterval(check, 4000);
+      // The buyer typically pays on another tab/device, so this tab is backgrounded;
+      // check immediately when they return so it flips without waiting for the next tick.
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+    })();
   </script>`;
 }
 

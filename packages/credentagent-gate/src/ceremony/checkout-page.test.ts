@@ -189,3 +189,31 @@ describe("renderRequirements — paid revisit", () => {
     expect(paidHtml).toContain('addEventListener("pageshow"');
   });
 });
+
+// ── #63: a standing /checkout tab reflects a completion made elsewhere ──────────
+// The hub is server-rendered once; a payment completed on another tab/device/rail would
+// otherwise leave this tab showing "Payment is locked" until a manual refresh. When the
+// host supplies a status endpoint, the page polls it and reloads on completion. Route-
+// agnostic: the host owns the URL (same pattern as payment.placeOrderPath).
+describe("renderRequirements — live completion poll (#63)", () => {
+  const statusUrl = "/checkout/order-status?orderId=ORD-T030";
+
+  it("polls the host status URL and reloads on completion while the order is unpaid", () => {
+    const html = renderRequirements(order, manifest, { ageVerified: true }, { statusUrl });
+    expect(html).toContain(statusUrl); // the exact host URL, verbatim (route-agnostic)
+    expect(html).toContain("setInterval"); // an open tab flips itself, no manual refresh
+    expect(html).toContain(".completed"); // keys off the server's completion flag
+    expect(html).toContain("location.reload()");
+  });
+
+  it("does NOT poll once the order is already paid (no redundant reload loop)", () => {
+    const html = renderRequirements(order, manifest, {}, { statusUrl, paid: { amount: 124, currency: "USD", method: "passkey" } });
+    expect(html).not.toContain(statusUrl);
+  });
+
+  it("emits no poll when the host supplies no statusUrl (unchanged for hosts without one)", () => {
+    const html = renderRequirements(order, manifest, { ageVerified: true });
+    expect(html).not.toContain("/checkout/order-status");
+    expect(html).not.toContain("setInterval");
+  });
+});
