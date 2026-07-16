@@ -1,8 +1,9 @@
 # `hnp-draws/` — the human-not-present "doorman" in action (005 seams, preview)
 
 Watch the [PR #41](https://github.com/openmobilehub/credentagent/pull/41) HNP seams decide, with **no web
-page and no phone** — a self-contained script that mints a **pre-approval** (an Intent Mandate) and throws
-good + bad purchases (**draws**) at `completeOrder`, printing what the gate allows and refuses.
+page and no phone** — a self-contained script that pre-approves a spending limit (an Intent Mandate) via the
+**`DelegatedGate`** facade, then has the agent draw good + bad purchases against it, printing what the gate
+allows and refuses.
 
 ## Run it
 
@@ -14,14 +15,15 @@ node examples/hnp-draws/demo.mjs
 ## What you see
 
 ```
-🎫  Pre-approval: "Reorder Blue Bottle coffee, up to $40, this month"
-✅  1 bag of coffee ($18)          → COMPLETED (no real money moved)
-⛔  reuse same transaction         → REFUSED: replay
-⛔  $54 cart, over the cap         → REFUSED: over-cap, over-total
-⛔  different store (Starbucks)    → REFUSED: out-of-scope
-⛔  wine on a coffee approval      → REFUSED: step-up   (age is never delegable)
-🔴  you revoke from your phone…
-⛔  another reorder                → REFUSED: revoked
+🎫  Pre-approved: coffee at blue-bottle, up to $30/order ($100 total). Off to sleep. 😴
+
+  ✅  1 coffee                   $18   approved — $82 of $100 left
+  ✅  another coffee (new id)    $18   approved — $64 of $100 left
+  ⛔  reuse c1 — double-spend    $18   refused — replay
+  ⛔  3 coffees at once          $54   refused — over-cap   ($54 > $30/order)
+  ⛔  coffee — different store   $18   refused — out-of-scope
+  ⛔  wine — age-restricted      $20   refused — step-up   (age is never delegable)
+  ⛔  1 coffee — after revoke    $18   refused — revoked
 ```
 
 ## What it proves
