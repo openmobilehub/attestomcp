@@ -143,7 +143,11 @@ function railSteps(
   const steps: RailStep[] = [];
   for (const e of gateEntries) {
     if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
-    else if (e.effect === "discount") steps.push({ label: "Membership", done: loyaltyApplied || paid });
+    // Membership is an OPTIONAL discount, not a ceremony everyone runs: show it ONLY when the
+    // discount is actually applied — never merely because it's OFFERED, and never ✓'d just
+    // because the order is paid (that was a phantom "Membership ✓" the buyer never earned).
+    // Mirrors the order-derived ceremony rail (theme.ts `checkoutRail`) so hub and rail agree (#46).
+    else if (e.effect === "discount") { if (loyaltyApplied) steps.push({ label: "Membership", done: true }); }
     // Custom gate (007): its own label as a step, done once proven for this order.
     else if (e.effect === "gate") steps.push({ label: e.label || "Verify", done: verifiedGates[e.credential] === true || paid });
   }
