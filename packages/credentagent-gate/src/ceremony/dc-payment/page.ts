@@ -36,8 +36,8 @@ export interface DcPaymentPageArgs {
   returnUrl?: string;
   /** statelessOrders: base64url cart mandate carried back to the store-less `/checkout`. */
   cart?: string;
-  /** The order-derived progress rail HTML (from `checkoutRail`); lists only the gates
-   *  this order actually has, with Pay current. Absent ⇒ no rail. */
+  /** The order-derived progress rail HTML (from `checkoutRail`), built by the route which
+   *  holds the full re-priced order. Absent ⇒ no rail (never a hardcoded one). */
   rail?: string;
 }
 
@@ -65,8 +65,8 @@ export function renderDcPaymentPage(args: DcPaymentPageArgs): string {
     currency,
     caption: `Order ${order}`,
   });
-  // The order-derived progress rail (from the route via checkoutRail): Pay is current,
-  // and only the gates this order actually has appear before it.
+  // The order-derived progress rail (built by the route via checkoutRail) with Pay current;
+  // it lists only the gates THIS order actually has — never a hardcoded Age ✓ · Membership ✓.
   const rail = args.rail ?? "";
   // Page-local chrome layered over the shared design system: the verify-progress rows
   // reuse `.step`; the receipt gate rows + the success card are page-specific.
@@ -218,16 +218,6 @@ ${pageHead(`Authorize payment (cross-device) · ${order}`, extraCss)}
       if (out.completed) {
         goDc.disabled = true;
         btn.textContent = "Authorized ✓";
-        // Mark the Pay step done in the progress rail — the server rendered it as the
-        // current step (a number); on completion it should show ✓ like the other done gates.
-        const railStepEls = document.querySelectorAll(".rail-step");
-        const payStep = railStepEls[railStepEls.length - 1];
-        if (payStep) {
-          payStep.classList.remove("current");
-          payStep.classList.add("done");
-          const payDot = payStep.querySelector(".rail-dot");
-          if (payDot) payDot.textContent = "✓";
-        }
       }
     }
   </script>

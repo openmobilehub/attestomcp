@@ -32,6 +32,7 @@ import * as jose from "jose";
 import { age, membership } from "../../credentials.js";
 import { DEFAULT_LOYALTY_DISCOUNT_PCT } from "../mandate.js";
 import type { CeremonyOrder } from "../types.js";
+import type { Credential } from "../../types.js";
 import type { CredentialKind } from "./dcql.js";
 import { openReaderContext } from "../mdoc/readerContext.js";
 import { decodeVpToken, type DisclosedEntry } from "../mdoc/mdoc.js";
@@ -107,6 +108,23 @@ export function evaluateCredential(kind: CredentialKind, claims: Record<string, 
   };
 }
 
+/**
+ * Evaluate disclosed claims for a CUSTOM credential (007) with that credential's OWN
+ * `verify` — the explicit-positive-claim control (invariant 5) is the developer's
+ * predicate (e.g. `c.license_active === true`), run SERVER-SIDE here; it never crosses
+ * the wire (Principle VI). Same presence-only posture as the built-ins: disclosure +
+ * nonce binding are enforced, issuer/device trust is not (trust_level presence-only-demo).
+ */
+export function evaluateCustom(credential: Credential, claims: Record<string, unknown>): CredGateResult {
+  const verified = credential.verify(claims);
+  return {
+    verified,
+    membershipNumber: null,
+    gates: [{ gate: credential.ui.label, pass: verified, detail: verified ? "claim verified" : "required claim not disclosed" }],
+    trust_level: "presence-only-demo",
+  };
+}
+
 // ── Disclosed mdoc DeviceResponse → the flat `claims` record `evaluateCredential`
 //    reads. mdoc.ts labels each claim "<namespace> / <elementId>"; we key by the
 //    bare elementId. Values can be raw or {_tag, value} (sanitized dates etc.) — a
@@ -141,8 +159,11 @@ export async function verifyCredentialPresentation(args: {
   secret: string;
   minimumAge?: number;
   percent?: number;
+  /** Custom credential (007): when present, its OWN `verify` runs instead of the
+   *  built-in age/membership policy — same decrypt/nonce-binding path. */
+  credential?: Credential;
 }): Promise<CredGateResult> {
-  const { kind, result, readerContextToken, secret, minimumAge, percent } = args;
+  const { kind, result, readerContextToken, secret, minimumAge, percent, credential } = args;
   const ctx = await openReaderContext(readerContextToken, secret);
 
   let data: unknown = result?.data;
@@ -173,11 +194,18 @@ export async function verifyCredentialPresentation(args: {
   const openid4vpResponse = JSON.parse(new TextDecoder().decode(plaintext)) as { vp_token?: unknown };
   const vpToken = openid4vpResponse.vp_token;
   const disclosed = vpToken ? decodeVpToken(vpToken) : [];
-  return evaluateCredential(kind, flattenDisclosed(disclosed), { minimumAge, percent });
+  const flat = flattenDisclosed(disclosed);
+  return credential ? evaluateCustom(credential, flat) : evaluateCredential(kind, flat, { minimumAge, percent });
 }
 
 // Shared by mdoc-verify.ts: a decoded DeviceResponse → the evaluateCredential
 // policy, flattening the disclosed claims into the common record shape.
 export function evaluateDisclosed(kind: CredentialKind, disclosed: DisclosedEntry[], opts: EvaluateOpts = {}): CredGateResult {
   return evaluateCredential(kind, flattenDisclosed(disclosed), opts);
+}
+
+// Shared by mdoc-verify.ts (007): a decoded DeviceResponse → a CUSTOM credential's own
+// `verify`, flattening the disclosed claims into the same record shape first.
+export function evaluateDisclosedCustom(credential: Credential, disclosed: DisclosedEntry[]): CredGateResult {
+  return evaluateCustom(credential, flattenDisclosed(disclosed));
 }

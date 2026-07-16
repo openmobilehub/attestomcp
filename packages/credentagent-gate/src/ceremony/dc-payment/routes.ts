@@ -29,7 +29,6 @@ import { buildDcPaymentRequest } from "./request.js";
 import { buildDcMandate, runDcGates, verifyDcPresentation, type DcMandate, type GateResult } from "./verify.js";
 import { renderDcPaymentPage } from "./page.js";
 import { checkoutRail } from "../theme.js";
-import { renderManifestRail } from "../checkout-page.js";
 
 // Minimal structural request/response shapes — the real Express req/res satisfy
 // them, so the package never imports express.
@@ -84,20 +83,18 @@ export const registerDcPaymentGate: RailRegistrar = (app: CeremonyApp, ctx: Cere
   get("/credentagent/dc-payment", async (req, res) => {
     const order = await resolveOrder(ctx, typeof req.query.order === "string" ? req.query.order : undefined, { cartMandate: decodeCartMandateParam(req.query.cart) });
     if (!order) { res.status(404).type("html").send("<!doctype html><h1>Order not found</h1>"); return; }
-    const ageVerified = (await ctx.verificationStore.read(order.id))?.ageVerified === true;
-    // Prefer the manifest-driven stepper (matches the checkout hub exactly); fall back to
-    // the order-derived one when no policy resolver is wired.
-    const manifest = ctx.resolveGate?.(order) ?? [];
+    // Order-derived stepper with Pay current: reflects only the gates THIS order has, and
+    // shows Age ✓ only when it was ACTUALLY verified (read from the store) — never hardcoded.
+    const verified = (await ctx.verificationStore.read(order.id)) ?? {};
+    const rail = checkoutRail(order, "pay", { ageVerified: verified.ageVerified === true });
     res.status(200).type("html").send(
       renderDcPaymentPage({
-        rail: manifest.length
-          ? renderManifestRail(manifest, "pay", { ageVerified, loyaltyApplied: order.discount > 0 })
-          : checkoutRail(order, "pay", { age: ageVerified }),
         order: order.id,
         total: order.total,
         currency: order.currency,
         lines: order.lines.map((l) => ({ name: l.name ?? l.id, quantity: l.quantity, lineTotal: l.lineTotal, currency: l.currency ?? order.currency })),
         cart: typeof req.query.cart === "string" ? req.query.cart : undefined,
+        rail,
       }),
     );
   });

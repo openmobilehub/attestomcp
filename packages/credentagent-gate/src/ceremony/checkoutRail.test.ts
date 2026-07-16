@@ -19,7 +19,7 @@ describe("checkoutRail reflects the order's actual gates (#46)", () => {
   });
 
   it("on the payment page with age VERIFIED, Age shows done and Pay is current", () => {
-    const html = checkoutRail(ageOnly, "pay", { age: true });
+    const html = checkoutRail(ageOnly, "pay", { ageVerified: true });
     expect(hasStep(html, "Age")).toBe(true);
     expect(hasStep(html, "Membership")).toBe(false);
     expect(html).toContain("✓"); // Age ticked because it was ACTUALLY verified

@@ -9,7 +9,8 @@
 // signature (trust anchor) — same posture as the OpenID4VP path; trust_level stays
 // presence-only-demo.
 import type { Origin } from "../origin.js";
-import { evaluateDisclosed, type CredGateResult } from "./verify.js";
+import { evaluateDisclosed, evaluateDisclosedCustom, type CredGateResult } from "./verify.js";
+import type { Credential } from "../../types.js";
 import type { CredentialKind } from "./dcql.js";
 import { mdocDocSpec } from "./doc-spec.js";
 import {
@@ -27,8 +28,11 @@ export async function verifyMdocPresentation(args: {
   secret: string;
   minimumAge?: number;
   percent?: number;
+  /** Custom credential (007): when present, its OWN `verify` runs on the disclosed
+   *  claims instead of the built-in age/membership policy. */
+  credential?: Credential;
 }): Promise<CredGateResult> {
-  const { kind, result, mdocContextToken, origin, secret, minimumAge, percent } = args;
+  const { kind, result, mdocContextToken, origin, secret, minimumAge, percent, credential } = args;
   const ctx = await openMdocContext(mdocContextToken, secret);
 
   let data: unknown = result?.data;
@@ -47,6 +51,7 @@ export async function verifyMdocPresentation(args: {
     sessionTranscript,
   });
   const disclosed = disclosedFromDeviceResponse(deviceResponse);
+  if (credential) return evaluateDisclosedCustom(credential, disclosed);
   // The iOS DeviceRequest is built from this same doc spec; keep it referenced so
   // the request/verify pair stays aligned to one doctype definition.
   void mdocDocSpec(kind, minimumAge);

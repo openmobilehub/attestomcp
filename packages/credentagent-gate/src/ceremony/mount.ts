@@ -9,7 +9,7 @@
 // The package stays dependency-free: `CeremonyApp` is a minimal structural type
 // (no `express` import) carrying just `locals` + the route methods a rail needs.
 import { randomBytes } from "node:crypto";
-import type { ReaderIdentity, VerificationManifestEntry, VerificationStore } from "../types.js";
+import type { Credential, ReaderIdentity, VerificationManifestEntry, VerificationStore } from "../types.js";
 import { deriveOrigin, type Origin, type RequestLike } from "./origin.js";
 import type {
   CeremonyCatalog,
@@ -64,9 +64,15 @@ export interface CeremonySeams {
    *  reader (presence-only). Normally set once on `new CredentAgent({ readerIdentity })`. */
   readerIdentity?: ReaderIdentity;
   /** Resolve the full policy manifest for an order (the host's `store.gate` resolver).
-   *  Lets the ceremony rail pages render the SAME manifest-driven stepper as the checkout
-   *  hub, so they never diverge. Absent ⇒ rails fall back to the order-derived stepper. */
+   *  Dormant pending the manifest-driven rail stepper (re-wiring is the post-merge
+   *  follow-up); the rails currently render the order-derived stepper. */
   resolveGate?: (order: CeremonyOrder) => VerificationManifestEntry[];
+  /** The gate's in-process credential registry (id → Credential), populated by
+   *  `requirements()` and passed here by `CredentAgent.mount()` (007). The rails read
+   *  it to serve a custom credential's own request/verify; it is re-published on
+   *  `app.locals.credentagent` so the host's `completion` seam can hand it to
+   *  `completeOrder` for the custom-gate sweep. Holds CODE (never the wire). */
+  credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
 /** The resolved context each rail receives (every required seam present). */
@@ -84,8 +90,11 @@ export interface CeremonyContext {
   statelessOrders?: boolean;
   /** Stable reader identity the rails present (absent ⇒ per-request self-signed). */
   readerIdentity?: ReaderIdentity;
-  /** Resolve the policy manifest for an order — feeds the rails' manifest-driven stepper. */
+  /** Resolve the policy manifest for an order (dormant pending the manifest-driven stepper). */
   resolveGate?: (order: CeremonyOrder) => VerificationManifestEntry[];
+  /** The gate's credential registry (007) — the rails read it to serve a custom
+   *  credential's own request/verify. Absent when no CredentAgent registry was passed. */
+  credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
 /** A rail attaches its routes to the host app given the resolved context. */
@@ -116,6 +125,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
   const statelessOrders = options.statelessOrders ?? locals.statelessOrders ?? false;
   const readerIdentity = options.readerIdentity ?? locals.readerIdentity;
   const resolveGate = options.resolveGate ?? locals.resolveGate;
+  const credentialRegistry = options.credentialRegistry ?? locals.credentialRegistry;
   let signingKey = options.signingKey ?? locals.signingKey;
 
   // Fail fast (CT2) — a load-bearing seam must never silently default. (`origin`
@@ -153,6 +163,7 @@ export function mountCeremony(app: CeremonyApp, options: Partial<CeremonySeams> 
     signingKey,
     origin,
     statelessOrders,
+    ...(credentialRegistry ? { credentialRegistry } : {}),
     ...(settlement ? { settlement } : {}),
     ...(readerIdentity ? { readerIdentity } : {}),
     ...(resolveGate ? { resolveGate } : {}),

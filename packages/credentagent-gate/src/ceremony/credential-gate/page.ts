@@ -12,11 +12,11 @@
 // Credentials API the page points the buyer at the instant-demo button. Every surface
 // states trust_level "presence-only-demo" (CT11 / Principle VII / FR-011): the wire
 // crypto is real; the issuer trust anchor is not — never a real safety control.
-import type { CredentialKind } from "./dcql.js";
 import { pageHead, brandHeader, trustFooter } from "../theme.js";
 
 export interface CredentialPageArgs {
-  kind: CredentialKind;
+  /** `"age"` / `"membership"` (built-ins) OR a custom credential id (007). */
+  kind: string;
   /** Order id, echoed back so verify is scoped to one order. */
   order: string;
   /** Re-derived from the catalog (age gate). */
@@ -26,6 +26,14 @@ export interface CredentialPageArgs {
   currency?: string;
   /** Membership discount percent (membership gate). */
   percent?: number;
+  /** Custom credential (007): its `ui.label` — the card title / progress step. */
+  label?: string;
+  /** Custom credential (007): its `ui.action` — the primary/demo button text. */
+  action?: string;
+  /** Custom credential (007): the canonical positive claim the instant-demo button
+   *  presents (derived from the credential's requested claim leaves → true). Goes
+   *  through the SAME server-side `verify` as a real wallet presentation. */
+  demoClaims?: Record<string, unknown>;
   /**
    * Where to send the buyer after this gate succeeds — the checkout hub, so the
    * sequence flows (hub → gate → back to hub with this gate ✓ → next gate).
@@ -35,8 +43,8 @@ export interface CredentialPageArgs {
   /** statelessOrders: the base64url cart mandate to carry back to `/checkout` so the
    *  store-less hub can re-resolve this order. Appended to the default returnUrl. */
   cart?: string;
-  /** The order-derived progress rail HTML (from `checkoutRail`), lists only the gates
-   *  this order actually has. Absent ⇒ no rail (never a hardcoded one). */
+  /** The order-derived progress rail HTML (from `checkoutRail`), built by the route which
+   *  holds the full re-priced order. Absent ⇒ no rail (never a hardcoded one). */
   rail?: string;
 }
 
@@ -44,52 +52,40 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/**
- * Honest page for a gate that's DEFINED in the policy (so it displays across checkout) but
- * whose wallet ceremony isn't mounted on this build — i.e. a custom credential. Beats a bare
- * "Unknown credential" (which is a lie: the gate IS known). Completing it is the generic
- * credential rail (roadmap), not a wiring bug.
- */
-export function renderPendingGatePage(label: string, action: string, returnUrl: string): string {
-  return `<!doctype html>
-<html lang="en">
-${pageHead(label)}
-<body>
-  <div class="wrap">
-  ${brandHeader({ h1: label, tagline: "Not presentable yet" })}
-  <div class="card">
-    <p class="lede">This gate is <strong>defined and shown across checkout</strong>, but presenting a
-    &ldquo;${escapeHtml(label)}&rdquo; credential (${escapeHtml(action)}) isn&rsquo;t wired into the ceremony
-    on this build — arbitrary credential types are on the roadmap (the generic credential rail). The
-    built-in gates (age, membership, payment) complete today.</p>
-    <a class="btn btn-secondary" href="${escapeHtml(returnUrl)}">&larr; Back to checkout</a>
-  </div>
-  ${trustFooter()}
-  </div>
-</body>
-</html>`;
-}
-
 export function renderCredentialPage(args: CredentialPageArgs): string {
   const minimumAge = args.minimumAge ?? 21;
   const percent = args.percent ?? 10;
   const isAge = args.kind === "age";
-  const title = isAge ? `Verify your age (${minimumAge}+)` : "Apply membership discount";
+  const isMembership = args.kind === "membership";
+  const isCustom = !isAge && !isMembership; // 007: any non-built-in credential id
+  const customLabel = args.label ?? args.kind;
+  const title = isAge
+    ? `Verify your age (${minimumAge}+)`
+    : isMembership
+      ? "Apply membership discount"
+      : customLabel;
   const lede = isAge
     ? `Your cart contains age-restricted items. Present a digital ID so we can confirm you are ${minimumAge} or older. Nothing is stored — only an over-${minimumAge} check.`
-    : `Present your membership credential to take ${percent}% off your cart. Optional — your purchase works without it.`;
-  const cta = isAge ? `Verify with my digital ID` : `Present membership credential`;
-  const demoCta = isAge ? `Verify age (instant demo)` : `Apply membership (instant demo)`;
+    : isMembership
+      ? `Present your membership credential to take ${percent}% off your cart. Optional — your purchase works without it.`
+      : `Your cart requires this credential. ${args.action ?? "Present the credential"} to continue — only the required claim is checked, nothing is stored.`;
+  const cta = isAge ? `Verify with my digital ID` : isMembership ? `Present membership credential` : (args.action ?? `Present credential`);
+  const demoCta = isAge ? `Verify age (instant demo)` : isMembership ? `Apply membership (instant demo)` : `${args.action ?? "Present credential"} (instant demo)`;
   // The canonical positive claim the instant-demo button presents — it goes
   // through the SAME server-side explicit-positive-claim check as a real wallet.
-  const demoClaims = isAge ? { [`age_over_${minimumAge}`]: true } : { membership_number: "DEMO-MEMBER-0001" };
+  const demoClaims = isAge
+    ? { [`age_over_${minimumAge}`]: true }
+    : isMembership
+      ? { membership_number: "DEMO-MEMBER-0001" }
+      : (args.demoClaims ?? {});
   const totalLine = args.total != null ? `<p class="small amount">Order ${escapeHtml(args.order)} · ${escapeHtml(args.currency ?? "USD")} ${args.total}</p>` : "";
   const returnUrl = args.returnUrl ?? `/checkout?order=${encodeURIComponent(args.order)}${args.cart ? `&cart=${args.cart}` : ""}`;
   // Identity-first tagline + the order-derived progress rail (built by the route via
-  // checkoutRail, which has the full order — so it lists only the gates THIS order
-  // actually has, with this gate current).
-  const tagline = isAge ? "Present a digital ID" : "Present a membership credential";
+  // checkoutRail) with THIS gate marked current. It lists only the gates the order
+  // actually has — never a hardcoded Age · Membership · Pay. Absent ⇒ no rail.
+  const tagline = isAge ? "Present a digital ID" : isMembership ? "Present a membership credential" : `Present your ${customLabel.toLowerCase()}`;
   const rail = args.rail ?? "";
+  void isCustom;
   // The PAGE-LOCAL extra styles: the calm gate-page chrome (verify log + the success
   // banner) layered over the shared design system. The verify-progress rows reuse the
   // shared `.step` styling; only the `#done` banner is page-specific.

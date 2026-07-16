@@ -1,7 +1,7 @@
 # Project Status — CredentAgent
 
 _Single source of truth for what's done, what's next, and what's waiting on you._
-_Updated **2026-07-08** · rename shipped (#37): repos + packages live as CredentAgent · CI green · 247 tests pass._
+_Updated **2026-07-12** · quickstart ladder (007) + storefront `0.2.1` (statelessMcp + serverless widget bundle) shipped · demo live on `mcp-apps-nine` · 249 tests pass._
 
 > **How this file works.** Read it at the start of every working session and update it at the end. It is
 > decisions-first: "Decisions for you" (each a checkbox + recommendation), then In flight / next, a rolling
@@ -29,6 +29,10 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
       *execute* (005 builds on 004 → publish → rename, deferred a week), but ratifying unblocks the 005 plan.
 - [ ] **Confirm the 005 Group-A decisions** (D1–D3, still *tentative* per the 2026-07-01 discussion) + the
       Decision-13 constitution amendment — both gate `/speckit-plan` → `/speckit-implement` for 005.
+- [ ] **Archive `mcp-apps-shopping-demo` (007 tail, T014).** Land the banner README ("this demo became
+      CredentAgent → quickstart") and `gh repo archive` it — **archive, never delete** (external videos, the
+      interoperability PDF, and partner threads link to it). Only after the quickstart is the demo of record,
+      which it now is. Recommendation: do it once 007 merges.
 
 ---
 
@@ -119,6 +123,7 @@ _Updated **2026-07-08** · rename shipped (#37): repos + packages live as Creden
 
 | What | Where |
 | :-- | :-- |
+| **Quickstart ladder (007) — the 5-min try/run/own demo + hosted cutover.** `examples/quickstart` (35-line hero, own package, ladder README, Deploy button), CI `quickstart-smoke` (10 assertions incl. security-bypass + widget-resource), demo promoted onto `mcp-apps-nine` (legacy alias kept). Two serverless bugs found by real-device testing + fixed in `0.2.1`: `statelessMcp` (multi-instance MCP session loss → `No valid session`; cross-instance tests + real-Vercel 20/20 seq · 15/15 conc) and the widget HTML not bundled into the function (`includeFiles` + smoke row g). `0.2.1` published; prod on the published dep (reproducible) | `specs/007-quickstart-ladder`, PR (this branch) |
 | **Rename EXECUTED: AttestoMCP → CredentAgent (2026-07-08)** — library ([PR #38](https://github.com/openmobilehub/credentagent/pull/38), 132 files, verified live both custody modes), GitHub repos renamed (`credentagent`, `credentagent-website`), website content ([credentagent-website#8](https://github.com/openmobilehub/credentagent-website/pull/8), Pages live), #31 retrofitted via the committed rename script | [#37](https://github.com/openmobilehub/credentagent/issues/37) |
 | **Published `0.2.0` as `@openmobilehub/credentagent-*`** (release `v0.2.0-credentagent` → CI publish with provenance; `NPM_TOKEN` secret set). Full deprecation chain: `attesto-*` + `attestomcp-*` all point at `credentagent-*` | npm |
 | `AttestoMcp` → `AttestoMCP` brand-casing rename (class, options type, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` *(historical — pre-CredentAgent)* | [#26](https://github.com/openmobilehub/credentagent/issues/26) |

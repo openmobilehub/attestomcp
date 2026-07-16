@@ -61,6 +61,7 @@ import {
   renderRequirements,
   MemoryVerificationStore,
   type CartItemRef,
+  type Credential,
   type CeremonyCatalog,
   type CeremonyOrder,
   type CeremonyOrderStore,
@@ -148,6 +149,17 @@ export interface StorefrontOptions {
    * state still use their stores.
    */
   statelessOrders?: boolean;
+  /**
+   * Opt-in (default false): serve `/mcp` with a **stateless** Streamable-HTTP transport —
+   * a fresh transport per request, no `Mcp-Session-Id`, nothing kept in per-instance memory.
+   * Multi-instance serverless (e.g. Vercel) has no session affinity, so the default stateful
+   * transport (a per-instance session map) rejects a follow-up request that lands on another
+   * instance with `No valid session`. Enable this on such deploys. Trade-off: no per-session
+   * server cart — tools that need the cart must receive it explicitly (the widget's checkout
+   * passes its on-screen `items`), and `extra.sessionId` is absent so cart tools fall back to
+   * a shared key. Pair with `statelessOrders` for a fully instance-independent checkout.
+   */
+  statelessMcp?: boolean;
   /**
    * Optional demo-mode settlement seam (e.g. on-chain). Throwing GATES completion:
    * a configured-but-failed settle records nothing and leaves the cart intact.
@@ -298,6 +310,7 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
   // provides a `signingKey`, OR explicitly opts into an ephemeral per-process key
   // (single-process dev / tests) — mirroring the gate's `allowEphemeralKey` escape hatch.
   const statelessOrders = opts.statelessOrders ?? false;
+  const statelessMcp = opts.statelessMcp ?? false;
   if (statelessOrders && !opts.signingKey && !opts.allowEphemeralKey) {
     throw new Error(
       "[credentagent-storefront] statelessOrders requires a stable `signingKey` so a cart mandate minted on " +
@@ -381,6 +394,11 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
         write: async (record: CompletedRecord) => { await orderStore.write(record.orderId, record); },
       },
       cart: { clear: async () => { const sid = orderSessions.get(input.order.id); if (sid) await cartStore.write(sid, new Map()); } },
+      // Custom-gate enforcement (007): hand `completeOrder` the credential registry
+      // `credentagent.mount(store.app)` published on app.locals — read LAZILY at completion
+      // time (mount runs after this closure is defined) so an applicable custom gate() is
+      // enforced on the shared completion path (invariant 1), not only in the rendered page.
+      credentialRegistry: (app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> } | undefined)?.credentialRegistry,
       ...(opts.settle ? { settle: opts.settle } : {}),
     });
   app.locals.credentagent = {
@@ -605,6 +623,22 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     // absolute behind any proxy (Vercel, a tunnel) with zero config — without it,
     // `${baseUrl}/checkout` would be relative and the widget's `new URL()` throws.
     if (!baseUrl) baseUrl = originFromRequest(req);
+
+    // Stateless mode (multi-instance serverless): a fresh transport + server per request,
+    // no session id, nothing in per-instance memory — so a request never depends on having
+    // hit the same instance as its `initialize`. See `statelessMcp`.
+    if (statelessMcp) {
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      res.on("close", () => { void transport.close(); });
+      try {
+        await buildServer().connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch {
+        if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "error" }, id: null });
+      }
+      return;
+    }
+
     const sid = req.headers["mcp-session-id"] as string | undefined;
     let transport = sid ? transports.get(sid) : undefined;
     if (!transport) {
@@ -663,7 +697,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     // the created order (the policy reads line ids + minimumAge — the re-priced
     // `order` carries the same lines; the discounted total shows via `order` below).
     const requires = homeRequires(resolveGate?.(created) ?? [], baseUrl, statelessOrders ? cartRaw : null) as VerificationManifestEntry[];
-    const verification: RenderVerification = { ageVerified, loyaltyApplied };
+    // Pass this order's proven custom gates (007) so the hub reflects a proven custom
+    // gate and unlocks payment — without it, a proven license loops back to a locked page.
+    const verification: RenderVerification = { ageVerified, loyaltyApplied, ...(v.verifiedGates ? { verifiedGates: v.verifiedGates } : {}) };
     const paid = done ? { amount: done.amount, currency: done.currency, method: done.method } : null;
 
     // An UNGATED storefront has no payment gate, so the manifest carries no

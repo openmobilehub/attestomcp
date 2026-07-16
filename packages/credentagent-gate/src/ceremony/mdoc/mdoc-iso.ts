@@ -174,12 +174,17 @@ export function buildItemsRequest(spec: MdocDocSpec): Uint8Array {
   return cborEncode({ docType, nameSpaces: { [namespace]: Object.fromEntries(sorted.map((e) => [e, false])) } });
 }
 
+// A request may carry one credential or several; the iOS DeviceRequest is one docRequest
+// per credential (item 6 — no truncation to the first). Callers pass a single spec or an array.
+const asSpecList = (specs: MdocDocSpec | MdocDocSpec[]): MdocDocSpec[] => (Array.isArray(specs) ? specs : [specs]);
+
 // Unsigned DeviceRequest (used by the structure tests). The real request sent to
 // iOS is reader-authenticated — see buildSignedDeviceRequest.
-export function buildDeviceRequest(spec: MdocDocSpec): Uint8Array {
+export function buildDeviceRequest(specs: MdocDocSpec | MdocDocSpec[]): Uint8Array {
+  const list = asSpecList(specs);
   return cborEncode({
     version: "1.0",
-    docRequests: [{ itemsRequest: new Tag(Buffer.from(buildItemsRequest(spec)), 24) }],
+    docRequests: list.map((spec) => ({ itemsRequest: new Tag(Buffer.from(buildItemsRequest(spec)), 24) })),
   });
 }
 
@@ -194,8 +199,13 @@ export function buildDeviceRequest(spec: MdocDocSpec): Uint8Array {
 // DeviceRequestInfo (mdoc v1.1): one mandatory use case covering our single doc
 // request (documentSets indices). Matches what verifier.multipaz.org sends; it is
 // part of the ReaderAuthAll signed payload, so it must be present AND identical.
-function buildDeviceRequestInfo(): Uint8Array {
-  return cborEncode({ useCases: [{ mandatory: true, documentSets: [[0]] }] });
+function buildDeviceRequestInfo(docCount = 1): Uint8Array {
+  // One mandatory use case whose document set references every doc index [0 … docCount-1].
+  // The single-doc shape ([[0]]) matches verifier.multipaz.org and is the on-device-tested path.
+  // The multi-doc shape ([[0,1,…]]) is the ISO-canonical extension (all docs required together),
+  // structure- and signature-verified here, but NOT yet confirmed against Apple's WebKit validator
+  // with a multi-credential wallet — verify on a real iOS 18 device before relying on it (item 6).
+  return cborEncode({ useCases: [{ mandatory: true, documentSets: [Array.from({ length: docCount }, (_, i) => i)] }] });
 }
 
 async function buildReaderAuthAll(args: {
@@ -219,18 +229,20 @@ async function buildReaderAuthAll(args: {
 }
 
 async function buildSignedDeviceRequest(
-  spec: MdocDocSpec,
+  specs: MdocDocSpec | MdocDocSpec[],
   sessionTranscript: Uint8Array,
   signingKey: NodeWebCrypto.CryptoKey,
   chainDer: Uint8Array[],
 ): Promise<Uint8Array> {
-  const itemsRequestTag = new Tag(Buffer.from(buildItemsRequest(spec)), 24);
-  const deviceRequestInfoTag = new Tag(Buffer.from(buildDeviceRequestInfo()), 24);
-  const readerAuthAll = await buildReaderAuthAll({ sessionTranscript, itemsRequestTags: [itemsRequestTag], deviceRequestInfoTag, signingKey, chainDer });
+  const list = asSpecList(specs);
+  const itemsRequestTags = list.map((spec) => new Tag(Buffer.from(buildItemsRequest(spec)), 24));
+  const deviceRequestInfoTag = new Tag(Buffer.from(buildDeviceRequestInfo(itemsRequestTags.length)), 24);
+  // One ReaderAuthAll COSE_Sign1 covers ALL docRequests (it signs over every itemsRequest tag).
+  const readerAuthAll = await buildReaderAuthAll({ sessionTranscript, itemsRequestTags, deviceRequestInfoTag, signingKey, chainDer });
   // Key order matches verifier.multipaz.org: version, docRequests, deviceRequestInfo, readerAuthAll.
   // readerAuthAll is an *array* of COSE_Sign1s (one per signing key); we always send exactly one,
   // so the value is [[protectedHdr, unprotected, null, sig]] — the outer array is not a mistake.
-  return cborEncode({ version: "1.1", docRequests: [{ itemsRequest: itemsRequestTag }], deviceRequestInfo: deviceRequestInfoTag, readerAuthAll: [readerAuthAll] });
+  return cborEncode({ version: "1.1", docRequests: itemsRequestTags.map((t) => ({ itemsRequest: t })), deviceRequestInfo: deviceRequestInfoTag, readerAuthAll: [readerAuthAll] });
 }
 
 // ── SessionTranscript = [null, null, ["dcapi", SHA256(CBOR([b64EncInfo, origin]))]] ──
@@ -249,7 +261,7 @@ export interface MdocRequestParts {
 }
 
 export async function buildMdocRequestParts(
-  spec: MdocDocSpec,
+  specs: MdocDocSpec | MdocDocSpec[],
   origin: string,
   signed = true,
 ): Promise<MdocRequestParts> {
@@ -263,9 +275,9 @@ export async function buildMdocRequestParts(
     const sessionTranscript = buildSessionTranscript(base64EncryptionInfo, origin);
     const host = new URL(origin).host.split(":")[0];
     const { chainDer, leafKey } = await makeMdocReaderCert(origin, host);
-    deviceRequest = await buildSignedDeviceRequest(spec, sessionTranscript, leafKey, chainDer);
+    deviceRequest = await buildSignedDeviceRequest(specs, sessionTranscript, leafKey, chainDer);
   } else {
-    deviceRequest = buildDeviceRequest(spec); // unsigned (diagnostic A/B)
+    deviceRequest = buildDeviceRequest(specs); // unsigned (diagnostic A/B)
   }
   return {
     data: { deviceRequest: bytesToB64url(deviceRequest), encryptionInfo: base64EncryptionInfo },

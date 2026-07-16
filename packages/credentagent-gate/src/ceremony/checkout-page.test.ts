@@ -9,7 +9,7 @@
 // render unchanged through the same code.
 
 import { describe, it, expect } from "vitest";
-import { renderRequirements, renderManifestRail, type RenderOrder, type PaymentOptions } from "./checkout-page.js";
+import { renderRequirements, type RenderOrder, type PaymentOptions } from "./checkout-page.js";
 import type { VerificationManifestEntry } from "../types.js";
 
 const order: RenderOrder = {
@@ -62,22 +62,6 @@ describe("renderRequirements — numbered gates + live status", () => {
     expect(done).toContain("✓ Age verified — 21+");
     expect(done).not.toContain("Verify age (21+)");
   });
-
-  it("renders a CUSTOM gate with its OWN label/action (never age copy) + in the stepper (#46)", () => {
-    const withCustom: VerificationManifestEntry[] = [
-      manifest[0], // age
-      { credential: "liquor-license", required: false, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Liquor license", action: "Verify license", approveUrl: "/credentagent/credential?order=ORD-T030&cred=liquor-license" },
-      manifest[1], // membership
-      manifest[2], // payment
-    ];
-    const html = renderRequirements(order, withCustom, { ageVerified: false });
-    expect(html).toContain("Verify license"); // the custom gate's OWN action verb
-    expect(html).toContain("Liquor license — optional."); // its own copy (optional here), not age's
-    expect(html).toContain("btn-optional"); // optional gate → de-emphasized button style, not solid
-    expect(html).toContain('rail-label">Liquor license'); // and a stepper step for it
-    // The bug rendered the custom gate as a SECOND age gate — assert exactly one age button.
-    expect((html.match(/Verify age/g) ?? []).length).toBe(1);
-  });
 });
 
 describe("renderRequirements — payment lock (presentation only)", () => {
@@ -105,26 +89,45 @@ describe("renderRequirements — payment lock (presentation only)", () => {
     expect(html).toContain("Pay $124.00");
   });
 
-  it("names the pending required gate in the lock — not a hardcoded 'age' (#46)", () => {
-    // age satisfied, but a REQUIRED custom gate is still pending → the lock must name
-    // THAT gate, not "age verification". (Fails with the old hardcoded copy.)
-    const withRequiredCustom: VerificationManifestEntry[] = [
-      manifest[0], // age (required)
-      { credential: "delivery-signature", required: true, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Delivery signature", action: "Confirm signature", approveUrl: "/x" },
-      manifest[2], // payment
-    ];
-    const html = renderRequirements(order, withRequiredCustom, { ageVerified: true }, { payment });
-    expect(html).toContain("Payment is locked");
-    expect(html).toContain("unlocks after Delivery signature"); // names the real blocker
-    expect(html).not.toContain("unlocks after age verification"); // not the hardcoded built-in
-  });
-
   it("a discount gate never blocks payment (only required gate effects do)", () => {
     // No age gate at all → a non-alcohol cart with only membership + payment.
     const noAge = manifest.filter((e) => e.credential !== "age");
     const html = renderRequirements(order, noAge, {}, { payment });
     expect(html).not.toContain("Payment is locked");
     expect(html).toContain('type="radio" name="pm"');
+  });
+});
+
+// ── 007: a CUSTOM gate renders from its own label and unlocks on verifiedGates ──
+// Pins the checkout-hub blockers Diego reported: a custom gate must NOT render as an age
+// gate, and its per-order proof (verifiedGates) must clear the lock. Each assertion fails
+// against the pre-007 age-only hub.
+describe("renderRequirements — custom gate (007)", () => {
+  const customManifest: VerificationManifestEntry[] = [
+    { credential: "professional_license", required: true, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Professional license", approveUrl: "/credentagent/credential?order=ORD-T030&cred=professional_license" },
+    { credential: "payment", required: true, effect: "authorize", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Pay (USD)", approveUrl: "/credentagent/dc-payment?order=ORD-T030" },
+  ];
+  const payment: PaymentOptions = { methods: [{ value: "passkey", name: "Pay with passkey", desc: "Authorize.", href: "/pay/passkey", checked: true }], orderToken: "TOK" };
+
+  it("renders the credential's OWN label, not an age gate, and links to its approveUrl", () => {
+    const html = renderRequirements(order, customManifest, {}, { payment });
+    expect(html).toContain("Professional license");
+    expect(html).not.toContain("Verify age");
+    expect(html).not.toContain("age-restricted");
+    expect(html).toContain("/credentagent/credential?order=ORD-T030&amp;cred=professional_license");
+  });
+
+  it("BLOCKS payment while the custom gate is unproven", () => {
+    const html = renderRequirements(order, customManifest, {}, { payment });
+    expect(html).toContain("Payment is locked");
+    expect(html).not.toContain('type="radio" name="pm"');
+  });
+
+  it("UNLOCKS payment and flips the gate to ✓ once verifiedGates records the proof", () => {
+    const html = renderRequirements(order, customManifest, { verifiedGates: { professional_license: true } }, { payment });
+    expect(html).not.toContain("Payment is locked"); // FAILS on the pre-007 age-only isSatisfied
+    expect(html).toContain('type="radio" name="pm"');
+    expect(html).toContain("✓ Professional license verified");
   });
 });
 
@@ -184,29 +187,5 @@ describe("renderRequirements — paid revisit", () => {
     // Also present on the paid revisit (defense in depth).
     const paidHtml = renderRequirements(order, manifest, {}, { paid: { amount: 124, currency: "USD", method: "passkey" } });
     expect(paidHtml).toContain('addEventListener("pageshow"');
-  });
-});
-
-describe("renderManifestRail — one shared, manifest-driven stepper (hub + ceremony rails)", () => {
-  const m: VerificationManifestEntry[] = [
-    { credential: "age", required: true, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Age 21+" },
-    { credential: "liquor-license", required: false, effect: "gate", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Liquor license", action: "Verify license" },
-    { credential: "membership", required: false, effect: "discount", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "10% off", discountPct: 10 },
-    { credential: "payment", required: true, effect: "authorize", enforcedAt: "checkout", trust_level: "presence-only-demo", label: "Pay" },
-  ];
-  const labels = (html: string): string[] => [...html.matchAll(/rail-label">([^<]+)</g)].map((x) => x[1]);
-
-  it("lists EVERY policy gate — custom + membership included — payment trailing", () => {
-    expect(labels(renderManifestRail(m, "pay", {}))).toEqual(["Age", "Liquor license", "Membership", "Pay"]);
-  });
-
-  it("the rail page (current='pay') and the hub (no current) build the SAME steps — no divergence", () => {
-    // This is the fix: the ceremony rails no longer derive a different stepper from the order.
-    expect(labels(renderManifestRail(m, "pay", { ageVerified: true }))).toEqual(labels(renderManifestRail(m, undefined, { ageVerified: true })));
-  });
-
-  it("highlights the current step by credential key", () => {
-    const html = renderManifestRail(m, "age", { ageVerified: false });
-    expect(html).toContain('class="rail-step current"'); // the Age step is current
   });
 });

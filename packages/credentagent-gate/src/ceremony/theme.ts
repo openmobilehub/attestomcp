@@ -102,10 +102,6 @@ const DESIGN_CSS = `
   .btn-primary:active { transform: translateY(1px); }
   .btn-secondary { background: transparent; color: var(--accent); border-color: var(--hairline); }
   .btn-secondary:hover { border-color: var(--accent); }
-  /* De-emphasized but INTENTIONAL — for OPTIONAL gates (e.g. a loyalty discount): a soft
-     teal-tint fill, not a bare outline, so it reads as "optional action", not "broken". */
-  .btn-optional { background: #f0fdfa; color: var(--accent); border-color: #99f6e4; }
-  .btn-optional:hover { background: #ccfbf1; border-color: var(--accent); }
   .btn-danger { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn + .btn { margin-top: 10px; }
   .btn:disabled { opacity: .55; cursor: default; }
@@ -324,33 +320,32 @@ export function progressRail(steps: RailStep[], currentIndex: number): string {
 }
 
 /**
- * The checkout progress rail for THIS order — includes ONLY the gates that actually
- * apply (age when the cart is age-restricted, membership when a discount is in play,
- * pay when there's an amount), derived from the re-priced order (invariant 2), so it
- * can't promise a step the order doesn't have.
- *
- * A step shows ✓ only when that gate is ACTUALLY satisfied — age from the verification
- * record (`done.age`), membership from an applied discount — NEVER merely because it
- * sits before the current step. So landing straight on the pay page with age unverified
- * shows Age as pending, not done. The `current` gate is highlighted (not ticked) and is
- * always included even if its `applies`/`done` checks are false (you're on its page).
+ * Order-derived progress rail for the ceremony gate pages (payment / credential). Includes
+ * ONLY the gates the ORDER actually has — Age when the cart is age-restricted, Membership
+ * when a discount is in play, Pay when there's an amount — plus the CURRENT gate, which is
+ * always shown even if the order can't imply it (a custom credential id). A step shows ✓
+ * only when ACTUALLY satisfied (age from the verification record, membership from an applied
+ * discount), never merely because it precedes the current step — so a payment page can't
+ * claim "Age ✓" the buyer never presented. Mirrors the hub's stepper inputs without needing
+ * the policy manifest, which the rails don't carry.
  */
 export function checkoutRail(
   order: { lines: { minimumAge?: number }[]; discount: number; total: number },
-  current: "age" | "membership" | "pay",
-  done: { age?: boolean } = {},
+  current: string, // "age" | "membership" | "pay" | a custom credential id
+  opts: { ageVerified?: boolean; currentLabel?: string } = {},
 ): string {
-  const gates: { key: "age" | "membership" | "pay"; label: string; applies: boolean; done: boolean }[] = [
-    { key: "age", label: "Age", applies: order.lines.some((l) => typeof l.minimumAge === "number" && l.minimumAge > 0), done: done.age === true },
+  const isBuiltin = current === "age" || current === "membership" || current === "pay";
+  const gates = [
+    { key: "age", label: "Age", applies: order.lines.some((l) => typeof l.minimumAge === "number" && l.minimumAge > 0), done: opts.ageVerified === true },
     { key: "membership", label: "Membership", applies: order.discount > 0, done: order.discount > 0 },
+    // A custom gate isn't implied by the order — surface it only while it's the current step.
+    ...(isBuiltin ? [] : [{ key: current, label: opts.currentLabel ?? current, applies: false, done: false }]),
     { key: "pay", label: "Pay", applies: order.total > 0, done: false },
   ];
   const steps = gates.filter((g) => g.applies || g.key === current);
   const currentIndex = steps.findIndex((g) => g.key === current);
-  return progressRail(
-    steps.map((g) => ({ label: g.label, done: g.done && g.key !== current })),
-    currentIndex,
-  );
+  // The current step is highlighted (ring), never ticked — even if otherwise "done".
+  return progressRail(steps.map((g) => ({ label: g.label, done: g.done && g.key !== current })), currentIndex);
 }
 
 // ── Trust footer ────────────────────────────────────────────────────────────

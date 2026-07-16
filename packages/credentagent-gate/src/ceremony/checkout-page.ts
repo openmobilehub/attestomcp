@@ -54,6 +54,9 @@ export interface RenderOrder {
 export interface RenderVerification {
   ageVerified?: boolean;
   loyaltyApplied?: boolean;
+  /** Custom gate() credentials proven for THIS order, keyed by credential id (007).
+   *  Drives the live status of a custom gate the same way `ageVerified` drives age. */
+  verifiedGates?: Record<string, true>;
 }
 
 /** A recorded completion for THIS order — a revisit shows the paid state. */
@@ -121,41 +124,25 @@ function trustNote(entries: VerificationManifestEntry[]): string {
   return trustFooter();
 }
 
-// Build the progress-rail steps from the MANIFEST — ONE step per gate the manifest carries
-// (so a custom gate appears too, not just Age/Membership), payment always the trailing step.
-// Age/membership keep their short labels; any other gate uses its own `ui.label`. Each step
-// is tagged with its credential key so a caller can highlight the "current" one.
+// Map the manifest to the three-step progress rail (Age · Membership · Pay) with live
+// status, so the hub mirrors the same stepper the gate pages render. A gate the manifest
+// doesn't carry simply doesn't appear; payment is always the trailing step.
 function railSteps(
-  manifest: VerificationManifestEntry[],
+  gateEntries: VerificationManifestEntry[],
   ageVerified: boolean,
   loyaltyApplied: boolean,
+  verifiedGates: Record<string, true>,
   paid: boolean,
-): (RailStep & { key: string })[] {
-  const steps: (RailStep & { key: string })[] = [];
-  for (const e of manifest) {
-    if (e.effect === "authorize") continue;
-    if (e.effect === "discount") steps.push({ key: e.credential, label: "Membership", done: loyaltyApplied || paid });
-    else if (e.effect === "gate" && e.credential === "age") steps.push({ key: "age", label: "Age", done: ageVerified || paid });
-    else if (e.effect === "gate") steps.push({ key: e.credential, label: e.label, done: paid }); // custom gate — its own label
+): RailStep[] {
+  const steps: RailStep[] = [];
+  for (const e of gateEntries) {
+    if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
+    else if (e.effect === "discount") steps.push({ label: "Membership", done: loyaltyApplied || paid });
+    // Custom gate (007): its own label as a step, done once proven for this order.
+    else if (e.effect === "gate") steps.push({ label: e.label || "Verify", done: verifiedGates[e.credential] === true || paid });
   }
-  steps.push({ key: "pay", label: "Pay", done: paid });
+  steps.push({ label: "Pay", done: paid });
   return steps;
-}
-
-// The progress-rail HTML from the MANIFEST (the single source of truth for the policy) —
-// shared by the checkout hub AND the ceremony rail pages so their steppers NEVER diverge.
-// `current` highlights a step by credential key ("age", "pay", a custom id); absent ⇒ the
-// first not-done step is current (the hub's behavior).
-export function renderManifestRail(
-  manifest: VerificationManifestEntry[],
-  current: string | undefined,
-  verification: { ageVerified?: boolean; loyaltyApplied?: boolean } = {},
-  paid = false,
-): string {
-  const steps = railSteps(manifest, !!verification.ageVerified, !!verification.loyaltyApplied, paid);
-  const byCurrent = current ? steps.findIndex((s) => s.key === current) : -1;
-  const currentIndex = byCurrent >= 0 ? byCurrent : steps.findIndex((s) => !s.done);
-  return progressRail(steps.map((s) => ({ label: s.label, done: s.done })), currentIndex);
 }
 
 // ── The page ──────────────────────────────────────────────────────────────────
@@ -174,6 +161,7 @@ export function renderRequirements(
 ): string {
   const ageVerified = !!verification.ageVerified;
   const loyaltyApplied = !!verification.loyaltyApplied;
+  const verifiedGates = verification.verifiedGates ?? {};
   const paid = opts.paid ?? null;
 
   // Payment settles last: split the manifest into the blocking/discount gates (kept
@@ -183,16 +171,19 @@ export function renderRequirements(
   const gateEntries = manifest.filter((e) => e.effect !== "authorize");
   const paymentEntry = manifest.find((e) => e.effect === "authorize");
 
-  // A REQUIRED gate that isn't yet satisfied blocks payment; a discount never blocks
-  // (it's an opt-in saving). Keep the pending blockers so the lock copy can NAME them —
-  // the blocker isn't always "age": any required gate, built-in or custom, blocks.
+  // A REQUIRED gate that isn't yet satisfied blocks payment. Age is the demo's
+  // blocking gate; a discount never blocks (it's an opt-in saving).
   const isSatisfied = (e: VerificationManifestEntry): boolean => {
-    if (e.effect === "gate" && e.credential === "age") return ageVerified;
     if (e.effect === "discount") return loyaltyApplied;
+    if (e.effect === "gate") {
+      if (e.credential === "age") return ageVerified;
+      // Custom gate (007): satisfied once its per-order proof is recorded, so a proven
+      // custom gate clears `blocked` and unlocks payment — the same as age.
+      return verifiedGates[e.credential] === true;
+    }
     return false;
   };
-  const blockingGates = gateEntries.filter((e) => e.required && e.effect === "gate" && !isSatisfied(e));
-  const blocked = blockingGates.length > 0;
+  const blocked = gateEntries.some((e) => e.required && e.effect === "gate" && !isSatisfied(e));
 
   // ── order summary ────────────────────────────────────────────────────────
   // A paid revisit arrives after completion CLEARED this order's verification, so a
@@ -236,19 +227,17 @@ export function renderRequirements(
   const paymentNumber = gateEntries.length + 1;
   const paidSection = paid ? renderPaid(paid) : "";
   // Calm, muted lock — never alarming. Keeps the literal "Payment is locked" the flow
-  // tests pin, and NAMES the pending required gate(s) so the copy stays honest when the
-  // blocker isn't age — a custom required gate names itself, not "age verification".
-  const blockingLabel = blockingGates.map((e) => e.label ?? e.credential).join(", ");
+  // tests pin, framed as a gentle "unlocks after age verification" message.
   const paymentSection = paid
     ? `<div class="card section">${paidSection}</div>`
     : blocked
-      ? `<div class="lock">🔒 Payment is locked · unlocks after ${escapeHtml(blockingLabel)}</div>`
+      ? `<div class="lock">🔒 Payment is locked · unlocks once every requirement above is met</div>`
       : renderPayment(order, paymentNumber, methods);
   const placeScript = paid || blocked ? "" : renderPlaceScript(order, methods, opts.payment);
 
-  // Progress rail mirrors the live gate status; current = first not-done step. Uses the
-  // SAME manifest-driven builder the ceremony rail pages use, so the steppers never diverge.
-  const rail = renderManifestRail(manifest, undefined, { ageVerified, loyaltyApplied }, !!paid);
+  // Progress rail mirrors the live gate status; current = first not-done step.
+  const steps = railSteps(gateEntries, ageVerified, loyaltyApplied, verifiedGates, !!paid);
+  const rail = progressRail(steps, steps.findIndex((s) => !s.done));
   const itemCount = order.itemCount ?? order.lines.reduce((n, l) => n + l.quantity, 0);
 
   // bfcache guard. After authorizing on a gate page (passkey / dc-payment), a buyer
@@ -295,41 +284,35 @@ function renderGate(entry: VerificationManifestEntry, n: number, satisfied: bool
   // `step-no` is kept (tests + the rail both read off the numbered policy order); the
   // card chrome and teal accent come from the shared design system.
   const no = `<span class="step-no">${n}.</span>`;
-  // Required gates are prominent (solid teal); OPTIONAL gates + discounts are de-emphasized
-  // (soft teal-tint) so the button style tells the truth about whether you MUST pass it.
-  const btnClass = entry.required ? "btn-primary" : "btn-optional";
   if (entry.effect === "discount") {
     const pct = entry.discountPct;
     return satisfied
       ? `<div class="card"><div class="row-ok">${no} ✓ Loyalty discount applied${pct != null ? ` (${pct}% off)` : ""}</div></div>`
       : entry.approveUrl
-        ? `<div class="card"><a class="btn btn-optional" href="${escapeHtml(entry.approveUrl)}">${no} Apply loyalty discount${pct != null ? ` (${pct}% off)` : ""}</a></div>`
+        ? `<div class="card"><a class="btn btn-secondary" href="${escapeHtml(entry.approveUrl)}">${no} Apply loyalty discount${pct != null ? ` (${pct}% off)` : ""}</a></div>`
         : "";
   }
-  // gate effect — age keeps its rich, specific copy; ANY other gate uses its OWN
-  // ui.label / ui.action (never age copy), so a custom gate renders truthfully.
-  if (entry.credential === "age") {
-    const age = entry.minAge ?? 21;
+  // Custom gate (007): render from the credential's OWN label, not the age copy. Any
+  // gate() that isn't the built-in age gate lands here.
+  if (entry.credential !== "age") {
+    const label = entry.label || "credential";
     if (satisfied) {
-      return `<div class="card"><div class="row-ok">${no} ✓ Age verified — ${age}+</div></div>`;
+      return `<div class="card"><div class="row-ok">${no} ✓ ${escapeHtml(label)} verified</div></div>`;
     }
-    const link = entry.approveUrl
-      ? `<a class="btn ${btnClass}" href="${escapeHtml(entry.approveUrl)}">Verify age (${age}+)</a>`
+    const clink = entry.approveUrl
+      ? `<a class="btn btn-primary" href="${escapeHtml(entry.approveUrl)}">${escapeHtml(label)}</a>`
       : "";
-    return `<div class="card"><div class="row-pending">${no} 🔒 This order contains age-restricted items. Verify you're ${age} or older to continue.</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
+    return `<div class="card"><div class="row-pending">${no} 🔒 This order requires your ${escapeHtml(label)}.</div>${clink ? `<div style="margin-top:12px;">${clink}</div>` : ""}</div>`;
   }
-  const label = entry.label;
-  const action = entry.action ?? `Verify ${label}`;
+  // gate effect (age):
+  const age = entry.minAge ?? 21;
   if (satisfied) {
-    return `<div class="card"><div class="row-ok">${no} ✓ ${escapeHtml(label)} verified</div></div>`;
+    return `<div class="card"><div class="row-ok">${no} ✓ Age verified — ${age}+</div></div>`;
   }
   const link = entry.approveUrl
-    ? `<a class="btn ${btnClass}" href="${escapeHtml(entry.approveUrl)}">${escapeHtml(action)}</a>`
+    ? `<a class="btn btn-primary" href="${escapeHtml(entry.approveUrl)}">Verify age (${age}+)</a>`
     : "";
-  const lead = entry.required
-    ? `🔒 ${escapeHtml(label)} required to continue.`
-    : `${escapeHtml(label)} — optional.`;
-  return `<div class="card"><div class="row-pending">${no} ${lead}</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
+  return `<div class="card"><div class="row-pending">${no} 🔒 This order contains age-restricted items. Verify you're ${age} or older to continue.</div>${link ? `<div style="margin-top:12px;">${link}</div>` : ""}</div>`;
 }
 
 // The Shopify-style payment-method group (one radio group, one Pay CTA). The methods
