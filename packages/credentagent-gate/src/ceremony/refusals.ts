@@ -16,6 +16,7 @@ export type RefusalCode =
   | "bounds-tampered" // intent's fields don't hash to its own intentId — bounds mutated after sealing
   | "intent-mismatch" // draw binds to a different intentId
   | "currency-mismatch"
+  | "invalid-amount" // draw amount is not a finite, positive number — the caps fail OPEN on NaN/negative
   | "over-cap" // per-draw cap (TS12 max_amount) — absolute ceiling, tolerance 0
   | "over-total" // cumulative cap (TS12 total_amount) across committed draws
   | "not-yet-valid" // now < notBefore

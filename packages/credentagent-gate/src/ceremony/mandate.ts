@@ -262,10 +262,16 @@ export interface CommittedDraw {
 /** Canonical JSON (stable, recursive key sort) — the exact bytes hashed + signed. Any
  *  edit to any field changes these bytes, so a signature/hash covers the whole document. */
 export function canonical(value: unknown): string {
+  // `undefined` is not JSON: as an object value JSON.stringify DROPS the key; in an array it
+  // becomes null. Match that here so seal-time and check-time bytes agree across a JSON
+  // round-trip — an optional bound left undefined (`subject`/`description`/`presentments`)
+  // must not change the hash after transport, else a legitimate grant refuses itself
+  // (bounds-tampered / signature) the moment it is stored, logged, or sent over the wire.
+  if (value === undefined) return "null";
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(obj).sort().filter((k) => obj[k] !== undefined);
   return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonical(obj[k])).join(",") + "}";
 }
 
@@ -283,7 +289,11 @@ export async function sealIntent(boundsWithoutId: Omit<IntentBounds, "intentId">
 
 /** Generate a delegate keypair K_s (ES256 / P-256). The bounds carry the PUBLIC JWK. */
 export async function generateDelegate(): Promise<{ privateKey: CryptoKey; delegate: DelegateJwk }> {
-  const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  // extractable=false: the PRIVATE key K_s (the grant's sole spending authority) is only ever
+  // used in-process for subtle.sign and never needs to leave — the public JWK still exports
+  // (WebCrypto public keys are always extractable). Removes a needless path for the raw
+  // signing key to leak via an accidental export/serialize.
+  const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
   const jwk = await subtle.exportKey("jwk", pair.publicKey);
   return { privateKey: pair.privateKey, delegate: { kty: "EC", crv: "P-256", x: jwk.x!, y: jwk.y! } };
 }
@@ -359,6 +369,15 @@ export async function checkDraw(intent: IntentBounds, draw: Draw, ctx: CheckDraw
   if (draw.currency !== intent.currency)
     refusals.push(refusal("currency-mismatch", { expected: intent.currency, got: draw.currency }));
 
+  // 3.5. amount DOMAIN — the caps below are `>` comparisons that FAIL OPEN on a non-finite or
+  // non-positive amount: `NaN > cap` is false (a NaN draw clears every ceiling AND, once
+  // committed, makes the cumulative `spent` NaN → the total cap is disabled forever), and a
+  // negative draw slips every ceiling then REFUNDS cumulative headroom. A "pure and total"
+  // gate must validate the domain of the value it bounds before comparing it. Refuse here so
+  // the `>`-checks below only ever see a finite, positive amount.
+  if (!Number.isFinite(draw.amount) || draw.amount <= 0)
+    refusals.push(refusal("invalid-amount", { amount: draw.amount }));
+
   // 4. per-draw cap (TS12 max_amount) — absolute ceiling
   if (draw.amount > intent.maxAmount) refusals.push(refusal("over-cap", { cap: intent.maxAmount, amount: draw.amount }));
 
@@ -367,11 +386,17 @@ export async function checkDraw(intent: IntentBounds, draw: Draw, ctx: CheckDraw
   if (spent + draw.amount > intent.totalAmount)
     refusals.push(refusal("over-total", { total: intent.totalAmount, wouldBe: spent + draw.amount }));
 
-  // 6. window (notBefore ≤ now ≤ intentExpiry)
-  if (intent.notBefore && now < Date.parse(intent.notBefore))
-    refusals.push(refusal("not-yet-valid", { notBefore: intent.notBefore }));
-  if (intent.intentExpiry && now > Date.parse(intent.intentExpiry))
-    refusals.push(refusal("expired", { intentExpiry: intent.intentExpiry }));
+  // 6. window (notBefore ≤ now ≤ intentExpiry). FAIL-CLOSED on an unparseable bound: a typo'd
+  // date must not silently disable the window — `Date.parse` returns NaN, and `now > NaN` is
+  // false, so an un-parseable expiry would leave the grant valid forever. Treat NaN as refused.
+  if (intent.notBefore) {
+    const notBefore = Date.parse(intent.notBefore);
+    if (Number.isNaN(notBefore) || now < notBefore) refusals.push(refusal("not-yet-valid", { notBefore: intent.notBefore }));
+  }
+  if (intent.intentExpiry) {
+    const expiry = Date.parse(intent.intentExpiry);
+    if (Number.isNaN(expiry) || now > expiry) refusals.push(refusal("expired", { intentExpiry: intent.intentExpiry }));
+  }
 
   // 7. scope — merchant allowlist (absent/empty ⇒ any suitable merchant)
   if (Array.isArray(intent.merchants) && intent.merchants.length > 0 && !intent.merchants.includes(draw.merchant))

@@ -183,3 +183,73 @@ describe("checkDraw — the deterministic gates", () => {
 // Type-level: IntentBounds/Draw are exported, usable shapes.
 const _typecheck: (i: IntentBounds, d: Draw) => string = (i, d) => i.intentId + d.pspTransactionId;
 void _typecheck;
+
+// ── Hardening (PR #41 review): amount-domain, fail-closed dates, JSON-stable content-address,
+// non-extractable K_s. Each fails if its guard is removed. ──────────────────────────────────
+describe("checkDraw — amount domain (NaN / negative / zero fail OPEN without the guard)", () => {
+  async function drawWithAmount(amount: number) {
+    const { privateKey, intent } = await fixture();
+    const draw = await signDraw(
+      { type: "credentagent.Draw/v0", intentId: intent.intentId, paymentMandateId: "d", merchant: "runfast.example", amount, currency: "USD", pspTransactionId: "tx_x", presentments: ["membership:acme-loyalty"] },
+      privateKey,
+    );
+    return { intent, draw };
+  }
+  it("BYPASS: a NaN amount is refused invalid-amount (NaN > cap is false → would clear every ceiling)", async () => {
+    const { intent, draw } = await drawWithAmount(NaN);
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual(["invalid-amount"]);
+  });
+  it("BYPASS: a negative amount is refused (slips the caps AND would refund cumulative headroom)", async () => {
+    const { intent, draw } = await drawWithAmount(-1000);
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual(["invalid-amount"]);
+  });
+  it("a zero-amount draw is refused invalid-amount", async () => {
+    const { intent, draw } = await drawWithAmount(0);
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual(["invalid-amount"]);
+  });
+  it("a normal positive amount still passes the domain gate", async () => {
+    const { intent, draw } = await drawWithAmount(40);
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual([]);
+  });
+});
+
+describe("checkDraw — window fails CLOSED on an unparseable date (else the grant never expires)", () => {
+  async function sealWithExpiry(intentExpiry: string) {
+    const { privateKey, delegate } = await generateDelegate();
+    const intent = await sealIntent({
+      type: "credentagent.IntentBounds/v0", currency: "USD", maxAmount: 120, totalAmount: 120,
+      intentExpiry, delegate, presence: "delegated", trust_level: "issuer-verified (demo PKI)",
+    } as Omit<IntentBounds, "intentId">);
+    const draw = await signDraw(
+      { type: "credentagent.Draw/v0", intentId: intent.intentId, paymentMandateId: "d", merchant: "x", amount: 40, currency: "USD", pspTransactionId: "tx_d" },
+      privateKey,
+    );
+    return { intent, draw };
+  }
+  it("BYPASS: a European-format expiry (Date.parse → NaN) refuses expired, not passes", async () => {
+    const { intent, draw } = await sealWithExpiry("15/07/2026");
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual(["expired"]);
+  });
+  it("a valid future expiry still passes the window gate", async () => {
+    const { intent, draw } = await sealWithExpiry("2026-12-31T23:59:59Z");
+    expect(codes(await checkDraw(intent, draw, { now: JUL15 }))).toEqual([]);
+  });
+});
+
+describe("content-address / key hygiene (PR #41 review)", () => {
+  it("BYPASS: intentId stays stable across a JSON round-trip when an optional bound is undefined", async () => {
+    const { delegate } = await generateDelegate();
+    // The zero-config path: preApprove without subject/description seals `naturalLanguageDescription: undefined`.
+    const intent = await sealIntent({
+      type: "credentagent.IntentBounds/v0", naturalLanguageDescription: undefined, currency: "USD",
+      maxAmount: 30, totalAmount: 100, delegate, presence: "delegated-demo", trust_level: "server-issued-demo",
+    } as Omit<IntentBounds, "intentId">);
+    const overWire = JSON.parse(JSON.stringify(intent)); // store → reload / transport / log
+    // Old canonical emitted a bare `undefined` token that JSON drops → the grant refused itself.
+    expect(await contentAddressId(overWire)).toBe(intent.intentId);
+  });
+  it("BYPASS: the delegate private key K_s is generated non-extractable", async () => {
+    const { privateKey } = await generateDelegate();
+    expect(privateKey.extractable).toBe(false);
+  });
+});
