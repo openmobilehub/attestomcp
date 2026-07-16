@@ -21,6 +21,13 @@ Each is runnable against the two `@openmobilehub/credentagent-*` packages (build
 
 ---
 
+## [`quickstart/`](./quickstart/) — start here: try it, run it, own it (~5 min)
+
+The standalone quickstart: try the **hosted demo** (paste one URL into Claude / ChatGPT /
+Goose), run it locally against the **published** packages (`npm i && npm start` — no monorepo
+build), or **Deploy-to-Vercel** your own copy in one click. Ships its own security smoke
+(`npm run smoke`). See [`quickstart/README.md`](./quickstart/README.md).
+
 ## `storefront.mjs` — a credential-gated storefront in ~8 lines
 
 A minimal, runnable agentic storefront you add to **Goose** (or any MCP host) as an HTTP connector and
@@ -46,7 +53,7 @@ const { url } = await store.listen(3005);          // → http://localhost:3005/
 
 ```bash
 npm install
-npm run build:packages          # build the two @openmobilehub/credentagent-* packages
+npm run build                   # build the two @openmobilehub/credentagent-* packages
 node examples/storefront.mjs     # → http://localhost:3005/mcp
 ```
 
@@ -106,7 +113,7 @@ store.gate((order) => credentagent.requirements(order, [
 ### Run it
 
 ```bash
-npm run build:packages              # build the two @openmobilehub/credentagent-* packages
+npm run build                       # build the two @openmobilehub/credentagent-* packages
 node examples/custom-credential.mjs  # → http://localhost:3006/mcp
 ```
 
@@ -120,17 +127,61 @@ In every case `payment` settles last (the resolver moves `authorize` effects to 
 
 ### Honest limits
 
-- **The custom gate fully resolves into the manifest** — `appliesTo`, `effect`, `ui.label`, and a per-order
-  approve link all flow through `requirements()` (the code→data boundary; functions never cross the wire).
-  But the **mounted phone ceremony** only knows the built-in `age` / `membership` kinds in v0.1
-  (`CredentialKind` is `"age" | "membership"`), so a custom credential's own `request` / `verify` /
-  `ui.action` are not executed by the ceremony page yet — completing an arbitrary custom credential on the
-  phone is roadmap.
+- **The custom gate resolves into the manifest AND completes on the phone (007).** `appliesTo`, `effect`,
+  `ui.label`, and a per-order approve link flow through `requirements()` (the code→data boundary; functions
+  never cross the wire), and the **mounted ceremony** now serves the credential's own `request` / `verify` /
+  `ui.action` — the credential-gate rail is no longer limited to `age` / `membership`. See
+  [`professional-license.mjs`](#professional-licensemjs--the-credential-library-proven-end-to-end) for the
+  worked pack that also **enforces** a custom gate at completion.
 - The canonical gate `OrderLine` type carries a `requiresRx` flag for this case, but the storefront's
   `PricedCartLine` forwards only `category` / `minimumAge`, so this example keys `appliesTo` off `category`
   to stay genuinely runnable on a `createStorefront()` order.
-- `trust_level` is `"presence-only-demo"`: v0.1 enforces disclosure + nonce binding, **not** issuer/device
-  signatures — a flow demonstration, not a real safety control yet.
+- `trust_level` is `"presence-only-demo"`: the wire crypto is real (disclosure + nonce binding), but there is
+  **no** issuer/device-signature trust anchor yet — a flow demonstration, not a real safety control until #14.
+
+## `professional-license.mjs` — the credential library, proven end-to-end
+
+The worked pack for the credential library (issue #19). Where `custom-credential.mjs` shows a custom gate
+*resolving*, this one shows a custom `gate()` **served by the mounted ceremony and enforced at completion**:
+an order with the licensed item cannot complete until the license is proven — on every payment rail, not just
+the rendered page (invariant 1). No new rail, no switch-case, no registration — just `defineCredential`:
+
+```ts
+const professionalLicense = defineCredential({
+  id: "professional_license",
+  request: dcql({ docType: "org.example.license.1", claims: ["license_active"] }),
+  verify: (claims) => claims.license_active === true,        // explicit positive claim (invariant 5)
+  effect: gate(),                                            // hard block, enforced whenever it applies
+  appliesTo: (order) => order.lines.some((l) => l.category === "Licensed"),
+  ui: { label: "Professional license", action: "Verify your license" },
+});
+
+store.gate((order) => credentagent.requirements(order, [
+  required(professionalLicense),   // custom gate — served + enforced for Licensed lines
+  required(payment.in("usd")),     // built-in — settles last
+]));
+```
+
+### Run it
+
+```bash
+npm run build:packages
+node examples/professional-license.mjs   # → http://localhost:3007/mcp
+```
+
+- *"Buy the contractor drill"* → the **Professional license** gate is surfaced **and enforced** (the order
+  won't complete until `license_active` is proven).
+- *"Buy the headphones"* → **no** license gate (unlicensed line).
+
+### What it proves
+
+`requirements()` registers each policy credential by id (register-on-resolve — no developer registration);
+`mount()` injects that registry so the credential-gate rail serves the credential's own `request`/`verify`,
+and `completeOrder` sweeps every applicable `gate()` credential, re-derived from the re-priced order
+(invariant 2), refusing one not proven for that order (invariants 1/4). `gate()` is the hard-block effect —
+enforced whenever it applies, independent of `required(...)` / `optional(...)`. `trust_level` stays
+`"presence-only-demo"` (no issuer trust anchor yet — #14). *Multi-instance:* register-on-resolve means each
+instance resolves the policy once (e.g. at startup); the reference single-server/demo always does.
 
 ## `with-x402-settlement.mjs` — settle payment on-chain via the `settle` seam
 
@@ -150,7 +201,7 @@ const store = createStorefront({ settle });   // ← the only new line vs storef
 ### Run it
 
 ```bash
-npm run build:packages
+npm run build
 node examples/with-x402-settlement.mjs   # → http://localhost:3007/mcp
 ```
 

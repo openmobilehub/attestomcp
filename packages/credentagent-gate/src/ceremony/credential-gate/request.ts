@@ -28,17 +28,32 @@ export interface SignedCredentialRequest {
   trust_level: "presence-only-demo";
 }
 
-/** Build the REAL signed OpenID4VP request descriptor for one credential kind. */
+/** Build the REAL signed OpenID4VP request descriptor for one built-in credential kind. */
 export async function buildCredentialRequest(
   kind: CredentialKind,
   origin: Origin,
   secret: string,
   opts: CredentialDcqlOpts = {},
 ): Promise<SignedCredentialRequest> {
+  return buildSignedRequestForDcql(buildCredentialDcql(kind, opts), origin, secret);
+}
+
+/**
+ * The credential-agnostic core (007): sign a REAL OpenID4VP request embedding an
+ * ARBITRARY DcqlQuery. The built-in `buildCredentialRequest` is a thin wrapper that
+ * supplies the age/membership DCQL; the generalized rail passes a custom credential's
+ * OWN `request` here. The crypto — reader cert, ephemeral ECDH key, sealed nonce,
+ * ES256 signature, origin/RP binding — is identical to the built-in path (invariant 6);
+ * only the source of the DCQL differs. trust_level stays presence-only-demo.
+ */
+export async function buildSignedRequestForDcql(
+  dcql: DcqlQuery,
+  origin: Origin,
+  secret: string,
+): Promise<SignedCredentialRequest> {
   const { x5c, privateKey } = await makeReaderCert(origin.rpID);
   const { encJwk, ecdhPrivateJwk } = await makeEncryptionKey();
   const nonce = jose.base64url.encode(crypto.getRandomValues(new Uint8Array(16)));
-  const dcql = buildCredentialDcql(kind, opts);
 
   const requestObject = {
     response_type: "vp_token",
@@ -56,7 +71,7 @@ export async function buildCredentialRequest(
   const request = await new jose.SignJWT(requestObject)
     .setProtectedHeader({ alg: "ES256", typ: "oauth-authz-req+jwt", x5c: [x5c] })
     .setIssuedAt()
-    .sign(privateKey as unknown as jose.KeyLike);
+    .sign(privateKey as unknown as Parameters<InstanceType<typeof jose.SignJWT>["sign"]>[0]);
 
   // Seal the nonce alongside the decryption key so /verify can require the wallet's
   // response to be bound to THIS request (apu/apv check), not just decrypt.

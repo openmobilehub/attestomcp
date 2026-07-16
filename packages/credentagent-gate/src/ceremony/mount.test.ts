@@ -7,6 +7,9 @@
 import { describe, it, expect } from "vitest";
 import { CredentAgent } from "../client.js";
 import { MemoryVerificationStore } from "../store.js";
+import { required } from "../credentials.js";
+import type { Credential } from "../types.js";
+import { professionalLicense } from "./credential-gate/__fixtures__/customCredential.js";
 import { mountCeremony, resolveOrder, type CeremonyApp, type CeremonyContext, type CeremonySeams } from "./mount.js";
 import { issueChallenge, verifyChallenge } from "./challengeToken.js";
 import { issueCartMandate } from "./cartMandate.js";
@@ -15,13 +18,14 @@ import type { CeremonyCatalog, CeremonyOrderStore, CompletionInput } from "./typ
 
 // ── Fakes: a catalog that prices from a fixed map (the source of truth) ──────
 
-const PRICES: Record<string, number> = { "oak-whiskey": 124, "aurora-headphones": 199 };
+const PRICES: Record<string, number> = { "oak-whiskey": 124, "aurora-headphones": 199, drill: 50 };
+const CATEGORIES: Record<string, string> = { drill: "Licensed" }; // 007: the custom gate's applicable line
 
 const catalog: CeremonyCatalog = {
   createOrder(items, orderId, opts) {
     const lines = items.map((it) => {
       const unitPrice = PRICES[it.productId] ?? 0;
-      return { id: it.productId, name: it.productId, unitPrice, currency: "USD", quantity: it.quantity, lineTotal: unitPrice * it.quantity };
+      return { id: it.productId, name: it.productId, unitPrice, currency: "USD", quantity: it.quantity, lineTotal: unitPrice * it.quantity, ...(CATEGORIES[it.productId] ? { category: CATEGORIES[it.productId] } : {}) };
     });
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
     const discount = opts?.loyaltyApplied ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
@@ -103,6 +107,62 @@ describe("CredentAgent.mount — back-compat + ceremony delegation (T008)", () =
     const a = new CredentAgent();
     const app = { locals: {} as Record<string, unknown> };
     expect(() => a.mount(app, { orderStore: { read: async () => null }, catalog, completion: async () => ({ completed: true }) })).toThrow(/signingKey/);
+  });
+});
+
+// ── 007 (US2, F2 wiring proof): mount() PUBLISHES the credential registry so a host's
+//    completion seam enforces custom gates. The unit sweep test (completion.test.ts)
+//    seeds ctx.credentialRegistry directly and would pass even if mount() never wired
+//    it — THIS suite goes through mount() + a host-shaped completion seam that reads
+//    the registry off app.locals, so it FAILS if the injection is removed. ──────────
+describe("CredentAgent.mount — publishes the registry so completion enforces custom gates (007)", () => {
+  const licenseCred: Credential = professionalLicense; // shared fixture (T002)
+
+  function wired() {
+    const app = { locals: {} as Record<string, unknown> };
+    const credentagent = new CredentAgent({ walletOrigin: "https://shop.example" });
+    const records = new Map<string, CompletedRecord>();
+    // The completion seam a HOST binds: it reads the registry mount() published on
+    // app.locals (exactly as the reference storefront does), never a hand-seeded one.
+    const completion = (i: CompletionInput) =>
+      completeOrder(i, {
+        catalog,
+        verificationStore: credentagent.store,
+        records: { read: async (id) => records.get(id), write: async (rec) => void records.set(rec.orderId, rec) },
+        cart: { clear: async () => {} },
+        credentialRegistry: (app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> } | undefined)?.credentialRegistry,
+      });
+    credentagent.mount(app, { orderStore: { read: async () => null }, catalog, completion, signingKey: "k" });
+    // Register-on-resolve: the checkout call that mints the manifest populates the registry.
+    credentagent.requirements(
+      { id: "ORD-L", total: 50, currency: "USD", lines: [{ id: "drill", quantity: 1, unitPrice: 50, category: "Licensed" }] },
+      [required(licenseCred)],
+    );
+    return { app, credentagent, completion, records };
+  }
+
+  const orderInput = (): CompletionInput => {
+    const order = catalog.createOrder([{ productId: "drill", quantity: 1 }], "ORD-L");
+    return { order, mandateId: "m", amount: order.total, currency: "USD", method: "test", gates: PASSING_GATES };
+  };
+
+  it("mount() publishes the registry to app.locals once requirements() populates it", () => {
+    const reg = (wired().app.locals.credentagent as { credentialRegistry?: ReadonlyMap<string, Credential> }).credentialRegistry;
+    expect(reg?.get("professional_license")).toBeDefined(); // FAILS if mount stopped publishing the registry
+  });
+
+  it("BYPASS: a Licensed order with no proven gate is refused THROUGH the mounted completion seam", async () => {
+    const h = wired();
+    const res = await h.completion(orderInput());
+    expect(res).toMatchObject({ completed: false, reason: "gate" }); // FAILS if mount's registry injection is removed
+    expect(h.records.size).toBe(0);
+  });
+
+  it("completes once the custom gate is proven for the order (so the refusal was the WIRED control)", async () => {
+    const h = wired();
+    await h.credentagent.store.write("ORD-L", { verifiedGates: { professional_license: true } });
+    const res = await h.completion(orderInput());
+    expect(res.completed).toBe(true);
   });
 });
 

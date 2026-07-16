@@ -5,13 +5,14 @@
 // (no hardcoded demo imports) so dc-payment and passkey reconcile against the same
 // amount-binding logic. Settlement GATES completion: a configured-but-failed
 // settle means authorized-but-not-completed (no record, cart intact — FR-013).
-import type { VerificationStore } from "../types.js";
+import type { Credential, GateOrder, VerificationStore } from "../types.js";
 import type { CartItemRef, CeremonyCatalog, CompletionInput, CompletionResult, GateOutcome } from "./types.js";
 import { verifyCartMandate, type CartMandate } from "./cartMandate.js";
 import { reconcileCartPayment } from "./reconciliation.js";
 import { checkDraw, type DrawVerifier } from "./mandate.js";
 import type { RevocationStore } from "./revocation.js";
 import { refusal } from "./refusals.js";
+import { RESERVED_CREDENTIAL_IDS } from "../credentials.js";
 
 // One on-chain (demo-mode) settlement backing a completed order. Kept structural
 // so the demo's richer SettlementRecord is assignable without the package taking
@@ -71,6 +72,15 @@ export interface CompletionContext {
   verifyDraw?: DrawVerifier;
   /** Injectable clock for the draw window check (testability). */
   now?: () => number;
+  /**
+   * The gate's in-process credential registry (id → Credential), populated by
+   * `requirements()` and injected by `mount()` (007). When present, completion
+   * enforces EVERY applicable custom `gate()` credential — re-deriving applicability
+   * from the RE-PRICED order (invariant 2) and refusing any not in the order's
+   * `verifiedGates` (invariant 1). Reserved built-ins are excluded (they keep their
+   * own enforcement). Absent ⇒ the custom-gate sweep is skipped (additive).
+   */
+  credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
 export async function completeOrder(input: CompletionInput, ctx: CompletionContext): Promise<CompletionResult> {
@@ -215,6 +225,39 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
 
   if (ageRestricted && (verification as { ageVerified?: boolean } | undefined)?.ageVerified !== true) {
     return { completed: false, reason: "age" };
+  }
+
+  // Invariant 1 (generalized — 007): enforce EVERY applicable custom `gate()`
+  // credential, not only age. `gate()` is the hard-block effect, so it is enforced
+  // whenever it applies, independent of the required/optional flag. Applicability is
+  // re-derived from the RE-PRICED order (invariant 2), never the token; the registry
+  // holds the credential CODE (verify/appliesTo) in-process, so nothing crossed the
+  // wire. Reserved built-ins (age/membership/payment) are excluded — they keep their
+  // dedicated enforcement above. Absent registry ⇒ this sweep no-ops (additive), so a
+  // host that doesn't wire it (or has no custom gates) is unchanged.
+  if (ctx.credentialRegistry) {
+    // Evaluate `appliesTo` against the FULL re-priced line — spread every field, never a
+    // hand-picked allow-list. The manifest resolver (manifest.ts) runs the SAME predicate
+    // against the host's full order; if the completion-time projection dropped a field a
+    // custom `appliesTo` reads (e.g. `requiresRx`), the gate would surface as applicable at
+    // manifest time yet be skipped here — a fail-OPEN bypass (invariant 1). The re-priced
+    // order is the catalog source of truth (invariant 2), so forwarding all of its fields
+    // is safe and keeps the two evaluations identical.
+    const gateOrder: GateOrder = {
+      id: repriced.id,
+      total: repriced.total,
+      currency: repriced.currency,
+      lines: repriced.lines.map((l) => ({ ...l })),
+    };
+    const verifiedGates = (verification as { verifiedGates?: Record<string, true> } | undefined)?.verifiedGates ?? {};
+    for (const cred of ctx.credentialRegistry.values()) {
+      if (RESERVED_CREDENTIAL_IDS.has(cred.id)) continue;
+      if (cred.effect.kind !== "gate") continue;
+      const applies = cred.appliesTo ? cred.appliesTo(gateOrder) : true;
+      if (applies && verifiedGates[cred.id] !== true) {
+        return { completed: false, reason: "gate" };
+      }
+    }
   }
 
   let settlement: SettlementRecordLike | undefined;

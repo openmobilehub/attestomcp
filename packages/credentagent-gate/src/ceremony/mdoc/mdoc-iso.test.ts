@@ -78,6 +78,52 @@ describe("mdoc-iso wire structures", () => {
   });
 });
 
+// Item 6 — a multi-credential request must carry EVERY credential on the iOS org-iso-mdoc path
+// (one docRequest each), documentSets must reference every doc index, and the single ReaderAuthAll
+// COSE_Sign1 must sign over ALL itemsRequests. Before the fix the builder emitted a single-element
+// docRequests array, so a multi-credential request was truncated to one doc on iOS.
+describe("mdoc-iso multi-credential DeviceRequest (item 6 — no iOS truncation)", () => {
+  const SPEC_A: MdocDocSpec = { docType: "org.example.license.1", namespace: "org.example.license.1", elements: ["license_active"] };
+  const SPEC_B: MdocDocSpec = { docType: "org.example.residency.1", namespace: "org.example.residency.1", elements: ["resident_eu"] };
+
+  it("unsigned DeviceRequest carries ONE docRequest per spec, in order (not just the first)", () => {
+    const dr = cborDecode(buildDeviceRequest([SPEC_A, SPEC_B])) as { docRequests: { itemsRequest: Tag }[] };
+    expect(dr.docRequests).toHaveLength(2);
+    const docTypes = dr.docRequests.map((d) => (cborDecode((d.itemsRequest as Tag).value as Uint8Array) as { docType: string }).docType);
+    expect(docTypes).toEqual(["org.example.license.1", "org.example.residency.1"]);
+  });
+
+  it("signed DeviceRequest carries every doc, documentSets covers all indices, ReaderAuthAll signs over ALL itemsRequests", async () => {
+    const origin = "https://shop.example";
+    const parts = await buildMdocRequestParts([SPEC_A, SPEC_B], origin);
+    const dr = cborDecode(Buffer.from(parts.data.deviceRequest, "base64url")) as {
+      version: string; docRequests: { itemsRequest: Tag }[]; deviceRequestInfo: Tag; readerAuthAll: unknown[][];
+    };
+    expect(dr.version).toBe("1.1");
+    expect(dr.docRequests).toHaveLength(2);
+
+    // One mandatory use case whose documentSets reference EVERY doc index [0, 1].
+    const dri = cborDecode((dr.deviceRequestInfo as Tag).value as Uint8Array) as { useCases: { mandatory: boolean; documentSets: number[][] }[] };
+    expect(dri.useCases[0].mandatory).toBe(true);
+    expect(dri.useCases[0].documentSets[0]).toEqual([0, 1]);
+
+    // The single ReaderAuthAll must sign over the SessionTranscript + BOTH itemsRequest tags.
+    const ra = dr.readerAuthAll[0];
+    const getKey = (m: unknown, k: number): unknown => (m instanceof Map ? m.get(k) : (m as Record<number, unknown>)[k]);
+    const certDer = (getKey(ra[1], 33) as Uint8Array[])[0];
+    const transcript = buildSessionTranscript(parts.base64EncryptionInfo, origin);
+    const itemsTags = dr.docRequests.map((d) => d.itemsRequest);
+    const raaBytes = cborEncode(
+      new Tag(Buffer.from(cborEncode(["ReaderAuthenticationAll", cborDecode(transcript), itemsTags, dr.deviceRequestInfo])), 24),
+    );
+    const sigStructure = cborEncode(["Signature1", Buffer.from(ra[0] as Uint8Array), Buffer.alloc(0), Buffer.from(raaBytes)]);
+    const cert = new X509Certificate(certDer);
+    const pub = await webcrypto.subtle.importKey("spki", cert.publicKey.rawData, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const ok = await webcrypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, ra[3] as Uint8Array, sigStructure);
+    expect(ok).toBe(true);
+  });
+});
+
 describe("mdoc-iso reader authentication (ReaderAuthAll)", () => {
   it("the signed device request carries a VALID ReaderAuthAll COSE_Sign1", async () => {
     const origin = "https://shop.example";

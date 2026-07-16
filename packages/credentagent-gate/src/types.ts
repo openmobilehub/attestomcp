@@ -58,6 +58,10 @@ export interface OrderLine {
   category?: string;
   /** Example custom flag a `prescription` `appliesTo` reads. */
   requiresRx?: boolean;
+  /** Any catalog attribute a custom `defineCredential` `appliesTo` keys on (a host that
+   *  forwards arbitrary product fields onto the line — e.g. the storefront's `priceCart` —
+   *  makes them readable here). Typed `unknown`; the predicate narrows it. */
+  [attribute: string]: unknown;
 }
 
 export interface GateOrder {
@@ -141,8 +145,18 @@ export interface VerificationManifestEntry {
 export interface VerificationRecord {
   ageVerified?: boolean;
   loyalty?: { applied: boolean; membershipNumber: string | null };
-  /** Custom credential results, keyed by credential id. */
-  [credentialId: string]: unknown;
+  /**
+   * Custom gate() credentials proven for THIS order, keyed by credential id
+   * (007 / invariant 4). This is the SINGLE source for custom-gate proof — the
+   * generalized credential rail writes `true` here on an explicit-positive custom
+   * verify, and `completeOrder` reads ONLY this map to enforce every applicable
+   * custom gate. Built-in age/membership keep their dedicated fields above.
+   *
+   * (There is deliberately no `[credentialId: string]: unknown` index signature: a
+   * per-id value written directly on the record would NOT be seen by the sweep, which
+   * reads `verifiedGates` — a silent un-enforcement. One representation wins.)
+   */
+  verifiedGates?: Record<string, true>;
 }
 
 export interface VerificationStore {
@@ -161,4 +175,15 @@ export interface CredentAgentOptions {
   walletOrigin?: string;
   /** Per-order verification state; default in-memory, pluggable (Redis). */
   store?: VerificationStore;
+  /**
+   * Custom credentials to register at construction, so EVERY instance can enforce them
+   * from boot — independent of whether `requirements()` ran on this instance (007 / item 5).
+   *
+   * `requirements()` also registers each policy credential lazily (register-on-resolve), which
+   * is enough for a single long-lived process. But in a serverless / multi-worker deploy the
+   * instance that COMPLETES an order is often not the one that ran checkout, so its registry is
+   * empty and the completion sweep would no-op — an applicable `gate()` checking out UNPROVEN
+   * (fail-open). Declare your custom credentials here and every instance enforces them.
+   */
+  credentials?: Credential[];
 }

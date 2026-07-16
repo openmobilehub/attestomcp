@@ -44,6 +44,15 @@ export function dcql(spec: { docType: string; claims: string[] }): DcqlQuery {
   };
 }
 
+/**
+ * The claim's leaf element id — the LAST path segment (the shape `dcql()` builds:
+ * `[docType, leaf]`). One definition of the path→leaf convention so the request
+ * builder, the org-iso-mdoc doc-spec, and the instant-demo claim derivation agree.
+ */
+export function claimLeaf(path: string[]): string | undefined {
+  return path[path.length - 1];
+}
+
 // ── Credential factory (non-mutating, chainable `.when()`) ─────────────────
 
 /**
@@ -119,6 +128,14 @@ export const payment = {
 
 // ── Extensibility ──────────────────────────────────────────────────────────
 
+/**
+ * The built-in credential ids. They stay on their existing order-parameterized
+ * ceremony + completion paths (age's per-order threshold, membership's percent);
+ * the generalized custom-credential rail + `completeOrder` sweep exclude them so a
+ * custom credential never shadows a built-in and the built-ins never regress (007).
+ */
+export const RESERVED_CREDENTIAL_IDS: ReadonlySet<string> = new Set(["age", "membership", "payment"]);
+
 /** Define a custom credential — gate ANY consequential action with ANY credential. */
 export function defineCredential(c: {
   id: string;
@@ -128,6 +145,16 @@ export function defineCredential(c: {
   appliesTo?: (order: GateOrder) => boolean;
   ui: { label: string; action: string };
 }): Credential {
+  // A reserved id would be silently shadowed: resolveCred routes age/membership to the built-in
+  // ceremony and the completion sweep skips any reserved id (RESERVED_CREDENTIAL_IDS), so a custom
+  // `gate()` here would never run its own verify and would fail OPEN. Reject it at construction —
+  // fail-fast beats accepting a policy the seam cannot honor (Principle III / IV).
+  if (RESERVED_CREDENTIAL_IDS.has(c.id)) {
+    throw new Error(
+      `defineCredential: "${c.id}" is a reserved built-in credential id (age / membership / payment). ` +
+        `Choose a different id — a custom credential cannot reuse a built-in's id.`,
+    );
+  }
   return makeCredential({
     id: c.id,
     request: c.request,
@@ -140,11 +167,30 @@ export function defineCredential(c: {
 
 // ── Policy entries ─────────────────────────────────────────────────────────
 
+// The effect kind fixes how a step MUST be declared, and a mismatch is a policy the
+// ceremony seam cannot honor (item 4 — fail-fast, like finding 1):
+//   • gate / authorize are BLOCKING — the completion sweep enforces them only when
+//     required, so an optional() one is surfaced but never enforced (fail-OPEN).
+//   • discount is a BENEFIT applied when the credential is presented — it never blocks
+//     completion, so required() asks the seam to gate on something it can't.
+
 /** A required gate — present in the manifest whenever it applies. */
 export function required(c: Credential): Step {
+  if (c.effect.kind === "discount") {
+    throw new Error(
+      `required(${c.id}): a discount is a benefit applied when the credential is presented, ` +
+        `not a blocking requirement — it must be optional(), not required().`,
+    );
+  }
   return { credential: c, required: true };
 }
 /** An optional gate — surfaced but never blocking. */
 export function optional(c: Credential): Step {
+  if (c.effect.kind === "gate" || c.effect.kind === "authorize") {
+    throw new Error(
+      `optional(${c.id}): a ${c.effect.kind} credential is blocking and must be required(), ` +
+        `not optional() — an optional blocking credential is surfaced but never enforced (it would fail open).`,
+    );
+  }
   return { credential: c, required: false };
 }
