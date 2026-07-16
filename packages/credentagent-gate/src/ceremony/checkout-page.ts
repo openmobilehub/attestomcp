@@ -136,18 +136,20 @@ function trustNote(entries: VerificationManifestEntry[]): string {
 function railSteps(
   gateEntries: VerificationManifestEntry[],
   ageVerified: boolean,
-  loyaltyApplied: boolean,
+  discountApplied: boolean,
   verifiedGates: Record<string, true>,
   paid: boolean,
 ): RailStep[] {
   const steps: RailStep[] = [];
   for (const e of gateEntries) {
     if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
-    // Membership is an OPTIONAL discount, not a ceremony everyone runs: show it ONLY when the
-    // discount is actually applied — never merely because it's OFFERED, and never ✓'d just
-    // because the order is paid (that was a phantom "Membership ✓" the buyer never earned).
-    // Mirrors the order-derived ceremony rail (theme.ts `checkoutRail`) so hub and rail agree (#46).
-    else if (e.effect === "discount") { if (loyaltyApplied) steps.push({ label: "Membership", done: true }); }
+    // Membership is an OPTIONAL discount, not a ceremony everyone runs: show it ONLY when a
+    // discount is actually ON the order — never merely because it's OFFERED. Keyed on the
+    // reconciled `displayDiscount` (the SAME signal the receipt row uses), NOT the raw loyalty
+    // flag — which completion CLEARS: a paid discounted order must keep its Membership step
+    // (matching the receipt + the ceremony rail), while a paid FULL-PRICE order shows none (no
+    // phantom "Membership ✓"). Mirrors theme.ts `checkoutRail` so hub and rail agree (#46).
+    else if (e.effect === "discount") { if (discountApplied) steps.push({ label: "Membership", done: true }); }
     // Custom gate (007): its own label as a step, done once proven for this order.
     else if (e.effect === "gate") steps.push({ label: e.label || "Verify", done: verifiedGates[e.credential] === true || paid });
   }
@@ -245,8 +247,10 @@ export function renderRequirements(
       : renderPayment(order, paymentNumber, methods);
   const placeScript = paid || blocked ? "" : renderPlaceScript(order, methods, opts.payment);
 
-  // Progress rail mirrors the live gate status; current = first not-done step.
-  const steps = railSteps(gateEntries, ageVerified, loyaltyApplied, verifiedGates, !!paid);
+  // Progress rail mirrors the live gate status; current = first not-done step. A discount is
+  // "applied" when it's actually on the reconciled order (survives completion clearing the flag).
+  const discountIsApplied = displayDiscount > 0;
+  const steps = railSteps(gateEntries, ageVerified, discountIsApplied, verifiedGates, !!paid);
   const rail = progressRail(steps, steps.findIndex((s) => !s.done));
   const itemCount = order.itemCount ?? order.lines.reduce((n, l) => n + l.quantity, 0);
 

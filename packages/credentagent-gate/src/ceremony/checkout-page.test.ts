@@ -247,4 +247,14 @@ describe("renderRequirements — hub stepper agrees with the ceremony rail (#46)
     // the Membership dot carries the ✓ (done) — earned here, not a phantom
     expect(html).toMatch(/rail-step done"><div class="rail-dot">✓<\/div><div class="rail-label">Membership</);
   });
+
+  it("keeps Membership on a PAID discounted order, reconciled from the paid amount (completion clears the flag)", () => {
+    // completion.ts clears this order's verification, so `loyaltyApplied` is false on the
+    // paid revisit — but the order WAS paid at a loyalty discount (the summary derives the
+    // row from lineSum − paid.amount). The stepper must agree with that receipt, not the
+    // cleared flag, or it drops a Membership the buyer earned and disagrees with the rail.
+    const html = renderRequirements(order, manifest, {}, { paid: { amount: 111.6, currency: "USD", method: "passkey" } });
+    expect(html).toContain("Loyalty discount");                     // receipt: a discount WAS applied
+    expect(railLabels(html)).toEqual(["Age", "Membership", "Pay"]); // …so the stepper must show it too
+  });
 });
