@@ -38,6 +38,12 @@ _Updated **2026-07-12** · quickstart ladder (007) + storefront `0.2.1` (statele
 
 ## 🔨 In flight / next
 
+- **Encode domain knowledge as infrastructure** — branch `encode-knowledge-as-infra`
+  (2026-07-15, spec: `docs/superpowers/specs/2026-07-15-encode-knowledge-as-infra-design.md`):
+  `REVIEW.md` review checklist wired into the automated review (+ workflow self-validation,
+  draft skip), an invariant-encoding ESLint layer (`npm run lint`, in CI), a committed DCO
+  auto-sign-off hook, and the agent skills committed in-repo
+  (`add-ceremony-rail`, `write-bypass-test`, `publish-release`). Awaiting PR + review.
 - **AP2 v2 alignment — captured as [#39](https://github.com/openmobilehub/credentagent/issues/39) +
   [#40](https://github.com/openmobilehub/credentagent/issues/40)** (2026-07-08), prompted by AP2-team feedback
   (Yanhe Chen, Google, Discord 2026-06-02: v1-shaped mandate, unsigned amount, unverified issuer/deviceAuth).
