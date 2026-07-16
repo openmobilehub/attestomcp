@@ -6,7 +6,7 @@
 // amount-binding logic. Settlement GATES completion: a configured-but-failed
 // settle means authorized-but-not-completed (no record, cart intact — FR-013).
 import type { Credential, GateOrder, VerificationStore } from "../types.js";
-import type { CartItemRef, CeremonyCatalog, CompletionInput, CompletionResult, GateOutcome } from "./types.js";
+import type { CartItemRef, CeremonyCatalog, CeremonyOrder, CompletionInput, CompletionResult, GateOutcome } from "./types.js";
 import { verifyCartMandate, type CartMandate } from "./cartMandate.js";
 import { reconcileCartPayment } from "./reconciliation.js";
 import { checkDraw, type DrawVerifier } from "./mandate.js";
@@ -83,6 +83,32 @@ export interface CompletionContext {
   credentialRegistry?: ReadonlyMap<string, Credential>;
 }
 
+/**
+ * Invariant 1 (007, generalized): is there an applicable custom `gate()` credential with NO
+ * proof for THIS order? Shared by the human-present path AND the delegated-draw path — a draw
+ * is a completion path too, and an unattended agent can't present a prescription/license, so
+ * an applicable custom gate must refuse (step up to a human). Applicability is re-derived from
+ * the RE-PRICED order (invariant 2) against the full line (never a lossy projection). Absent
+ * registry / no custom gates ⇒ false (additive — unchanged for hosts that don't wire it).
+ */
+function hasUnprovenCustomGate(ctx: CompletionContext, repriced: CeremonyOrder, verification: unknown): boolean {
+  if (!ctx.credentialRegistry) return false;
+  const gateOrder: GateOrder = {
+    id: repriced.id,
+    total: repriced.total,
+    currency: repriced.currency,
+    lines: repriced.lines.map((l) => ({ ...l })),
+  };
+  const verifiedGates = (verification as { verifiedGates?: Record<string, true> } | undefined)?.verifiedGates ?? {};
+  for (const cred of ctx.credentialRegistry.values()) {
+    if (RESERVED_CREDENTIAL_IDS.has(cred.id)) continue;
+    if (cred.effect.kind !== "gate") continue;
+    const applies = cred.appliesTo ? cred.appliesTo(gateOrder) : true;
+    if (applies && verifiedGates[cred.id] !== true) return true;
+  }
+  return false;
+}
+
 export async function completeOrder(input: CompletionInput, ctx: CompletionContext): Promise<CompletionResult> {
   // Every deterministic gate must have passed; one failure refuses, recording
   // nothing.
@@ -95,7 +121,13 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
   // reprice high and refuse).
   const existing = await ctx.records.read(input.order.id);
   if (existing) {
-    return { completed: true, ...(existing.settlement ? { settlement: existing.settlement } : {}) };
+    // Echo the SAME shape the live completion returned — including the delegationId audit link
+    // for a draw (a polling agent must see the grant link on a replay, not just completed:true).
+    return {
+      completed: true,
+      ...(existing.settlement ? { settlement: existing.settlement } : {}),
+      ...(existing.delegationId ? { delegationId: existing.delegationId } : {}),
+    };
   }
 
   // Cart Mandate integrity (additive, fail-closed): if a signed cart mandate rode along
@@ -163,6 +195,13 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
     // never completes from a grant, regardless of any snapshot (invariant 5, spec FR-013).
     if (ageRestricted) return { completed: false, reason: "draw", refusals: [refusal("step-up", { cause: "age-restricted" })] };
 
+    // Custom gate() credentials are non-delegable too (invariant 1, generalized — 007): a draw
+    // is a completion path, so an applicable custom gate (prescription, license, …) with no
+    // proof for THIS order must step up to a live human — the draw path must NOT skip the sweep
+    // the HP path runs by returning early below.
+    if (hasUnprovenCustomGate(ctx, repriced, verification))
+      return { completed: false, reason: "draw", refusals: [refusal("step-up", { cause: "custom-gate" })] };
+
     // Revocation + prior draws — fail-closed if the store errors (never fail-open).
     let revoked: boolean;
     let priorDraws;
@@ -186,6 +225,12 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
     // never carries an authoritative price, and the bound payment can't drift from ground truth.
     if (draw.amount !== repriced.total) {
       return { completed: false, reason: "draw", refusals: [refusal("over-cap", { pricedAt: repriced.total, amount: draw.amount })] };
+    }
+    // ...and in the SAME currency: checkDraw only proves draw.currency == intent.currency (the
+    // grant's self-consistency), never agreement with the ORDER. Bind it to the re-priced
+    // order's currency so a USD grant cannot settle a EUR-priced cart (invariant 3).
+    if (draw.currency !== repriced.currency) {
+      return { completed: false, reason: "draw", refusals: [refusal("currency-mismatch", { expected: repriced.currency, got: draw.currency })] };
     }
 
     // Atomic consume — keyed per intent (NOT per order: completeOrder's own idempotency is
@@ -227,37 +272,13 @@ export async function completeOrder(input: CompletionInput, ctx: CompletionConte
     return { completed: false, reason: "age" };
   }
 
-  // Invariant 1 (generalized — 007): enforce EVERY applicable custom `gate()`
-  // credential, not only age. `gate()` is the hard-block effect, so it is enforced
-  // whenever it applies, independent of the required/optional flag. Applicability is
-  // re-derived from the RE-PRICED order (invariant 2), never the token; the registry
-  // holds the credential CODE (verify/appliesTo) in-process, so nothing crossed the
-  // wire. Reserved built-ins (age/membership/payment) are excluded — they keep their
-  // dedicated enforcement above. Absent registry ⇒ this sweep no-ops (additive), so a
-  // host that doesn't wire it (or has no custom gates) is unchanged.
-  if (ctx.credentialRegistry) {
-    // Evaluate `appliesTo` against the FULL re-priced line — spread every field, never a
-    // hand-picked allow-list. The manifest resolver (manifest.ts) runs the SAME predicate
-    // against the host's full order; if the completion-time projection dropped a field a
-    // custom `appliesTo` reads (e.g. `requiresRx`), the gate would surface as applicable at
-    // manifest time yet be skipped here — a fail-OPEN bypass (invariant 1). The re-priced
-    // order is the catalog source of truth (invariant 2), so forwarding all of its fields
-    // is safe and keeps the two evaluations identical.
-    const gateOrder: GateOrder = {
-      id: repriced.id,
-      total: repriced.total,
-      currency: repriced.currency,
-      lines: repriced.lines.map((l) => ({ ...l })),
-    };
-    const verifiedGates = (verification as { verifiedGates?: Record<string, true> } | undefined)?.verifiedGates ?? {};
-    for (const cred of ctx.credentialRegistry.values()) {
-      if (RESERVED_CREDENTIAL_IDS.has(cred.id)) continue;
-      if (cred.effect.kind !== "gate") continue;
-      const applies = cred.appliesTo ? cred.appliesTo(gateOrder) : true;
-      if (applies && verifiedGates[cred.id] !== true) {
-        return { completed: false, reason: "gate" };
-      }
-    }
+  // Invariant 1 (generalized — 007): enforce EVERY applicable custom `gate()` credential, not
+  // only age — the SAME check the delegated-draw branch above runs (`hasUnprovenCustomGate`),
+  // so the two completion paths cannot drift. `gate()` is the hard-block effect, enforced
+  // whenever it applies (required/optional flag ignored); applicability is re-derived from the
+  // RE-PRICED order (invariant 2) against the full line. Absent registry ⇒ no-op (additive).
+  if (hasUnprovenCustomGate(ctx, repriced, verification)) {
+    return { completed: false, reason: "gate" };
   }
 
   let settlement: SettlementRecordLike | undefined;

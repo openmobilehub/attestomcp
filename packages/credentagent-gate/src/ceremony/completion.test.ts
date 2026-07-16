@@ -355,3 +355,46 @@ describe("completeOrder — custom gate() enforcement (007, US2 / invariant 1)",
     expect(res.completed).toBe(true);
   });
 });
+
+// ── Draw-path hardening (PR #41 review): the delegated-draw branch must run the SAME custom-
+// gate sweep as the HP path, bind currency to the order, and echo delegationId on replay. ──
+describe("completeOrder — draw path hardening (PR #41 review)", () => {
+  it("BYPASS: a draw over a cart with an unproven custom gate() is refused step-up (draw can't skip the sweep)", async () => {
+    const h = harness({ registry: licenseRegistry });
+    const rev = new MemoryRevocationStore();
+    const { intent, mkDraw } = await drawFixture({ maxAmount: 100 });
+    const draw = await mkDraw(50); // drill @ 50 — a professional_license gate() line, unproven
+    const res = await completeOrder(h.input([{ productId: "drill", quantity: 1 }], { amount: 50, draw: { intent, draw } }), { ...h.ctx, revocation: rev });
+    expect(res.completed).toBe(false); // FAILS (wrongly completes) if the draw branch skips the sweep
+    expect(res.refusals?.[0]?.code).toBe("step-up");
+    expect(h.records.size).toBe(0);
+  });
+
+  it("BYPASS: a draw whose currency ≠ the re-priced order currency is refused (USD grant can't settle a EUR cart)", async () => {
+    const h = harness();
+    const rev = new MemoryRevocationStore();
+    const { privateKey, delegate } = await generateDelegate();
+    const intent = await sealIntent({
+      type: "credentagent.IntentBounds/v0", merchants: ["utopia-marketplace"], currency: "EUR",
+      maxAmount: 120, totalAmount: 120, stepUpOver: 500, delegate, mayPresent: [],
+      presence: "delegated", trust_level: "issuer-verified (demo PKI)",
+    } as Omit<IntentBounds, "intentId">);
+    // checkDraw passes (draw EUR == intent EUR), amount 20 == widget×2, but the order re-prices in USD.
+    const draw = await signDraw({ type: "credentagent.Draw/v0", intentId: intent.intentId, paymentMandateId: "d", merchant: "utopia-marketplace", amount: 20, currency: "EUR", pspTransactionId: "tx_eur" }, privateKey);
+    const res = await completeOrder(h.input([{ productId: "widget", quantity: 2 }], { amount: 20, draw: { intent, draw } }), { ...h.ctx, revocation: rev });
+    expect(res.completed).toBe(false); // FAILS (settles EUR on USD) without the order-currency bind
+    expect(res.refusals?.[0]?.code).toBe("currency-mismatch");
+  });
+
+  it("an idempotent replay of a completed draw echoes the delegationId audit link", async () => {
+    const h = harness();
+    const rev = new MemoryRevocationStore();
+    const { intent, mkDraw } = await drawFixture();
+    const draw = await mkDraw(20);
+    const first = await completeOrder(h.input([{ productId: "widget", quantity: 2 }], { amount: 20, draw: { intent, draw } }), { ...h.ctx, revocation: rev });
+    expect(first.delegationId).toBe(intent.intentId);
+    const replay = await completeOrder(h.input([{ productId: "widget", quantity: 2 }], { amount: 20, draw: { intent, draw } }), { ...h.ctx, revocation: rev });
+    expect(replay.completed).toBe(true);
+    expect(replay.delegationId).toBe(intent.intentId); // dropped on the echo before the fix
+  });
+});
