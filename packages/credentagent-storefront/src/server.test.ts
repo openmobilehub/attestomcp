@@ -248,6 +248,26 @@ describe("GET /checkout — the shared three-gate page (renderRequirements)", ()
     expect(res.text).not.toContain("Payment is locked");
   });
 
+  // #63: a standing /checkout tab must reflect a completion made on another tab / device /
+  // rail without a manual refresh. The page polls THIS order's status endpoint and reloads
+  // on completion (the same signal the widget polls) — and stops once the order is paid.
+  it("a pending checkout embeds a poll of this order's status endpoint + reload (#63)", async () => {
+    const store = gatedStore();
+    const orderId = await checkoutId(await connect(store), "oak-whiskey");
+    const res = await request(store.app).get(`/checkout?order=${orderId}`);
+    expect(res.text).toContain(`/checkout/order-status?orderId=${orderId}`);
+    expect(res.text).toContain("location.reload()");
+  });
+
+  it("a completed order's paid revisit no longer polls (#63)", async () => {
+    const store = createStorefront(); // ungated → instant-demo completion
+    const orderId = await checkoutId(await connect(store), "drift-mouse");
+    await request(store.app).post("/checkout/place-order").type("form").send({ order: orderId }).expect(200);
+    const res = await request(store.app).get(`/checkout?order=${orderId}`);
+    expect(res.text).toContain("Order paid");
+    expect(res.text).not.toContain("/checkout/order-status");
+  });
+
   // BYPASS (Security invariant 1, load-bearing): the instant-demo place-order path
   // completes WITHOUT a device ceremony, so it must refuse a GATED order — otherwise a
   // direct POST of an age-restricted order id completes with NO age proof (the UI hides

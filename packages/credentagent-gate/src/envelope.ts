@@ -16,29 +16,40 @@ export const ENVELOPE_SENTINEL = "verification_required" as const;
 export type BuiltinKind = "age" | "membership" | "payment";
 
 /**
- * The age DCQL, matching the reference verifier (ISO 18013-5 mDL + EU PID).
- * Mirrors the server's credential-gate/dcql.ts so the envelope describes the
+ * The age DCQL for a threshold, matching the reference verifier (ISO 18013-5 mDL +
+ * EU PID). Mirrors the server's credential-gate/dcql.ts so the envelope describes the
  * request the wallet will actually receive.
+ *
+ * Every option we offer must be able to prove `age_over_${minAge}` — `age.over(N)`
+ * verifies exactly that claim (invariant 5: an 18+ proof must never satisfy a 21+
+ * gate). Asking a doctype only for `age_over_18` while gating on 21 would let the
+ * wallet match and then get refused at verify — a dead end. So both doctypes are
+ * asked for the boolean at THIS threshold (plus the 18 bracket, mirroring
+ * credential-gate/doc-spec.ts). A credential that lacks the threshold claim simply
+ * won't match its option, which is the correct outcome.
  */
-export function ageDcql(): DcqlQuery {
+export function ageDcql(minAge = 21): DcqlQuery {
+  const over = (ns: string, n: number) => ({ path: [ns, `age_over_${n}`], intent_to_retain: false });
+  const claimsIn = (ns: string) => (minAge > 18 ? [over(ns, minAge), over(ns, 18)] : [over(ns, 18)]);
   return {
     credentials: [
       {
         id: "mdl",
         format: "mso_mdoc",
         meta: { doctype_value: "org.iso.18013.5.1.mDL" },
-        claims: [
-          { path: ["org.iso.18013.5.1", "age_over_21"], intent_to_retain: false },
-          { path: ["org.iso.18013.5.1", "age_over_18"], intent_to_retain: false },
-        ],
+        claims: claimsIn("org.iso.18013.5.1"),
       },
       {
         id: "eupid",
         format: "mso_mdoc",
         meta: { doctype_value: "eu.europa.ec.eudi.pid.1" },
-        claims: [{ path: ["eu.europa.ec.eudi.pid.1", "age_over_18"], intent_to_retain: false }],
+        claims: claimsIn("eu.europa.ec.eudi.pid.1"),
       },
     ],
+    // mDL OR EU-PID — either proves age. WITHOUT this set, DCQL treats the two
+    // `credentials` as AND (both required), so a wallet holding only one doctype
+    // (e.g. an imported mDL) matches nothing and the picker shows "info not found".
+    credential_sets: [{ options: [["mdl"], ["eupid"]] }],
   };
 }
 
