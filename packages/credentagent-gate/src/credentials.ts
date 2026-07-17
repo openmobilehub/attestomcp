@@ -81,7 +81,10 @@ export const age = {
   over(minAge: number): Credential {
     return makeCredential({
       id: "age",
-      request: ageDcql(),
+      // Ask at THIS threshold, so every credential the wallet can pick is one that can
+      // actually prove it (an EU-PID asked only for age_over_18 would match a 21+ gate
+      // in the picker and then be refused by `verify` below).
+      request: ageDcql(minAge),
       // Security invariant 5: require the explicit positive claim at THIS threshold
       // (an 18+ proof must not satisfy a 21+ gate).
       verify: (claims) => claims[`age_over_${minAge}`] === true,
