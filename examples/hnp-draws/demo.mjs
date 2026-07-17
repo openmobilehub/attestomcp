@@ -21,14 +21,14 @@ console.log("\n🎫  Pre-approved: coffee at blue-bottle, up to $30/order. Off t
 
 // 3. Your agent spends. Each spend() returns { ok, amount, remaining, reason? } — no throwing.
 //    Two real purchases draw the $100 down; the rest are refused, each with a reason.
-await attempt("1 coffee", { paymentId: "c1", item: "coffee" });
-await attempt("another coffee (new id)", { paymentId: "c2", item: "coffee" });
-await attempt("reuse c1 — double-spend", { paymentId: "c1", item: "coffee" });
-await attempt("3 coffees at once", { paymentId: "c3", item: "coffee", quantity: 3 });
-await attempt("coffee — different store", { paymentId: "c4", item: "coffee", merchant: "starbucks" });
-await attempt("wine — age-restricted", { paymentId: "c5", item: "wine" });
+await attempt("1 coffee", { idempotencyKey: "c1", item: "coffee" });
+await attempt("another coffee (new id)", { idempotencyKey: "c2", item: "coffee" });
+await attempt("retry c1 (same key — safe)", { idempotencyKey: "c1", item: "coffee" });
+await attempt("3 coffees at once", { idempotencyKey: "c3", item: "coffee", quantity: 3 });
+await attempt("coffee — different store", { idempotencyKey: "c4", item: "coffee", merchant: "starbucks" });
+await attempt("wine — age-restricted", { idempotencyKey: "c5", item: "wine" });
 await grant.revoke(); // you change your mind, from your phone
-await attempt("1 coffee — after revoke", { paymentId: "c6", item: "coffee" });
+await attempt("1 coffee — after revoke", { idempotencyKey: "c6", item: "coffee" });
 
 // Attempt one purchase and print the verdict (demo output only — not part of the API).
 async function attempt(label, purchase) {

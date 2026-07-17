@@ -19,7 +19,7 @@ node examples/hnp-draws/demo.mjs
 
   ✅  1 coffee                   $18   approved — $82 of $100 left
   ✅  another coffee (new id)    $18   approved — $64 of $100 left
-  ⛔  reuse c1 — double-spend    $18   refused — replay
+  ✅  retry c1 (same key — safe) $18   approved — $64 of $100 left   (idempotent: same result, charged once)
   ⛔  3 coffees at once          $54   refused — over-cap   ($54 > $30/order)
   ⛔  coffee — different store   $18   refused — out-of-scope
   ⛔  wine — age-restricted      $20   refused — step-up   (age is never delegable)

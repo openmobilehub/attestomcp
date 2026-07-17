@@ -48,8 +48,11 @@ export interface PreApproveOptions {
 }
 
 export interface Purchase {
-  /** The payment's idempotency key. Reuse one and the gate sees a double-spend. */
-  paymentId: string;
+  /** A stable idempotency key for THIS purchase (Stripe's model). REUSE it to retry safely —
+   *  a timed-out retry with the same key returns the ORIGINAL result, charged once, never a
+   *  double-charge. Use a UNIQUE key per distinct purchase; a distinct key is a new draw.
+   *  The caller owns retry-safety: it must reuse the key, not mint a fresh one, on retry. */
+  idempotencyKey: string;
   item: string;
   quantity?: number;
   /** Spend at a merchant other than the approved one (to exercise scope). */
@@ -144,8 +147,6 @@ export class DelegatedGate {
  * gate; `revoke()` flips the ledger so the next spend dies.
  */
 export class DelegatedGrant {
-  private seq = 0;
-
   constructor(
     private readonly grant: IntentBounds,
     private readonly key: DelegateKey,
@@ -178,25 +179,28 @@ export class DelegatedGrant {
    * for any GATE decision — it never throws to signal a refusal. (It does throw on a
    * programming error, e.g. an item id not in the catalog.)
    */
-  async spend({ paymentId, item, quantity = 1, merchant }: Purchase): Promise<SpendResult> {
-    // Order id namespaced by the grant so two grants on one gate never collide (their
-    // shared idempotency store must not let grant B read grant A's completion — invariant 4).
-    const orderId = `${this.grant.intentId}-${++this.seq}`;
+  async spend({ idempotencyKey, item, quantity = 1, merchant }: Purchase): Promise<SpendResult> {
+    // The order id is DERIVED from the caller's idempotency key (not a per-call counter), and
+    // namespaced by the grant. That is what makes a retry safe: a repeat with the same key
+    // hits completeOrder's order-keyed idempotency and echoes the ORIGINAL completion — one
+    // draw, charged once. The grant prefix keeps two grants on one gate from colliding
+    // (grant B must never read grant A's completion — invariant 4).
+    const orderId = `${this.grant.intentId}-${idempotencyKey}`;
     const order = this.catalog.createOrder([{ productId: item, quantity }], orderId);
     const draw = await signDraw(
       {
         type: "credentagent.Draw/v0",
         intentId: this.grant.intentId,
-        paymentMandateId: paymentId,
+        paymentMandateId: idempotencyKey,
         merchant: merchant ?? this.grant.merchants![0],
         amount: order.total,
         currency: "USD",
-        pspTransactionId: paymentId,
+        pspTransactionId: idempotencyKey,
       },
       this.key,
     );
     const res = await completeOrder(
-      { order, mandateId: paymentId, amount: order.total, currency: "USD", method: "delegated", gates: [], draw: { intent: this.grant, draw } },
+      { order, mandateId: idempotencyKey, amount: order.total, currency: "USD", method: "delegated", gates: [], draw: { intent: this.grant, draw } },
       this.ctx,
     );
     // Headroom AFTER this spend: the store's committed draws now include this one iff it

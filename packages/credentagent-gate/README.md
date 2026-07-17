@@ -158,7 +158,7 @@ import { DelegatedGate } from "@openmobilehub/credentagent-gate";
 
 const gate  = new DelegatedGate({ catalog: { coffee: 18 } });
 const grant = await gate.preApprove({ merchant: "blue-bottle", perOrder: 30, total: 100 }); // approve once
-const result = await grant.spend({ paymentId: "pay_1", item: "coffee" });                    // unattended draw
+const result = await grant.spend({ idempotencyKey: "order-1", item: "coffee" });             // unattended draw (retry-safe key)
 //  → { ok: true, amount: 18, remaining: 82 }   — or { ok: false, reason: "over-cap", retryable: "terminal" }
 await grant.revoke();                                                                         // kill-switch
 ```
