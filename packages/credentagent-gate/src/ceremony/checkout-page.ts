@@ -104,6 +104,12 @@ export interface RenderRequirementsOptions {
   payment?: PaymentOptions;
   /** A recorded completion for THIS order ⇒ render the paid state, not the methods. */
   paid?: RenderPaid | null;
+  /** A host status endpoint for THIS order returning `{ completed: boolean }`. When set
+   *  and the order is not yet paid, the page polls it and reloads on completion, so a
+   *  standing checkout tab reflects a payment made on another tab / device / rail without
+   *  a manual refresh (#63). Route-agnostic — the host owns the URL, same as
+   *  `payment.placeOrderPath`. Omitted ⇒ no poll (unchanged for hosts without one). */
+  statusUrl?: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,14 +136,20 @@ function trustNote(entries: VerificationManifestEntry[]): string {
 function railSteps(
   gateEntries: VerificationManifestEntry[],
   ageVerified: boolean,
-  loyaltyApplied: boolean,
+  discountApplied: boolean,
   verifiedGates: Record<string, true>,
   paid: boolean,
 ): RailStep[] {
   const steps: RailStep[] = [];
   for (const e of gateEntries) {
     if (e.effect === "gate" && e.credential === "age") steps.push({ label: "Age", done: ageVerified || paid });
-    else if (e.effect === "discount") steps.push({ label: "Membership", done: loyaltyApplied || paid });
+    // Membership is an OPTIONAL discount, not a ceremony everyone runs: show it ONLY when a
+    // discount is actually ON the order — never merely because it's OFFERED. Keyed on the
+    // reconciled `displayDiscount` (the SAME signal the receipt row uses), NOT the raw loyalty
+    // flag — which completion CLEARS: a paid discounted order must keep its Membership step
+    // (matching the receipt + the ceremony rail), while a paid FULL-PRICE order shows none (no
+    // phantom "Membership ✓"). Mirrors theme.ts `checkoutRail` so hub and rail agree (#46).
+    else if (e.effect === "discount") { if (discountApplied) steps.push({ label: "Membership", done: true }); }
     // Custom gate (007): its own label as a step, done once proven for this order.
     else if (e.effect === "gate") steps.push({ label: e.label || "Verify", done: verifiedGates[e.credential] === true || paid });
   }
@@ -235,8 +247,10 @@ export function renderRequirements(
       : renderPayment(order, paymentNumber, methods);
   const placeScript = paid || blocked ? "" : renderPlaceScript(order, methods, opts.payment);
 
-  // Progress rail mirrors the live gate status; current = first not-done step.
-  const steps = railSteps(gateEntries, ageVerified, loyaltyApplied, verifiedGates, !!paid);
+  // Progress rail mirrors the live gate status; current = first not-done step. A discount is
+  // "applied" when it's actually on the reconciled order (survives completion clearing the flag).
+  const discountIsApplied = displayDiscount > 0;
+  const steps = railSteps(gateEntries, ageVerified, discountIsApplied, verifiedGates, !!paid);
   const rail = progressRail(steps, steps.findIndex((s) => !s.done));
   const itemCount = order.itemCount ?? order.lines.reduce((n, l) => n + l.quantity, 0);
 
@@ -250,6 +264,11 @@ export function renderRequirements(
   // on a restore we force a fresh GET so the page reflects current server state
   // (the paid banner, not the picker).
   const bfcacheGuard = `<script>window.addEventListener("pageshow",function(e){if(e.persisted)location.reload();});</script>`;
+
+  // Live-completion poll (#63): while the order isn't paid, poll the host's status endpoint
+  // and reload once it reports completion (the reload re-renders the paid banner). A GET poll
+  // + reload is idempotent — completion re-reads the recorded order, so no double charge.
+  const livePoll = !paid && opts.statusUrl ? renderPollScript(opts.statusUrl) : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -272,6 +291,7 @@ ${pageHead(`Checkout · ${order.id}`)}
   ${placeScript}
   ${paid ? "" : trustNote(manifest)}
   ${bfcacheGuard}
+  ${livePoll}
   </div>
 </body>
 </html>`;
@@ -392,6 +412,29 @@ function renderPlaceScript(order: RenderOrder, methods: PaymentMethod[], payment
         }
       });
     }
+  </script>`;
+}
+
+// Live-completion poll (#63). A standing checkout tab is server-rendered once; if the buyer
+// completes payment on another tab / device / rail, this tab would keep showing "Payment is
+// locked" until a manual refresh. While the order isn't paid, poll the host's status endpoint
+// (`{ completed: boolean }`) and reload once it reports completion — the reload re-renders the
+// paid banner. A GET poll + reload is idempotent (completion re-reads the recorded order).
+function renderPollScript(statusUrl: string): string {
+  return `<script>
+    (function () {
+      var url = ${JSON.stringify(statusUrl)};
+      function check() {
+        return fetch(url, { headers: { accept: "application/json" } })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) { if (data && data.completed) { clearInterval(timer); location.reload(); } })
+          .catch(function () { /* transient — keep polling */ });
+      }
+      var timer = setInterval(check, 4000);
+      // The buyer typically pays on another tab/device, so this tab is backgrounded;
+      // check immediately when they return so it flips without waiting for the next tick.
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+    })();
   </script>`;
 }
 

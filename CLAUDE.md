@@ -155,7 +155,9 @@ Quick gate for any new/changed public API (full list in the rubric):
 
 ## Code review
 
-PRs get both automated and human review:
+PRs get both automated and human review. **`REVIEW.md` (repo root) is the checklist both
+run** — the automated review's prompt grounds itself there; apply it when reviewing and
+anticipate it when authoring:
 
 > **Maintainers: push your feature branch to this repo — don't fork.** The automatic
 > Claude review only runs on **same-repo** PRs (GitHub withholds secrets from fork-PR
@@ -167,7 +169,12 @@ PRs get both automated and human review:
   on every non-draft PR opened from a branch in this repo, grounded in this file's
   invariants **and the DX rubric** (`docs/reference/architecture-principles.md`) — it checks
   Stripe-grade ergonomics (the example-is-the-test rule, above) alongside the security invariants.
-  `claude-review` is a **required status check**: a same-repo PR can't merge until it's green.
+  `claude-review` is **opt-in and currently OFF**: the job only runs when the repo variable
+  `ENABLE_CLAUDE_REVIEW` is `"true"`. Otherwise it is **skipped**, and a skipped job counts as
+  passing for a required check — so it does not block merges, and **human review is the gate**.
+  (It's off because the account can't use the `CLAUDE_CODE_OAUTH_TOKEN`, so the action errored on
+  every PR.) Turn it on with `gh variable set ENABLE_CLAUDE_REVIEW --body true` — the token must
+  also be usable.
 - **Fork / external-contributor PRs** — the automated job is **skipped** (fork runs can't
   read the `CLAUDE_CODE_OAUTH_TOKEN` secret), so it never blocks you. A skipped required
   check counts as passing. Those PRs are reviewed by one of:

@@ -17,11 +17,21 @@ _Updated **2026-07-15** · `main` reconciled into `005-hnp-seams` (#41): 005 sea
       flags from `docs/naming-clearance.md` (generic "-Agent" suffix, cred- neighbors: Credant/CredenTek) still
       deserve the professional search. Fresh scoped packages were unpublishable-within-72h if it had surprised
       us; that window is the accepted risk.
-- [ ] **Add the `CLAUDE_CODE_OAUTH_TOKEN` secret** + a `claude-code-review.yml` workflow if you want the
-      automated PR review (the org-managed review also covers it).
-- [ ] **Approve + merge [PR #41](https://github.com/openmobilehub/credentagent/pull/41)** — 005 seams +
-      `DelegatedGate` facade. Reconciled with current `main` (this merge; the earlier hand-merge that dropped
-      the HNP seams was redone as a proper `git merge`), full suite green again. Blocked only on your review.
+- [ ] **Automated `claude-review` is OFF — decide whether to re-enable it.** The
+      `CLAUDE_CODE_OAUTH_TOKEN` secret *exists*, but the maintainer's enterprise account can't use
+      it, so the action errored on *every* PR (`is_error:true`, `total_cost_usd: 0`) — and since
+      `claude-review` is a **required** check, nothing could merge. The job is now gated on a repo
+      variable, so it is **skipped** (skipped counts as passing) instead of failing.
+      **Recommendation: leave it off** — the org-managed review + human review already cover PRs.
+      To re-enable once the token works: `gh variable set ENABLE_CLAUDE_REVIEW --body true` (no
+      workflow change needed). If it stays off long-term, un-require `claude-review` in branch
+      protection so it isn't listed as required at all.
+- [ ] **Merge [PR #41](https://github.com/openmobilehub/credentagent/pull/41)** — 005 seams +
+      `DelegatedGate` facade. **APPROVED** and reconciled with current `main`. An on-demand
+      multi-agent review (standing in for the disabled `claude-review`) found **6 HIGH** bypasses in
+      the bounds enforcement — NaN/negative amounts defeating every cap, the draw path skipping the
+      custom-`gate()` sweep, a revocation TOCTOU, and the safe-retry double-charge — **all fixed**,
+      each with a bypass test verified red without its control. 348 tests green.
 - [x] **005 Group-A (D1–D3) + sequencing (Option B) + Decision-13 — RATIFIED/DONE 2026-07-08** (see Done).
 - [ ] **Archive `mcp-apps-shopping-demo` (007 tail, T014).** Land the banner README ("this demo became
       CredentAgent → quickstart") and `gh repo archive` it — **archive, never delete** (external videos, the
@@ -126,6 +136,7 @@ _Updated **2026-07-15** · `main` reconciled into `005-hnp-seams` (#41): 005 sea
 | **005 ratified + first increment built** — Group-A D1–D3 + sequencing **Option B** + Decision-13 (constitution amendment) all ratified 2026-07-08; the shared gate seams (`checkDraw`, `RevocationStore`, `completeOrder` draw branch, typed refusals) + the Stripe-grade **`DelegatedGate`** facade + a 36-line example | [PR #41](https://github.com/openmobilehub/credentagent/pull/41) |
 | **HNP §12 spikes COMPLETE** — on-device (Runs 1–5, incl. a green settlement) + headless-auth (PASS: claude.ai routines carry the unattended leg; two setup gates found) | `specs/005-…` |
 | **Quickstart ladder (007) — the 5-min try/run/own demo + hosted cutover.** `examples/quickstart` (35-line hero, own package, ladder README, Deploy button), CI `quickstart-smoke` (10 assertions incl. security-bypass + widget-resource), demo promoted onto `mcp-apps-nine` (legacy alias kept). Two serverless bugs found by real-device testing + fixed in `0.2.1`: `statelessMcp` (multi-instance MCP session loss → `No valid session`; cross-instance tests + real-Vercel 20/20 seq · 15/15 conc) and the widget HTML not bundled into the function (`includeFiles` + smoke row g). `0.2.1` published; prod on the published dep (reproducible) | `specs/007-quickstart-ladder` |
+| **Encode domain knowledge as infrastructure (2026-07-15)** — `REVIEW.md` review checklist wired into the automated review (+ workflow self-validation, draft skip), invariant-encoding ESLint layer (`npm run lint`, in CI; each rule verified to fire), committed DCO auto-sign-off hook (`scripts/git-hooks/`), agent skills committed in-repo (`add-ceremony-rail`, `write-bypass-test`, `publish-release`). Spec: `docs/superpowers/specs/2026-07-15-encode-knowledge-as-infra-design.md` | [PR #67](https://github.com/openmobilehub/credentagent/pull/67) |
 | **Rename EXECUTED: AttestoMCP → CredentAgent (2026-07-08)** — library ([PR #38](https://github.com/openmobilehub/credentagent/pull/38), 132 files, verified live both custody modes), GitHub repos renamed (`credentagent`, `credentagent-website`), website content ([credentagent-website#8](https://github.com/openmobilehub/credentagent-website/pull/8), Pages live), #31 retrofitted via the committed rename script | [#37](https://github.com/openmobilehub/credentagent/issues/37) |
 | **Published `0.2.0` as `@openmobilehub/credentagent-*`** (release `v0.2.0-credentagent` → CI publish with provenance; `NPM_TOKEN` secret set). Full deprecation chain: `attesto-*` + `attestomcp-*` all point at `credentagent-*` | npm |
 | `AttestoMcp` → `AttestoMCP` brand-casing rename (class, options type, ~171 sites across code + docs), version bumped `0.1.0` → `0.2.0` *(historical — pre-CredentAgent)* | [#26](https://github.com/openmobilehub/credentagent/issues/26) |
