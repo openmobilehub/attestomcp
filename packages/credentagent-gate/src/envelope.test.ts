@@ -44,6 +44,41 @@ describe("ageDcql", () => {
     // selective disclosure: never retain
     expect(mdl!.claims.every((c) => c.intent_to_retain === false)).toBe(true);
   });
+
+  it("makes the mDL and EU-PID alternatives (present one OR the other, not both)", () => {
+    const q = ageDcql();
+    // Without credential_sets, listing two credentials means the wallet must present
+    // BOTH (DCQL treats `credentials` as AND) — so a wallet holding only an mDL matches
+    // nothing and the picker shows "info not found". The set makes them OR.
+    expect(q.credential_sets).toEqual([{ options: [["mdl"], ["eupid"]] }]);
+    // Every option references a declared credential id (no dangling reference).
+    const ids = new Set(q.credentials.map((c) => c.id));
+    for (const option of q.credential_sets![0].options) {
+      for (const id of option) expect(ids.has(id)).toBe(true);
+    }
+  });
+
+  const leavesOf = (c: { claims: { path: string[] }[] }) => c.claims.map((cl) => cl.path[cl.path.length - 1]);
+
+  it("asks EVERY offered credential for the gate's threshold claim (no dead-end option)", () => {
+    // Invariant 5 guard: `age.over(21).verify` requires age_over_21 === true. The EU-PID
+    // option used to ask only for age_over_18 — offered as an alternative for a 21+ gate,
+    // the wallet would match it and verify would then refuse. Every option we offer must
+    // be able to prove the threshold it's offered for.
+    for (const c of ageDcql(21).credentials) {
+      expect(leavesOf(c)).toContain("age_over_21");
+    }
+  });
+
+  it("tracks a non-default threshold instead of hardcoding 21", () => {
+    for (const c of ageDcql(25).credentials) {
+      expect(leavesOf(c)).toContain("age_over_25");
+    }
+    // an 18+ gate asks only the 18 boolean (nothing higher to bracket)
+    for (const c of ageDcql(18).credentials) {
+      expect(leavesOf(c)).toEqual(["age_over_18"]);
+    }
+  });
 });
 
 describe("buildVerificationRequired", () => {
