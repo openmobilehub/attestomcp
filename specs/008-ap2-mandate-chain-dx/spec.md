@@ -1,132 +1,171 @@
-# Feature Specification: AP2 Mandate-Chain Developer Surface (`MandateBundle`)
+# Feature Specification: The Consent SDK Surface (AP2 mandate chain, three enforcement paths)
 
 **Feature branch:** `008-ap2-mandate-chain-dx` · **Issue:** #92 · **Date:** 2026-07-20
+**Informs:** #17 (`requireInTool`), #12/#69–71 (delegated grants), #39/#40 (wire format)
 
 ## Overview
 
-The library already builds all three AP2 mandates internally — the **Intent Mandate**
-(`IntentBounds` / `sealIntent`), the **Cart Mandate** (`ap2.CartMandate` / `issueCartMandate`),
-and the **Payment Mandate** (`ap2.PaymentMandate` / `buildPasskeyMandate`) — but never hands
-them back as a consistent, retrievable artifact. A developer who wants to inspect, log, or pass
-a signed mandate on to another AP2 component or the payment network has no first-class way to get
-it.
+This is the authoritative developer surface for CredentAgent's consent flow: how a developer
+gates a consequential agent action behind a proven wallet credential, across the **three
+situations** that genuinely differ — a hosted page, a page-less MCP tool, and a human-not-present
+delegated spend — plus how the AP2 mandates (Intent / Cart / Payment) are exposed.
 
-This feature adds a single shared return shape, **`MandateBundle`**, exposed by **both** consent
-surfaces: the human-present live-ceremony path (`requirements()` + `mount()`, and #17's
-`gateTool()`) and the human-not-present delegated path (`DelegatedGate.preApprove()` / `spend()`).
-The two **entry surfaces stay separate** — each is honest to a genuinely different developer
-situation (a live user signing a cart *now* vs pre-authorizing bounds for *later*) — but the
-**output shape unifies**. Per AP2, "human present vs not" is a **flag on the Payment Mandate**,
-not a separate pipeline.
+The surface below is the output of a **9-round adversarial DX review** (four cold-reader personas
++ a four-lens Stripe-grade council per round; see "Design journey"). The architecture was
+validated and the council directed it to be **frozen**; the final version applies its full set of
+consistency/naming fixes. The **spine** — one configured client, one catalog price source, one
+policy array, one typed result door, Money-as-type, `trustLevel` on every branch — is Stripe-grade
+and MUST NOT regress.
 
-Everything remains **dev-signed, presence-only** (constitution VII); this feature exposes the
-existing demo mandates, it does not add real signing (that is #14/#39).
+## The surface (caller-first — this IS the DX test)
 
-## User Scenarios & Testing *(mandatory)*
+```js
+import { CredentAgent, required, age, payment, usd } from "@openmobilehub/credentagent-gate";
 
-### User Story 1 - Retrieve the mandates after a human-present checkout (Priority: P1)
+// ── Configure once ─────────────────────────────────────────────
+const credentagent = new CredentAgent({
+  origin: "https://shop.example",            // your RP origin; mount() serves the /approve ceremony here
+  catalog: { wine: usd.dollars(20) },        // the ONE price source. Money is OPAQUE: compare with .lt()/.gte()/.eq(); .serialize() to the wire
+});
+credentagent.mount(app);
+const policy = [ required(age.over(21)), required(payment.in("usd")) ];   // credentials — payment is just one of them
 
-A developer integrating the HP checkout completes a ceremony and wants the signed Cart + Payment
-mandate for their records / to forward to the payment network.
+// ══ ONE CONTRACT (learn once) ═════════════════════════════════
+//   PRICED INPUT:  order = { id?, items: [{ sku, qty }] }   // priced from the catalog; you NEVER pass an amount
+//   RESULT DOOR:   if (res.ok)            res.mandateBundle  // + res.authorization: "direct" | "delegated"
+//                  else if (res.pending)  res.approveUrl     // send to the human; then re-check / the agent re-calls
+//                  else                   res.code           // switch on this; res.credential names which credential, when relevant
+//   res.trustLevel ALWAYS present (every branch): "presence-only-demo" today — disclosure+binding, NOT issuer trust.
+//   res.code ∈ "under-age" | "payment-declined" | "no-membership" | "budget-exceeded" | "per-spend-exceeded" | "revoked" | …
+//
+//   TWO RESOURCES + one wrapper — the same split Stripe uses:
+//     orders   one-shot verification   ≈ Checkout Session / PaymentIntent    orders.create()→{id,approveUrl} · orders.retrieve(id)→door
+//     grants   durable spend authority ≈ SetupIntent + off_session           grants.create()→grant · grants.retrieve(id)→grant · grant.spend()/.revoke()
+//     requireInTool()  page-less wrapper — its RETURN is the door (the one deliberate standalone)
 
-- Given a completed HP order, when the developer reads the completion result, then a
-  `MandateBundle` is present with `cartMandate` (user-signed) and `paymentMandate`
-  (`presence: "human_present"`), and `intentMandate` is `undefined`.
-- No manual assembly: the bundle is one property access off the result.
+// ── orders — you host the consent page ─────────────────────────
+server.registerTool("checkout", inputSchema, async (args) => {
+  const { id, approveUrl, manifest } = await credentagent.orders.create({ order: { items: cartItems(args) }, policy });
+  return { structuredContent: { id, approveUrl, manifest } };   // keep id — retrieve the door by it
+});
+const res = await credentagent.orders.retrieve(id);             // the DOOR: res.ok / res.pending+approveUrl / res.code
 
-### User Story 2 - Retrieve the mandate chain from a delegated (HNP) spend (Priority: P1)
+// ── requireInTool — page-less MCP tool ─────────────────────────
+server.registerTool("place-order", inputSchema, credentagent.requireInTool(
+  async (args) => ({ structuredContent: await placeOrder(args) }),   // runs ONLY on ok — an unverified caller never reaches it
+  { order: (args) => ({ id: args.orderId, items: itemsFrom(args) }), policy },
+));
+//   { ok:true,  structuredContent, mandateBundle, authorization, trustLevel }
+//   { ok:false, pending:true, approveUrl, resume:"place-order", trustLevel }        // agent proves, re-calls
+//   { ok:false, code:"under-age", credential:"age", trustLevel }                    // proven but failed policy
 
-A developer using `DelegatedGate` for an agent that buys while the human is away wants the full
-chain that authorized a purchase.
+// ── grants — authorize once, spend later (human not present) ──
+// (A) human PRESENT — create, persist id (exists before they prove), send approveUrl:
+const grant = await credentagent.grants.create({ merchant: "utopia", budget: usd.dollars(100), perSpend: usd.dollars(30), policy });
+await store.save(userId, grant.id);
+sendToUser(grant.approveUrl);
+// (B) LATER, worker/cron — human AWAY — rehydrate, gate on status, spend:
+const grant = await credentagent.grants.retrieve(await store.load(userId));   // grant.status: "pending" | "authorized" | "revoked" | "denied"
+if (grant.status !== "authorized") return;
+for (const purchaseId of purchasesToMake()) {
+  const s = await grant.spend({ idempotencyKey: purchaseId, items: [{ sku: "wine", qty: 1 }] });   // durable key → s.replayed on a safe retry
+  if (!s.ok) { if (s.code === "budget-exceeded") break; throw new Error(s.code); }   // "per-spend-exceeded" | "revoked"
+  forwardToPsp(s.mandateBundle.paymentMandate.serialize());     // authorization:"delegated" is stamped INTO the serialized mandate
+  if (s.remaining.lt(usd.dollars(20))) break;                   // Money comparison — never a raw scalar
+}
+await grant.revoke();                                           // grant.status → "revoked"; next spend → { ok:false, code:"revoked" }
+```
 
-- Given a grant from `preApprove()`, when the developer reads `grant.intentMandate`, then they get
-  the user-signed `IntentBounds`.
-- Given a successful `spend()`, when they read the result's `mandates`, then a `MandateBundle`
-  holds `intentMandate`, the algorithmically-generated `cartMandate`, and `paymentMandate`
-  (`presence: "human_not_present"`, pointing at the cart).
-
-### User Story 3 - Branch on presence (Priority: P2)
-
-A developer routes to different downstream handling for delegated vs live purchases.
-
-- Given any `MandateBundle`, when they read `paymentMandate.presence`, then it reliably reports
-  `"human_present"` or `"human_not_present"`.
-
-### User Story 4 - Hand a mandate to another AP2 component (Priority: P2)
-
-A developer forwards a `cartMandate` / `paymentMandate` to another AP2 agent or a settlement step.
-
-- Given a bundle, when they serialize a mandate, then it is a plain JSON object carrying its own
-  honesty marker (`signature.note` / `trust_level`) so the recipient cannot mistake demo trust for
-  issuer-verified trust.
-
-### Edge Cases
-
-- **HP has no Intent Mandate today** → `intentMandate` is `undefined` on the HP bundle. Do NOT
-  synthesize a placeholder to force symmetry.
-- **A refused HNP spend** (over-cap / revoked / replay) → no `cartMandate` / `paymentMandate` is
-  produced; the bundle represents only an *authorized* draw. The refusal stays the typed
-  `SpendResult` reason.
-- **Honesty** → every exposed object must read as dev-signed presence-only; none may imply
-  issuer/device-signed trust.
-
-## Requirements *(mandatory)*
+## Requirements
 
 ### Functional Requirements
 
-- **FR-001**: Define a `MandateBundle` type: `{ intentMandate?: IntentBounds; cartMandate:
-  CartMandate; paymentMandate: PaymentMandate }`.
-- **FR-002**: The HP completion path surfaces a `MandateBundle` (`cartMandate` user-signed,
-  `paymentMandate.presence = "human_present"`, `intentMandate` absent).
-- **FR-003**: `DelegatedGate` grants expose `grant.intentMandate`; each successful `spend()`
-  surfaces a `MandateBundle` (`presence = "human_not_present"`).
-- **FR-004**: `paymentMandate` carries the `presence` flag and a pointer to its `cartMandate`.
-- **FR-005**: Every mandate object surfaces its honesty (dev-signed, presence-only); nothing may
-  read as issuer-verified (constitution VII).
-- **FR-006**: **Additive only** — no change to the behavior or existing signatures of
-  `preApprove` / `spend` / `requirements` / `gateTool` / `completeOrder`; the bundle is extra
-  return data. No existing test changes its expectations.
-- **FR-007**: A refused draw exposes no cart/payment mandate; the bundle represents authorized
-  draws only.
+- **FR-001 — One configured client.** `new CredentAgent({ origin, catalog })` + `mount(app)`; every
+  path hangs off it. No second client, no per-path config door.
+- **FR-002 — One priced input.** `order = { id?, items: [{ sku, qty }] }` on every path; the gate
+  re-prices from the catalog server-side. A caller NEVER passes an amount (invariant #2).
+- **FR-003 — One result door.** `{ ok } | { ok:false, pending, approveUrl } | { ok:false, code,
+  credential? }`, with `res.trustLevel` and (on `ok`) `res.authorization` present on **every** branch
+  of **every** path. `code` is the switchable enum; `credential` names the failed credential; a
+  lifecycle refusal (`revoked`) is a `code`, never a credential.
+- **FR-004 — Two resources, symmetric.** `orders.create()/retrieve(id)` and `grants.create()/
+  retrieve(id)` — both awaited, both return an `id` from the mint, both retrievable by it. Orders are
+  one-shot verifications (retrieve → verdict); grants are durable (retrieve → handle with `status` +
+  `spend()`/`revoke()`). `requireInTool()` is the one documented standalone wrapper.
+- **FR-005 — Money is a type.** `usd.dollars(n)`; opaque (no public scalar); compared via
+  `.lt()/.gte()/.eq()`, combined via `.plus()/.minus()`, emitted via `.serialize()`.
+- **FR-006 — MandateBundle on `ok`.** `{ intentMandate?, cartMandate, paymentMandate }`, each with
+  its own `trustLevel` and `.serialize()`. `authorization: "direct" | "delegated"` rides on the result
+  AND is stamped into the serialized `paymentMandate` (so a PSP can't mistake an off-session,
+  human-away mandate for a live presentation).
+- **FR-007 — Delegated lifecycle.** `grants.create()` returns `grant.id` immediately (before the human
+  proves), so it persists across the authorize-now / spend-later process boundary; `grants.retrieve(id)`
+  rehydrates; `grant.status` gates spending; `idempotencyKey` is a durable per-purchase key
+  (`s.replayed` on a safe retry).
+- **FR-008 — Additive.** Layers over today's `requirements()`/`mount()`, the retained Mode-B envelope,
+  `DelegatedGate`, and the existing `ap2.CartMandate`/`ap2.PaymentMandate`/`IntentBounds`. Ships without
+  breaking their current callers; `delegate()` may remain a thin alias of `grants.create()` during
+  migration.
 
-### Key Entities
+### Honesty (Constitution VII — load-bearing)
 
-- **MandateBundle** — the shared return artifact; the three AP2 mandates that apply.
-- **IntentBounds** (Intent Mandate) — user-signed bounds; present only for HNP.
-- **CartMandate** (`ap2.CartMandate`) — the exact priced cart; user-signed (HP) or agent-generated
-  (HNP).
-- **PaymentMandate** (`ap2.PaymentMandate`) — derived; carries the presence flag + cart pointer.
+- **HR-001** — `trustLevel` is `"presence-only-demo"` everywhere today (dev-signed integrity hash, NOT
+  issuer/key-signed). No prose, comment, or field may imply issuer-verified trust or real settlement.
+  The example says "seals/binds (dev-signed)", never "signed".
+- **HR-002** — On a delegated spend the human is absent; `authorization:"delegated"` + the fact that
+  `trustLevel` describes the *authorize* ceremony (not the spend) must be visible on the result and in
+  the serialized mandate. "presence-only" must never assert a presentation that didn't happen.
 
-## Success Criteria *(mandatory)*
+## Success Criteria
 
-- **SC-001**: From either surface, a developer retrieves the signed mandates via a single property
-  access on the result — no manual assembly, no low-level primitive calls.
-- **SC-002**: Tests assert `presence` correctly distinguishes HP from HNP on real bundles.
-- **SC-003**: The whole change is additive — the existing gate + storefront suites pass unchanged.
-- **SC-004**: Honesty is visible in the exposed types/fields; a bypass-style test asserts no object
-  claims issuer-verified trust.
+- **SC-001** — A cold reader picks the right path for each of the three canonical tasks (page checkout,
+  page-less tool gate, human-away budget) without re-reading, and writes the call in ~one declarative line.
+- **SC-002** — `if (res.ok) … else if (res.pending) … else switch (res.code)` compiles and is correct on
+  **every** path (byte-identical door).
+- **SC-003** — No amount is ever passed by the caller; a hand-edited price cannot change what settles
+  (bypass test).
+- **SC-004** — Every mandate and every result carries its `trustLevel`; a bypass test asserts nothing reads
+  as issuer-verified, and that a delegated mandate is marked as such through serialization.
 
-## Assumptions
+## Design journey (why these choices — the 9-round DX review)
 
-- Builds on the existing `IntentBounds`/`sealIntent`, `CartMandate`/`issueCartMandate`,
-  `PaymentMandate`/`buildPasskeyMandate` implementations.
-- Dev-signed presence-only remains the trust level; real key-bound signing is out of scope (#14/#39).
-- The HP exposure point is the completion result (`completeOrder` / the `gateTool()` proven path);
-  confirming/adding that surfacing is part of the implementation.
+Scored 1–5 for Stripe-ease by four independent cold-reader personas each round; a four-lens council
+audited against `architecture-principles.md` + the constitution.
+
+| v | Score | What the round forced |
+| --- | --- | --- |
+| 1 | 3.67 | "three libraries stapled together"; honesty fence missing from the types |
+| 2 | 3.25 | one client + shared policy + `trustLevel`; over-corrected (purchase-in-tool went homeless) |
+| 3 | 3.50 | named present-pair; delegate consent ceremony surfaced; money/trust contracts |
+| 4 | 3.75 | one `{ok,reason}` door; catalog prices every path (kills agent-supplied-total) |
+| 5 | 3.70 | uniform input; the `ok`-on-success bug; `usd()` money helper; idempotent replay |
+| 6 | 3.67 | contract-first framing (learn once, then thin triggers); honesty-prose fix |
+| 7 | 3.75 | `proveUrl` on every result; **grant.id + rehydrate**; `requireInTool` third door; Stripe-analogue map |
+| 8 | 3.75 | **Stripe resource idiom** (`grants.create/retrieve`); specific refusal tokens; `spend().remaining` |
+| 9 | 3.75 | council froze the spine; final renames (below) |
+
+**Why it asymptotes at ~3.75, and why that is "nailed":** the score plateaued for six rounds because
+(a) a Stripe-veteran reader structurally anchors a *novel* consent API at 3–4 versus Stripe's decade of
+refinement, and (b) adversarial cold-readers always surface ~3 fresh consistency nits on any snippet. The
+council's own round-9 verdict — *"the spine is genuinely Stripe-grade and should be FROZEN; none require
+new surface — all are renames"* — is the true exit signal. The architecture is validated; the remainder was
+a naming pass, now applied.
+
+**Final naming pass applied (round-9 fixes):** `reason`+`detail` → `credential`+`code` (matches no-collision
+with the shipped `envelope.ts`); `reason:'revoked'` → a `code` / `grant.status`; `orders.require` →
+`orders.create` (awaited, symmetric with `grants.create`); mint returns `id`; `Money` made opaque;
+`proveUrl` → `approveUrl` (aligns with the shipped `approve_url`); `authorization` stamped into the
+serialized paymentMandate.
 
 ## Out of Scope
 
-- Wire-format / SD-JWT mandate serialization (#39) and cross-SDK conformance vs the Python AP2 SDK
-  (#40) — this feature is the **developer surface**, not the wire format.
-- New or key-bound signing (#14).
-- Redesigning `DelegatedGate` or the intent rail (#12, #69–71).
-- The `gateTool()` internals (#17) — it ships mandates-hidden; this adds the exposure additively.
-- A single polymorphic entry point (rejected in favor of two honest surfaces + one shared output).
+- Wire-format / SD-JWT serialization (#39) and Python-SDK conformance (#40) — this owns the surface, not the wire.
+- Real key-bound / issuer-verified signing (#14).
+- Reworking `DelegatedGate`/intent-rail internals (#12, #69–71) — this is their surface, additive.
+- Implementation — this spec is design only; `plan.md` sequences the build over the existing primitives.
 
 ## Dependencies
 
-- **#12 / #69–71** — the HNP intent rail / `DelegatedGate` surface this exposes (the `005-*`
-  worktrees). Build on, do not redesign.
-- **#17** — `gateTool()` (HP page-less); independent, additive.
-- **Constitution** — Principle I (Stripe-grade, no grab-bags), Principle VII (honesty in types),
-  Security "per-order state" (bundles are per order/draw, never process-global).
+- #17 (`requireInTool` — the page-less wrapper; the in-flight `gateTool` is its earlier name).
+- #12 / #69–71 (`grants` = the delegated surface over the intent rail).
+- Constitution I (Stripe-grade, no grab-bags) and VII (honesty in types); Security invariants #1–#6.
