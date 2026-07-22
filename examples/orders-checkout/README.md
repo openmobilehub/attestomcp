@@ -6,7 +6,9 @@ real thing that makes that safe: the agent starts the order and gets a **link**;
 link, prove your age, and pay; the order settles.
 
 The whole checkout is wired in **one call** — `credentagent.orders.serve(app)`. There's no
-store to assemble and no completion logic to hand-write; the library owns the ceremony.
+store to assemble and no completion logic to hand-write; the library owns the ceremony. Note
+what runs **when**: `serve()` and `on()` run **once at startup**; `orders.create()` runs **per
+purchase**, inside a request handler.
 
 ```js
 import express from "express";
@@ -14,17 +16,19 @@ import { CredentAgent, age, payment, required } from "@openmobilehub/credentagen
 
 const app = express();
 app.use(express.json());
-
 const credentagent = new CredentAgent({ walletOrigin: "http://localhost:4000" });
-credentagent.orders.serve(app);                                  // ← rails + checkout page + completion
-credentagent.on("order.settled", ({ id }) => fulfill(id));       // ← fired once, when it's paid
 
+// ── once, at startup ──────────────────────────────────────────
+credentagent.orders.serve(app);                              // wire the whole checkout onto your app
+credentagent.on("order.settled", ({ id }) => fulfill(id));   // subscribe once — fires when it's paid
+
+// ── per purchase — a request handler that runs on each buy ────
 app.post("/buy-wine", (_req, res) => {
   const { approveUrl } = credentagent.orders.create({
-    order:  { id: "", total: 2100, currency: "USD", lines: [{ id: "wine", name: "Bottle of wine", quantity: 1, unitPrice: 2100, minimumAge: 21 }] },
+    order:  { id: "", total: 21, currency: "USD", lines: [{ id: "wine", name: "Bottle of wine", quantity: 1, unitPrice: 21, minimumAge: 21 }] },
     policy: [required(age.over(21)), required(payment.in("usd"))],
   });
-  res.json({ approveUrl });                                      // ← hand this link to the human
+  res.json({ approveUrl });                                  // hand this link to the human
 });
 ```
 

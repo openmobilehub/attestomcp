@@ -59,9 +59,9 @@ the widget shows the confirmation. Add the headphones instead and the age gate d
 ## Orders — a checkout without a storefront
 
 Don't have (or want) the MCP storefront? Drive the checkout yourself with `credentagent.orders`.
-`orders.serve(app)` wires the **whole** checkout onto your Express app in one call — the ceremony
-rails, the checkout page, and completion — so there is nothing to assemble. `orders.create()`
-returns a link you hand to the human; `order.settled` fires once, when it's paid.
+Two things happen at **startup** (wire the checkout once, subscribe to completion once); the third,
+`orders.create()`, happens **per purchase** — inside a request handler, each time an agent wants to buy.
+The comments below mark which is which:
 
 ```ts
 import express from "express";
@@ -69,19 +69,22 @@ import { CredentAgent, age, payment, required } from "@openmobilehub/credentagen
 
 const app = express();
 app.use(express.json());
-
 const credentagent = new CredentAgent({ walletOrigin: "http://localhost:4000" });
-credentagent.orders.serve(app);                              // rails + checkout page + completion
-credentagent.on("order.settled", ({ id }) => fulfill(id));   // fired once, when the order is paid
 
+// ── once, at startup ──────────────────────────────────────────────
+credentagent.orders.serve(app);                              // wire the whole checkout onto your app
+credentagent.on("order.settled", ({ id }) => fulfill(id));   // subscribe once — fires when ANY order is paid
+
+// ── per purchase — inside a request handler (runs every time) ──────
 app.post("/buy-wine", (_req, res) => {
   const { id, approveUrl } = credentagent.orders.create({    // → { id, approveUrl, manifest }
-    order:  { id: "", total: 2100, currency: "USD", lines: [{ id: "wine", name: "Bottle of wine", quantity: 1, unitPrice: 2100, minimumAge: 21 }] },
+    order:  { id: "", total: 21, currency: "USD", lines: [{ id: "wine", name: "Bottle of wine", quantity: 1, unitPrice: 21, minimumAge: 21 }] },
     policy: [required(age.over(21)), required(payment.in("usd"))],
   });
   res.json({ id, approveUrl });                              // hand approveUrl to the human
 });
 
+// the agent reads status here (or just rely on the order.settled webhook above — no polling)
 app.get("/orders/:id", async (req, res) => res.json(await credentagent.orders.retrieve(req.params.id)));
 ```
 

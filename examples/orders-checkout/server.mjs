@@ -14,14 +14,17 @@ const PORT = 4000;
 const app = express();
 app.use(express.json());
 
-// Configure once. `orders.serve(app)` wires the ceremony rails, the checkout page at each
-// order's approveUrl, and completion — a finished ceremony fires `order.settled`.
 const credentagent = new CredentAgent({ walletOrigin: `http://localhost:${PORT}` });
+
+// ── ONCE, at startup ────────────────────────────────────────────────────────────
+// `orders.serve(app)` wires the ceremony rails, the checkout page at each order's
+// approveUrl, and completion. `on(...)` subscribes once — it fires when ANY order is paid.
 credentagent.orders.serve(app);
 credentagent.on("order.settled", ({ id }) => console.log(`✓ order.settled: ${id} — fulfill it now`));
 
-// What an agent calls to start a purchase that needs consent. It gets back a link to hand
-// to the human; the amount + age gate are re-derived server-side, never trusted from a token.
+// ── PER PURCHASE — a request handler that runs each time an agent wants to buy ────
+// It gets back a link to hand to the human; the amount + age gate are re-derived
+// server-side, never trusted from a token.
 app.post("/buy-wine", (_req, res) => {
   const { id, approveUrl } = credentagent.orders.create({
     order: { id: "", total: 21, currency: "USD", lines: [{ id: "wine", name: "Bottle of wine", quantity: 1, unitPrice: 21, minimumAge: 21 }] },
