@@ -1,3 +1,5 @@
+// ⚠ PROTOTYPE — a validation demo, NOT the shipping library API. It graduates into the
+//   real credentagent.orders.* / credentagent.grants.* API in #97 (the demo is rewired to it).
 // grants.mjs — a RUNNABLE prototype of the v10 `grants.*` surface (#92 / spec 008),
 // the human-NOT-present half, over the REAL DelegatedGate engine.
 //

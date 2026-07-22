@@ -1,3 +1,5 @@
+// ⚠ PROTOTYPE — a validation demo, NOT the shipping library API. It graduates into the
+//   real credentagent.orders.* / credentagent.grants.* API in #97 (the demo is rewired to it).
 // server.mjs — the v10 `orders.*` surface wired to the REAL ceremony.
 //
 //   (npm run build --workspaces)                 # once, if not built

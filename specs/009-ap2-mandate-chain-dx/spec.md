@@ -195,6 +195,11 @@ predates this call; the surface + FR-004 reflect it.
 - Reworking `DelegatedGate`/intent-rail internals (#12, #69–71) — this is their surface, additive.
 - Implementation — this spec is design only; `plan.md` sequences the build over the existing primitives.
 
+**On the prototypes:** `examples/orders-proto/` and `examples/grants-proto/` are **validation demos** — facades
+that *stand in for* the API to prove the design runs; they are not the shipping library code. They graduate
+into the real `credentagent.orders.*` / `credentagent.grants.*` API in **#97** (the demos get rewired to the
+real API rather than deleted, so nothing is thrown away).
+
 ## Dependencies
 
 - #17 (`credentagent.gate()` — the top-level, action-agnostic page-less wrapper; SHIPPED on `feat/17`).
