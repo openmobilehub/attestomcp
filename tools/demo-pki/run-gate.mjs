@@ -67,7 +67,6 @@ const liquorLicense = defineCredential({
 store.gate((order) =>
   credentagent.requirements(order, [
     required(age.over(21).when((o) => o.lines.some((l) => l.minimumAge != null))),
-    optional(liquorLicense),
     optional(membership.discount(10)),
     required(payment.in("usd")),
   ]),
