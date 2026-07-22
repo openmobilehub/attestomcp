@@ -5,6 +5,8 @@
 //   • manifest — data: `requirements()` resolves the policy server-side and emits a flat, JSON-safe
 //                manifest. Functions NEVER cross the wire. `requirements()` is that code→data boundary.
 
+import type { OrderStore, CreatedOrder, CompletedOrder } from "./orders.js";
+
 // ── DCQL (what to ask the wallet) ──────────────────────────────────────────
 
 export interface DcqlClaim {
@@ -226,4 +228,8 @@ export interface CredentAgentOptions {
    * (fail-open). Declare your custom credentials here and every instance enforces them.
    */
   credentials?: Credential[];
+  /** Persist created orders (`orders.create`); default in-memory, inject a shared store for multi-instance. */
+  orderStore?: OrderStore<CreatedOrder>;
+  /** Persist completed orders (its `write()` fires `order.settled`); default in-memory, injectable. */
+  completedOrderStore?: OrderStore<CompletedOrder>;
 }

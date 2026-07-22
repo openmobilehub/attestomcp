@@ -7,6 +7,7 @@ import type { Credential, CredentAgentOptions, GateOrder, ReaderIdentity, Step, 
 import { resolveRequirements } from "./manifest.js";
 import { MemoryVerificationStore } from "./store.js";
 import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/mount.js";
+import { Orders, MemoryOrderStore, type CreatedOrder, type CompletedOrder } from "./orders.js";
 
 x509.cryptoProvider.set(globalThis.crypto);
 
@@ -28,8 +29,11 @@ const DEFAULT_WALLET_ORIGIN = `http://localhost:${process.env.PORT ?? 3000}`;
 export class CredentAgent {
   readonly walletOrigin: string;
   readonly store: VerificationStore;
+  /** The human-present checkout resource — `orders.create()` / `orders.retrieve()` (spec 009). */
+  readonly orders: Orders;
   /** Stable reader identity presented by the rails (undefined ⇒ per-request self-signed). */
   readonly readerIdentity?: ReaderIdentity;
+  private readonly listeners = new Map<string, Set<(payload: { id: string }) => void>>();
   // True once the ceremony rails are wired onto a host app (so `/credentagent/*` routes
   // exist on this server). `requirements()` then emits approve links that resolve
   // to those mounted routes rather than the legacy `/credential-gate/*` shape.
@@ -77,6 +81,31 @@ export class CredentAgent {
     // (fail-open). register-on-resolve stays for zero-config dev; this makes multi-instance
     // deploys fail-closed. Reserved ids are inert here (the sweep + resolveCred skip them).
     for (const c of opts.credentials ?? []) this.registry.set(c.id, c);
+    // The orders resource — configure-once: it reuses this client's origin + requirements(),
+    // with in-memory order stores by default (inject a shared store for multi-instance deploys).
+    this.orders = new Orders({
+      walletOrigin: this.walletOrigin,
+      requirements: (order, policy) => this.requirements(order, policy),
+      created: opts.orderStore ?? new MemoryOrderStore<CreatedOrder>(),
+      completed: opts.completedOrderStore ?? new MemoryOrderStore<CompletedOrder>(),
+      emit: (event, payload) => this.emit(event, payload),
+    });
+  }
+
+  /**
+   * Subscribe to a lifecycle event. Today: `"order.settled"` — fired once when an order
+   * completes (the completed-store write), so you retrieve ONCE and finish, never a poll loop.
+   */
+  on(event: "order.settled", handler: (payload: { id: string }) => void): void {
+    const set = this.listeners.get(event) ?? new Set();
+    set.add(handler);
+    this.listeners.set(event, set);
+  }
+
+  private emit(event: string, payload: { id: string }): void {
+    for (const h of this.listeners.get(event) ?? []) {
+      try { h(payload); } catch (err) { console.error(`[credentagent] ${event} handler threw:`, err); }
+    }
   }
 
   /**
