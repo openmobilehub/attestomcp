@@ -117,8 +117,12 @@ export class GrantsProto {
   }
 
   _bundle(rec, sku, qty, amountMinor) {
+    // A CartMandateLine is { id, quantity, unitPrice, lineTotal } — so a recipient can reconcile the
+    // signed mandate to the priced purchase (Codex P1). Price from the catalog, never the caller.
+    const unitPrice = this.catalogMinor[sku] ?? Math.round(amountMinor / qty);
+    const line = { id: sku, quantity: qty, unitPrice, lineTotal: unitPrice * qty };
     const cart = issueCartMandate(
-      { orderId: `${rec.id}-${sku}-${Date.now()}`, lines: [{ sku, qty }], currency: "usd", total: amountMinor },
+      { orderId: `${rec.id}-${sku}-${rec.cache.size}`, lines: [line], currency: "usd", total: amountMinor },
       SIGNING_KEY,
     );
     const pay = {
