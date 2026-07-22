@@ -1,6 +1,6 @@
 # Feature Specification: The Consent SDK Surface (AP2 mandate chain, three enforcement paths)
 
-**Feature branch:** `008-ap2-mandate-chain-dx` · **Issue:** #92 · **Date:** 2026-07-20
+**Feature branch:** `009-ap2-mandate-chain-dx` · **Issue:** #92 · **Date:** 2026-07-20
 **Informs:** #17 (`credentagent.gate()`), #12/#69–71 (delegated grants), #39/#40 (wire format)
 
 ## Overview

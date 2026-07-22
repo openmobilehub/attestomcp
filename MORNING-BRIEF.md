@@ -1,7 +1,7 @@
 # Morning brief — #92 prototypes (overnight)
 
 Both goal increments are **built, smoke-tested green, and committed** on branch
-`008-ap2-mandate-chain-dx` (worktree `.worktrees/mandate-dx`). Nothing pushed, no PR, no
+`009-ap2-mandate-chain-dx` (worktree `.worktrees/mandate-dx`). Nothing pushed, no PR, no
 `packages/` edits — all new code is under `examples/`.
 
 ## TL;DR
@@ -76,7 +76,7 @@ cd ~/tools/git/attestomcp
 
 ## Where it lives
 
-Branch `008-ap2-mandate-chain-dx` · this session's commits:
+Branch `009-ap2-mandate-chain-dx` · this session's commits:
 
 ```
 fe1d513 proto(#92,008): increment B — runnable grants.* (human-not-present) surface
@@ -88,5 +88,5 @@ d4f9aa2 spec(#92,008): lock the consent SDK surface after 9-round DX council
 ```
 
 Files: `examples/orders-proto/` (orders + real ceremony), `examples/grants-proto/` (grants), and the
-spec at `specs/008-ap2-mandate-chain-dx/spec.md`. The order-lifecycle explainer artifact is at
+spec at `specs/009-ap2-mandate-chain-dx/spec.md`. The order-lifecycle explainer artifact is at
 https://claude.ai/code/artifact/a33a6e3c-84ab-4fd6-91e5-077d2c5297b4.
