@@ -117,7 +117,15 @@ export class CredentAgent {
 
   /**
    * Subscribe to a lifecycle event. Today: `"order.settled"` — fired once when an order
-   * completes (the completed-store write), so you retrieve ONCE and finish, never a poll loop.
+   * completes (the completed-store write emits it).
+   *
+   * This is an IN-PROCESS listener, NOT an HTTP webhook: the handler runs in the same Node
+   * process that completed the order, synchronously, with no network hop, retry, or signing.
+   * In a single-process server that's all you need — react here instead of polling. In a
+   * multi-instance / serverless deploy the event fires only on the instance that completed
+   * the order; a listener elsewhere won't hear it, so read `orders.retrieve(id)` (backed by a
+   * shared completed-order store) as the durable, cross-instance signal. A real outbound HTTP
+   * webhook is not built yet.
    */
   on(event: "order.settled", handler: (payload: { id: string }) => void): void {
     const set = this.listeners.get(event) ?? new Set();

@@ -84,7 +84,8 @@ app.post("/buy-wine", (_req, res) => {
   res.json({ id, approveUrl });                              // hand approveUrl to the human
 });
 
-// the agent reads status here (or just rely on the order.settled webhook above — no polling)
+// read status here (durable, works across instances). In a single-process server the
+// in-process order.settled listener above is enough; this is the cross-instance signal.
 app.get("/orders/:id", async (req, res) => res.json(await credentagent.orders.retrieve(req.params.id)));
 ```
 

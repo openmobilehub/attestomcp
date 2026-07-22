@@ -6,7 +6,8 @@
 //
 // It wraps machinery the gate already has: requirements() (the manifest), the ceremony
 // rails + renderRequirements() (the approveUrl page), and completeOrder() (whose write to the
-// completed-order store IS the `order.settled` webhook — FR-009, never a poll loop).
+// completed-order store emits the in-process `order.settled` event — FR-009 — so a single-
+// process server reacts to it instead of polling; it is an in-process listener, NOT an HTTP webhook).
 //
 // Stores default to in-memory and are per-order keyed (Security invariant 4 — never
 // process-global); inject a shared store (Redis) for multi-instance deploys.
@@ -108,7 +109,8 @@ export class Orders {
     this.deps.serve(app);
   }
 
-  /** Called by the completion path when an order finishes — records it and fires the webhook. */
+  /** Called by the completion path when an order finishes — records it and emits the
+   *  in-process `order.settled` event (see `CredentAgent.on` — a local listener, not a webhook). */
   async _complete(record: CompletedOrder): Promise<void> {
     await this.deps.completed.write(record.orderId, record);
     this.deps.emit("order.settled", { id: record.orderId });

@@ -50,7 +50,7 @@ describe("credentagent.orders", () => {
     expect((await ca.orders.retrieve(b.id)).ok).toBe(false); // B untouched
   });
 
-  it("fires order.settled once on completion (webhook, not a poll loop)", async () => {
+  it("fires order.settled once on completion (in-process event, not a poll loop)", async () => {
     const ca = new CredentAgent({ walletOrigin: "https://shop.example" });
     const seen: string[] = [];
     ca.on("order.settled", ({ id }) => seen.push(id));

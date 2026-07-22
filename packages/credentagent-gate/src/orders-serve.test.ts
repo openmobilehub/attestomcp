@@ -86,7 +86,7 @@ describe("orders.serve — checkout wiring", () => {
     await app._post.get("/credentagent/orders/:id/place")!({ params: { id } }, res);
     expect(res._status).toBe(200);
 
-    expect(settled).toEqual([id]);            // the webhook fired once
+    expect(settled).toEqual([id]);            // the in-process order.settled event fired once
     const after = await ca.orders.retrieve(id);
     expect(after.ok).toBe(true);
     if (after.ok) expect(after.completion.amount).toBe(500); // amount re-derived server-side (invariant 2)
