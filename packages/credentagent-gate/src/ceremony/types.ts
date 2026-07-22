@@ -174,7 +174,7 @@ export type SettlementSeam = (order: CeremonyOrder) => Promise<SettlementRecordL
 //   completes. An adapter that "approves" the wrong amount is still refused.
 //
 // Nothing here names a specific verifier or processor: the seam is the interface,
-// a concrete adapter (Multipaz/UPay, @auth0/mdl, …) is a HOST-side implementation.
+// a concrete adapter (a Multipaz verifier + processor, @auth0/mdl, …) is a HOST-side implementation.
 
 /**
  * A verified presentment as it reaches the gate — STRUCTURAL and JSON-safe on
@@ -224,7 +224,7 @@ export interface DelegatedHandoff {
 
 /**
  * The external verifier/processor seam. THREE methods, mirroring the split a real
- * verifier/processor already has (Multipaz verifier + UPay `createTransaction` /
+ * verifier/processor already has (a real verifier + a processor's `createTransaction` /
  * `commitTransaction`): mint the request, verify the presentment, then — only when
  * the gate authorizes it — settle.
  *

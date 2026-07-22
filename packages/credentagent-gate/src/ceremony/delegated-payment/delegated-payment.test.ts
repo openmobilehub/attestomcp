@@ -308,7 +308,7 @@ function verifierReturning(over: Partial<DelegatedVerdict> = {}, settleImpl?: ()
         ...over,
       }),
     ),
-    settle: vi.fn(async () => (settleImpl ? (settleImpl() as { network: string; txId: string; status: string }) : { network: "upay", txId: "tx_1", status: "settled" })),
+    settle: vi.fn(async () => (settleImpl ? (settleImpl() as { network: string; txId: string; status: string }) : { network: "test-processor", txId: "tx_1", status: "settled" })),
   };
 }
 
