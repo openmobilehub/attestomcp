@@ -74,6 +74,7 @@ export function renderDelegatedPage(opts: DelegatedPageOptions): string {
 (function () {
   var go = document.getElementById("go");
   var out = document.getElementById("out");
+  var ORDER = ${JSON.stringify(order)};
   go.addEventListener("click", async function () {
     go.disabled = true;
     out.textContent = "Preparing request\\u2026";
@@ -81,13 +82,29 @@ export function renderDelegatedPage(opts: DelegatedPageOptions): string {
       var res = await fetch("/credentagent/delegated/request?${qs}");
       if (!res.ok) throw new Error("request failed (" + res.status + ")");
       var data = await res.json();
-      // The handoff is the external verifier's own payload; this page forwards it and
-      // keeps the sealed reference for the completion leg (#87). Nothing here decides
-      // whether the payment is approved.
-      sessionStorage.setItem("credentagent.delegated.ref", data.referenceToken);
-      out.textContent = "Handoff ready. Completion lands with the verify leg.";
+
+      // ── The external verifier runs the wallet ceremony HERE, using data.handoff ──
+      // (e.g. multipazVerifyCredentials(data.handoff)). A local stand-in verifier
+      // simulates the presentment server-side, so there is nothing to drive on-page.
+      out.textContent = "Verifying\\u2026";
+
+      // Complete: the browser sends back ONLY the sealed reference — never an approval.
+      // The gate re-fetches the verified presentment, re-checks the amount + policy, and
+      // settles server-side.
+      var done = await fetch("/credentagent/delegated/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ order: ORDER, referenceToken: data.referenceToken }),
+      });
+      var result = await done.json();
+      if (result.completed) {
+        out.textContent = "\\u2713 Payment complete \\u00b7 trust: " + result.trust_level;
+      } else {
+        out.textContent = "Refused: " + (result.reason || result.error || "not completed");
+        go.disabled = false;
+      }
     } catch (err) {
-      out.textContent = "Could not start: " + err.message;
+      out.textContent = "Could not complete: " + err.message;
       go.disabled = false;
     }
   });
