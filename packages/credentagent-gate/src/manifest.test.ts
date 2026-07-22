@@ -97,3 +97,41 @@ describe("CT4 — required vs optional", () => {
     expect(ageEntry!.required).toBe(true);
   });
 });
+
+// 008 (#88): when a `verifier` seam is wired, the blocking gate/authorize approve links
+// resolve to the ONE delegated ceremony; a discount stays on the credential rail; and
+// without a verifier the links are byte-unchanged.
+describe("008 — delegated approve-link routing", () => {
+  const minimalCeremony = () => ({
+    orderStore: { read: async () => null },
+    catalog: { createOrder: (_items: unknown, id: string) => ({ id, lines: [], itemCount: 0, subtotal: 0, discount: 0, total: 0, currency: "USD" }) },
+    completion: async () => ({ completed: true as const }),
+    signingKey: "stable-test-secret",
+  });
+  const verifier = {
+    buildRequest: async () => ({ reference: "r", handoff: {} }),
+    consume: async () => ({ approved: true, trust_level: "presence-only-demo" as const, claims: {}, binding: { amount: 0, currency: "USD", payee: { id: "shop.example" } } }),
+  };
+
+  it("routes gate + authorize to /credentagent/delegated, and keeps discount on the credential rail", () => {
+    const ca = new CredentAgent({ walletOrigin: "https://shop.example" });
+    // A route-less app is fine: mount() sets the delegated flag from ceremony.verifier
+    // regardless of whether the rail's HTTP routes register.
+    ca.mount({ locals: {} }, { ...minimalCeremony(), verifier });
+    const manifest = ca.requirements(alcoholOrder, fullPolicy);
+    const url = (id: string) => manifest.find((e) => e.credential === id)!.approveUrl;
+    expect(url("age")).toBe("https://shop.example/credentagent/delegated?order=ORD-1");
+    expect(url("payment")).toBe("https://shop.example/credentagent/delegated?order=ORD-1");
+    // A discount is NOT in the delegated presentation — the buyer opts in on the credential rail.
+    expect(url("membership")).toBe("https://shop.example/credentagent/credential?order=ORD-1&cred=membership");
+  });
+
+  it("WITHOUT a verifier the links are the built-in rails (byte-unchanged)", () => {
+    const ca = new CredentAgent({ walletOrigin: "https://shop.example" });
+    ca.mount({ locals: {} }, minimalCeremony()); // no verifier
+    const manifest = ca.requirements(alcoholOrder, fullPolicy);
+    const url = (id: string) => manifest.find((e) => e.credential === id)!.approveUrl;
+    expect(url("age")).toBe("https://shop.example/credentagent/credential?order=ORD-1&cred=age");
+    expect(url("payment")).toBe("https://shop.example/credentagent/dc-payment?order=ORD-1");
+  });
+});

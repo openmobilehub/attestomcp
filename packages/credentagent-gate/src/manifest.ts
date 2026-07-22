@@ -32,6 +32,13 @@ export interface ResolveContext {
    * page (`?cred=…`); payment authorizes on the dc-payment page.
    */
   mountedRoutes?: boolean;
+  /**
+   * Set when a `verifier` seam was wired at mount() (008). The blocking gate/authorize
+   * credentials are then proven in ONE external-verifier ceremony, so their approve links
+   * all resolve to the single `/credentagent/delegated?order=…` page rather than the
+   * per-credential dc-payment / credential rails. A discount stays on the credential rail.
+   */
+  delegated?: boolean;
 }
 
 /** Per-order approve link, e.g. `https://shop.example/credential-gate/age?order=ORD-1`. */
@@ -46,9 +53,15 @@ function approveUrlFor(walletOrigin: string, credentialId: string, orderId: stri
  *   age / membership / other gate → `…/credentagent/credential?order=…&cred=<id>`
  * Same origin the checkout link uses, so the host can re-home it onto its own base.
  */
-function mountedApproveUrlFor(walletOrigin: string, credentialId: string, effect: Effect["kind"], orderId: string): string {
+function mountedApproveUrlFor(walletOrigin: string, credentialId: string, effect: Effect["kind"], orderId: string, delegated: boolean): string {
   const origin = walletOrigin.replace(/\/$/, "");
   const order = encodeURIComponent(orderId);
+  // Delegated (008): the blocking credentials (gate + authorize) are proven together in ONE
+  // external-verifier ceremony, so they share the single delegated page. A discount is NOT
+  // in that presentation — it stays on the credential rail so the buyer can opt into it.
+  if (delegated && (effect === "gate" || effect === "authorize")) {
+    return `${origin}/credentagent/delegated?order=${order}`;
+  }
   if (effect === "authorize" || credentialId === "payment") {
     return `${origin}/credentagent/dc-payment?order=${order}`;
   }
@@ -94,7 +107,7 @@ export function resolveRequirements(
         // Ceremony is mounted: every entry that maps to a `/credentagent/*` route gets a
         // per-order approve link — including the membership discount, which is
         // proven on the same credential page (so the buyer can opt into the discount).
-        entry.approveUrl = mountedApproveUrlFor(ctx.walletOrigin, c.id, effect, order.id);
+        entry.approveUrl = mountedApproveUrlFor(ctx.walletOrigin, c.id, effect, order.id, ctx.delegated ?? false);
       } else if (effect === "gate" || effect === "authorize") {
         // Legacy `/credential-gate/*` shape — a gate/authorize is proven via a
         // per-order ceremony link; a discount is merely presented, no approve link.
