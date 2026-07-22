@@ -60,6 +60,8 @@ export interface OrdersDeps {
   /** The completed-order store; its write() fires "order.settled". */
   completed: OrderStore<CompletedOrder>;
   emit: (event: "order.settled", payload: { id: string }) => void;
+  /** Wire the checkout (rails + page + completion) onto an Express app — `orders.serve(app)`. */
+  serve: (app: unknown) => void;
 }
 
 const genId = (): string => `ord_${globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
@@ -91,6 +93,19 @@ export class Orders {
     const created = await this.deps.created.read(id);
     if (created) return { ok: false, pending: true, approveUrl: `${this.deps.walletOrigin}/credentagent/orders/${id}`, trustLevel: TRUST };
     return { ok: false, code: "not-found", trustLevel: TRUST };
+  }
+
+  /**
+   * Wire the checkout onto your Express app in one call: the ceremony rails, the checkout
+   * page at each order's `approveUrl` (`/credentagent/orders/:id`), and completion — a
+   * finished ceremony records the order and fires `order.settled`. No seams to assemble.
+   *
+   *   ca.orders.serve(app);
+   *   ca.on("order.settled", ({ id }) => fulfill(id));
+   *   const { approveUrl } = ca.orders.create({ order, policy });
+   */
+  serve(app: unknown): void {
+    this.deps.serve(app);
   }
 
   /** Called by the completion path when an order finishes — records it and fires the webhook. */

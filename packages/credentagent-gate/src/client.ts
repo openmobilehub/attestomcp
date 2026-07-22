@@ -8,6 +8,7 @@ import { resolveRequirements } from "./manifest.js";
 import { MemoryVerificationStore } from "./store.js";
 import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/mount.js";
 import { Orders, MemoryOrderStore, type CreatedOrder, type CompletedOrder } from "./orders.js";
+import { serveOrders } from "./orders-serve.js";
 
 x509.cryptoProvider.set(globalThis.crypto);
 
@@ -38,6 +39,8 @@ export class CredentAgent {
   // exist on this server). `requirements()` then emits approve links that resolve
   // to those mounted routes rather than the legacy `/credential-gate/*` shape.
   private mountedRoutes = false;
+  // True once `orders.serve(app)` has wired the checkout (idempotent — one serve per client).
+  private ordersServed = false;
   // In-process credential registry (id → Credential), populated as `requirements()`
   // resolves policies — register-on-resolve, so a developer registers nothing (Principle
   // V). Injected into the ceremony context at `mount()` so the rails can serve a custom
@@ -83,12 +86,32 @@ export class CredentAgent {
     for (const c of opts.credentials ?? []) this.registry.set(c.id, c);
     // The orders resource — configure-once: it reuses this client's origin + requirements(),
     // with in-memory order stores by default (inject a shared store for multi-instance deploys).
+    // The two stores are held here so `orders.serve(app)` binds the checkout over the SAME
+    // state `orders.create()` / `orders.retrieve()` use (invariant 4 — keyed per order id).
+    const createdStore = opts.orderStore ?? new MemoryOrderStore<CreatedOrder>();
+    const completedStore = opts.completedOrderStore ?? new MemoryOrderStore<CompletedOrder>();
     this.orders = new Orders({
       walletOrigin: this.walletOrigin,
       requirements: (order, policy) => this.requirements(order, policy),
-      created: opts.orderStore ?? new MemoryOrderStore<CreatedOrder>(),
-      completed: opts.completedOrderStore ?? new MemoryOrderStore<CompletedOrder>(),
+      created: createdStore,
+      completed: completedStore,
       emit: (event, payload) => this.emit(event, payload),
+      serve: (app) => {
+        if (this.ordersServed) return; // idempotent
+        serveOrders(app as CeremonyApp, {
+          walletOrigin: this.walletOrigin,
+          created: createdStore,
+          completed: completedStore,
+          complete: (record) => this.orders._complete(record),
+          requirements: (order, policy) => this.requirements(order, policy),
+          verificationStore: this.store,
+          credentialRegistry: this.registry,
+          ...(this.readerIdentity ? { readerIdentity: this.readerIdentity } : {}),
+          ...(opts.gateSecret ? { signingKey: opts.gateSecret } : {}),
+        });
+        this.ordersServed = true;
+        this.mountedRoutes = true; // approve links now resolve to the mounted rails
+      },
     });
   }
 

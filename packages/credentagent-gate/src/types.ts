@@ -232,4 +232,12 @@ export interface CredentAgentOptions {
   orderStore?: OrderStore<CreatedOrder>;
   /** Persist completed orders (its `write()` fires `order.settled`); default in-memory, injectable. */
   completedOrderStore?: OrderStore<CompletedOrder>;
+  /**
+   * Stable HMAC secret the checkout `orders.serve(app)` signs its challenges with, so a
+   * challenge issued on one instance verifies on another (a serverless / multi-worker split).
+   * Omit for a single-process dev server — `orders.serve` then uses an ephemeral per-process
+   * key (fine for one process; a challenge can't cross an instance boundary). Set it (e.g.
+   * `process.env.GATE_SECRET`) for any multi-instance deploy.
+   */
+  gateSecret?: string;
 }
