@@ -68,6 +68,7 @@ import {
   type CompletedRecord,
   type CompletionInput,
   type CompletionResult,
+  type DelegatedVerifier,
   type RepriceOpts,
   type RenderVerification,
   type VerificationManifestEntry,
@@ -165,6 +166,14 @@ export interface StorefrontOptions {
    * a configured-but-failed settle records nothing and leaves the cart intact.
    */
   settle?: (order: CeremonyOrder) => Promise<Record<string, unknown> & { network: string; txId: string; status: string }>;
+  /**
+   * Optional external verifier/processor (008, #60). Pass one — e.g. a Multipaz-verifier +
+   * UPay adapter — and `new CredentAgent().mount(store.app)` serves the delegated ceremony:
+   * the SAME `gate()` policy runs a real, issuer-trust-verified, amount-bound payment, with
+   * only the verification/settlement backend moved in. Published on `app.locals.credentagent`
+   * so the zero-arg `mount()` picks it up. Omit ⇒ the built-in presence-only rails, unchanged.
+   */
+  verifier?: DelegatedVerifier;
 }
 
 /**
@@ -426,6 +435,9 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
     ...(signingKey ? { signingKey } : {}),
     allowEphemeralKey: opts.allowEphemeralKey ?? !signingKey,
     statelessOrders,
+    // 008: hand the external verifier to the zero-arg `mount()` (it reads app.locals). The
+    // delegated rail only registers when this is present — otherwise the built-in rails serve.
+    ...(opts.verifier ? { verifier: opts.verifier } : {}),
   };
 
   // ── cart logic (per-session over the catalog source + the cart store) ─────
