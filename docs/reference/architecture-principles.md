@@ -83,9 +83,9 @@ package can be tested and reasoned about without a web server, a DB, or a clock.
 - **Here:** the gate never imports Express — it talks to structural ports (`orderStore`, `catalog`,
   `completion`, `CeremonyApp`); stores are injectable (`MemoryVerificationStore` default; a shared store
   for multi-instance). `mount()` **fails fast** on a missing required seam (never silently degrades).
-  The `verifier` seam (008) is the sharpest case: a real verifier/processor (Multipaz/UPay, `@auth0/mdl`)
-  is one injected adapter behind a structural port — `grep -ri upay packages/credentagent-gate/src`
-  returns nothing.
+  The `verifier` seam (008) is the same shape: verification and settlement are a structural port
+  (`DelegatedVerifier`), so **any** external verifier + payment processor is a host-side adapter the gate
+  neither names nor depends on — no processor is a dependency of the core.
 - **Push further:** any new `Date.now()`, `process.env`, or hard import in the core is a smell — inject it.
 
 ### 7. One choke point for each critical concern

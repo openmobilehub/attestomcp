@@ -173,8 +173,8 @@ export type SettlementSeam = (order: CeremonyOrder) => Promise<SettlementRecordL
 //   the gate (invariant 2/3/6) and RE-CHECKED against the verdict before anything
 //   completes. An adapter that "approves" the wrong amount is still refused.
 //
-// Nothing here names a specific verifier or processor: the seam is the interface,
-// a concrete adapter (a Multipaz verifier + processor, @auth0/mdl, …) is a HOST-side implementation.
+// Nothing here names a specific verifier or processor: the seam is the interface;
+// a concrete adapter is a HOST-side implementation, and the gate depends on none.
 
 /**
  * A verified presentment as it reaches the gate — STRUCTURAL and JSON-safe on

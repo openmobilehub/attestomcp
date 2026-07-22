@@ -84,7 +84,7 @@ export function renderDelegatedPage(opts: DelegatedPageOptions): string {
       var data = await res.json();
 
       // ── The external verifier runs the wallet ceremony HERE, using data.handoff ──
-      // (e.g. multipazVerifyCredentials(data.handoff)). A local stand-in verifier
+      // (whatever browser call that verifier provides). A local stand-in verifier
       // simulates the presentment server-side, so there is nothing to drive on-page.
       out.textContent = "Verifying\\u2026";
 
