@@ -1,7 +1,7 @@
 # Feature Specification: The Consent SDK Surface (AP2 mandate chain, three enforcement paths)
 
 **Feature branch:** `008-ap2-mandate-chain-dx` · **Issue:** #92 · **Date:** 2026-07-20
-**Informs:** #17 (`requireInTool`), #12/#69–71 (delegated grants), #39/#40 (wire format)
+**Informs:** #17 (`credentagent.gate()`), #12/#69–71 (delegated grants), #39/#40 (wire format)
 
 ## Overview
 
@@ -38,10 +38,12 @@ const policy = [ required(age.over(21)), required(payment.in("usd")) ];   // cre
 //   res.trustLevel ALWAYS present (every branch): "presence-only-demo" today — disclosure+binding, NOT issuer trust.
 //   res.code ∈ "under-age" | "payment-declined" | "no-membership" | "budget-exceeded" | "per-spend-exceeded" | "revoked" | …
 //
-//   TWO RESOURCES + one wrapper — the same split Stripe uses:
+//   TWO RESOURCES + one top-level wrapper:
 //     orders   one-shot verification   ≈ Checkout Session / PaymentIntent    orders.create()→{id,approveUrl} · orders.retrieve(id)→door
 //     grants   durable spend authority ≈ SetupIntent + off_session           grants.create()→grant · grants.retrieve(id)→grant · grant.spend()/.revoke()
-//     requireInTool()  page-less wrapper — its RETURN is the door (the one deliberate standalone)
+//     credentagent.gate(handler,{policy})  gate ANY page-less tool — ACTION-AGNOSTIC (a purchase, a records release,
+//                                          a deploy). Top-level, NOT under `orders`: identity leads, payment is one
+//                                          application. Its RETURN is the door.
 
 // ── orders — you host the consent page ─────────────────────────
 server.registerTool("checkout", inputSchema, async (args) => {
@@ -54,13 +56,13 @@ credentagent.on("order.settled", async ({ id }) => {
   if (res.ok) { /* complete + settle res.mandateBundle.paymentMandate */ }
 });
 
-// ── requireInTool — page-less MCP tool ─────────────────────────
-server.registerTool("place-order", inputSchema, credentagent.requireInTool(
-  async (args) => ({ structuredContent: await placeOrder(args) }),   // runs ONLY on ok — an unverified caller never reaches it
-  { order: (args) => ({ id: args.orderId, items: itemsFrom(args) }), policy },
+// ── credentagent.gate() — gate ANY page-less tool (here a NON-commerce action) ──
+server.registerTool("release-records", inputSchema, credentagent.gate(
+  async (args) => ({ structuredContent: await releaseRecords(args) }),   // runs ONLY on ok — an unverified caller never reaches it
+  { order: (args) => ({ id: args.subject }), policy: [ required(age.over(21)) ] },   // no items → a pure identity gate; no purchase
 ));
 //   { ok:true,  structuredContent, mandateBundle, authorization, trustLevel }
-//   { ok:false, pending:true, approveUrl, resume:"place-order", trustLevel }        // agent proves, re-calls
+//   { ok:false, pending:true, approveUrl, resume:"release-records", trustLevel }    // agent proves, re-calls
 //   { ok:false, code:"under-age", credential:"age", trustLevel }                    // proven but failed policy
 
 // ── grants — authorize once, spend later (human not present) ──
@@ -95,7 +97,9 @@ await grant.revoke();                                           // grant.status 
 - **FR-004 — Two resources, symmetric.** `orders.create()/retrieve(id)` and `grants.create()/
   retrieve(id)` — both awaited, both return an `id` from the mint, both retrievable by it. Orders are
   one-shot verifications (retrieve → verdict); grants are durable (retrieve → handle with `status` +
-  `spend()`/`revoke()`). `requireInTool()` is the one documented standalone wrapper.
+  `spend()`/`revoke()`). **`credentagent.gate(handler, opts)`** is the top-level, **action-agnostic**
+  page-less wrapper — it gates ANY consequential tool (a purchase, a records release, a deploy), so it
+  lives on the client, not under a commerce resource (thesis: identity leads, payment is one application).
 - **FR-005 — Money is a type.** `usd.dollars(n)`; opaque (no public scalar); compared via
   `.lt()/.gte()/.eq()`, combined via `.plus()/.minus()`, emitted via `.serialize()`.
 - **FR-006 — MandateBundle on `ok`.** `{ intentMandate?, cartMandate, paymentMandate }`, each with
@@ -115,7 +119,7 @@ await grant.revoke();                                           // grant.status 
   for the human — mirroring Stripe's `success_url` + `checkout.session.completed`. `orders.retrieve(id)`
   is a **single current-state read** (for the callback handler, or a fallback), and an optional
   `orders.awaitProof(id, { timeout })` resolves when settled. A hand-written poll loop MUST NOT be the
-  documented path. The page-less `orders.gate` path needs **no** signal — the agent's re-call is the trigger.
+  documented path. The page-less `credentagent.gate()` path needs **no** signal — the agent's re-call is the trigger.
 - **FR-010 — Intent Mandate production (grants only).** The AP2 **Intent Mandate** is produced in the
   `grants` flow, at the one-time authorize ceremony (`grant.approveUrl`) — **not** in `orders` (a
   human-present order signs the **Cart** Mandate directly, so `mandateBundle.intentMandate` is absent).
@@ -176,6 +180,14 @@ with the shipped `envelope.ts`); `reason:'revoked'` → a `code` / `grant.status
 `proveUrl` → `approveUrl` (aligns with the shipped `approve_url`); `authorization` stamped into the
 serialized paymentMandate.
 
+**Post-lock reconciliation (2026-07-21):** the page-less wrapper — designed here as `orders.gate` /
+earlier `requireInTool` — is **`credentagent.gate(handler, opts)`**, top-level and **action-agnostic**.
+The `#17` session shipped it as `credentagent.gate()`, and that name wins over `orders.gate`: gating a
+*non-commerce* tool (a records release, a deploy) shouldn't live under a commerce resource — "identity
+leads; payment is one application." So `orders` and `grants` stay resources (the checkout and delegated
+*lifecycles*), while `gate()` is the general page-less primitive on the client. The design journey above
+predates this call; the surface + FR-004 reflect it.
+
 ## Out of Scope
 
 - Wire-format / SD-JWT serialization (#39) and Python-SDK conformance (#40) — this owns the surface, not the wire.
@@ -185,6 +197,6 @@ serialized paymentMandate.
 
 ## Dependencies
 
-- #17 (`requireInTool` — the page-less wrapper; the in-flight `gateTool` is its earlier name).
+- #17 (`credentagent.gate()` — the top-level, action-agnostic page-less wrapper; SHIPPED on `feat/17`).
 - #12 / #69–71 (`grants` = the delegated surface over the intent rail).
 - Constitution I (Stripe-grade, no grab-bags) and VII (honesty in types); Security invariants #1–#6.
