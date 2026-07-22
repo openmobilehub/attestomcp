@@ -46,9 +46,11 @@ the gate** → re-import on the phone.
 
 ## 0. Prereqs
 
-- **OpenSSL 3.x** (macOS LibreSSL is too old for the ISO EKU OID + `issuerAltName=URI:`):
-  `brew install openssl@3`. `gen-pki.sh` defaults to
-  `/opt/homebrew/opt/openssl@3/bin/openssl`; override with `OPENSSL=…`.
+- **OpenSSL 3.2+** — the `-not_before`/`-not_after` flags on `req`/`x509` landed in 3.2, and
+  LibreSSL (the macOS system `openssl`) lacks the ISO EKU OID + `issuerAltName=URI:` syntax.
+  `brew install openssl@3`. `gen-pki.sh` defaults to `/opt/homebrew/opt/openssl@3/bin/openssl`
+  and **checks the version** (fails fast with a clear message on LibreSSL or < 3.2); override
+  with `OPENSSL=…`. Runs on both macOS (`date -v`) and Linux (`date -d`) — auto-detected.
 - For minting: the Multipaz repo checked out locally (the jvmTests compile against
   the `multipaz` module) — see [`mint/README.md`](mint/README.md).
 - Python 3 (stdlib only) for `cardart/make_cards.py` and `site/build_site.py`.

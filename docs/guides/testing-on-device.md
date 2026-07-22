@@ -76,10 +76,14 @@ badge.
 warnings** appear — issuer (via the imported **VICAL**) *and* verifier (via the imported
 **RICAL** matched against the reader identity the gate now presents, #51).
 
-> **The verifier side needs the gate to present the reader identity.** `run-gate.mjs` does
-> this (it configures `readerIdentity`), so the "unknown verifier" warning should clear. A
-> gate started WITHOUT a configured `readerIdentity` still self-signs per request, and that
-> warning would persist ([#51](https://github.com/openmobilehub/credentagent/issues/51)).
+> **The verifier side needs the reader *private key*, which is not committed.** `run-gate.mjs`
+> configures `readerIdentity` **only if `keys/reader-key.pem` exists locally** — and that key is
+> gitignored, so a **fresh clone does not have it**. Without it the gate falls back to a
+> per-request self-signed reader, which cannot match the committed `out/utopia.rical`, so the
+> "unknown verifier" warning **persists**. The committed RICAL only matches the *producer's* local
+> key. To clear the warning on a fresh clone: run `./gen-pki.sh` (mints a new reader key + cert +
+> RICAL), rebuild the trust lists, and **re-import that RICAL** on the phone (same ordering as the
+> "re-running gen-pki orphans the RICAL" note above). ([#51](https://github.com/openmobilehub/credentagent/issues/51))
 
 ## Troubleshooting
 

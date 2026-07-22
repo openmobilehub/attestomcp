@@ -17,8 +17,10 @@
 # Extension profiles live in openssl.cnf and mirror Multipaz's MdocUtil. See that
 # file and MORNING-BRIEF.md for the ISO Annex-B references and the choices made.
 #
-# Requires OpenSSL 3.x (the ISO EKU OID + issuerAltName URI syntax need it;
-# macOS LibreSSL is too old). Override the binary and demo host with env vars:
+# Requires OpenSSL 3.2+ (the `-not_before`/`-not_after` flags on req/x509 landed in
+# 3.2; the ISO EKU OID + issuerAltName URI syntax need OpenSSL, not LibreSSL). The
+# script checks the version and auto-detects BSD/macOS vs GNU/Linux `date`, so it
+# runs on both. Override the binary and demo host with env vars:
 #   OPENSSL=/opt/homebrew/opt/openssl@3/bin/openssl  BASE_URL=https://your-host  ./gen-pki.sh
 set -euo pipefail
 
@@ -56,10 +58,29 @@ DS_DAYS=455    # ISO 18013-5 Table B.3 caps the DS validity at 457 days; stay un
 BACKDATE_DAYS=2  # notBefore backdated so an MSO "signed" ~now-1d stays inside DS validity
 SUBJ_BASE="/C=US/ST=CA/O=Utopia (Demo)"
 
-# Explicit notBefore/notAfter (UTC, [CC]YYMMDDHHMMSSZ). macOS `date -v` syntax.
-NB="$(date -u -v-${BACKDATE_DAYS}d +%Y%m%d%H%M%SZ)"
-CA_NA="$(date -u -v+${CA_DAYS}d +%Y%m%d%H%M%SZ)"
-DS_NA="$(date -u -v+${DS_DAYS}d +%Y%m%d%H%M%SZ)"
+# Fail fast if the toolchain can't produce a valid PKI: `-not_before`/`-not_after`
+# on req/x509 landed in OpenSSL 3.2, and LibreSSL lacks the ISO EKU OID + URI syntax.
+_ver_line="$("$OPENSSL" version 2>/dev/null)"
+case "$_ver_line" in
+  LibreSSL*) echo "ERROR: $OPENSSL is LibreSSL ($_ver_line) — need OpenSSL 3.2+ (LibreSSL lacks the ISO EKU OID and -not_before/-not_after)." >&2; exit 1 ;;
+esac
+_ver="$(printf '%s\n' "$_ver_line" | awk '{print $2}')"; _maj="${_ver%%.*}"; _rest="${_ver#*.}"; _min="${_rest%%.*}"
+if [ "${_maj:-0}" -lt 3 ] || { [ "$_maj" = 3 ] && [ "${_min:-0}" -lt 2 ]; }; then
+  echo "ERROR: gen-pki.sh needs OpenSSL 3.2+ (for -not_before/-not_after on req/x509); found '${_ver:-unknown}' from $OPENSSL." >&2
+  echo "  macOS: brew install openssl@3 && OPENSSL=\"\$(brew --prefix openssl@3)/bin/openssl\" ./gen-pki.sh" >&2
+  exit 1
+fi
+
+# Explicit notBefore/notAfter (UTC, [CC]YYMMDDHHMMSSZ). Portable across BSD/macOS
+# (`date -v`) and GNU/Linux (`date -d`).
+if date -u -v+1d +%Y >/dev/null 2>&1; then _date_bsd=1; else _date_bsd=0; fi
+date_offset() {  # $1 = signed days, e.g. "-2" or "+455"
+  if [ "$_date_bsd" = 1 ]; then date -u -v"${1}d" +%Y%m%d%H%M%SZ
+  else date -u -d "${1} days" +%Y%m%d%H%M%SZ; fi
+}
+NB="$(date_offset "-${BACKDATE_DAYS}")"
+CA_NA="$(date_offset "+${CA_DAYS}")"
+DS_NA="$(date_offset "+${DS_DAYS}")"
 
 mkdir -p keys certs
 chmod 700 keys
