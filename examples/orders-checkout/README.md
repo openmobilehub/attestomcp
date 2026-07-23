@@ -32,6 +32,11 @@ app.post("/buy-wine", async (_req, res) => {
 });
 ```
 
+> **Serverless caveat:** `on("order.settled")` is an in-process event — it fits a long-lived server
+> like this example. On serverless (Vercel, Lambda), fulfill from `orders.retrieve(id)` over
+> injected shared stores instead; a real signed webhook is tracked in
+> [#101](https://github.com/openmobilehub/credentagent/issues/101).
+
 ## Run it
 
 ```bash

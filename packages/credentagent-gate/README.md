@@ -89,6 +89,14 @@ app.post("/buy-wine", async (_req, res) => {
 app.get("/orders/:id", async (req, res) => res.json(await credentagent.orders.retrieve(req.params.id)));
 ```
 
+> **`on("order.settled")` is an in-process event, not a webhook** — it fires synchronously in the
+> one long-lived Node process that completed the order. On serverless (Vercel, Lambda) the instance
+> can be frozen the moment the response is sent, so async work started in the listener may never
+> finish — don't fulfill from it there. Instead, inject shared stores (`orderStore`,
+> `completedOrderStore`) and read `orders.retrieve(id)` as the durable, cross-instance signal. A
+> real signed HTTP webhook is the next increment
+> ([#101](https://github.com/openmobilehub/credentagent/issues/101)).
+
 `orders.retrieve(id)` is the one result **door**: `{ ok: true, completion }` once paid, `{ ok: false,
 pending: true, approveUrl }` while it's open, or `{ ok: false, code }` for an unknown id. The amount and
 the age threshold are re-derived from the order you stored server-side — never trusted from the link
