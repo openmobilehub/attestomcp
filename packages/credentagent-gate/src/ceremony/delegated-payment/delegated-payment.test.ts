@@ -21,6 +21,7 @@ import { sealReference, openReference } from "./referenceToken.js";
 import { mergeDelegatedDcql, delegatedPolicyEntries } from "./dcql.js";
 import { issueCartMandate } from "../cartMandate.js";
 import { renderDelegatedPage } from "./page.js";
+import { buildDelegatedRequest } from "./request.js";
 
 const SECRET = "stable-test-secret";
 
@@ -581,5 +582,43 @@ describe("delegated rail — approve page escapes the untrusted cart param", () 
     // The old sink. innerHTML PARSES markup; setAttribute/textContent cannot.
     expect(html).not.toContain(`'<a class="ret" href="' + RETURN_URL`);
     expect(html).toContain("createElement(\"a\")");
+  });
+});
+
+// ── The gate must name NO verifier (#88 honesty) ─────────────────────────────────────────
+// types.ts and index.ts both promise "nothing here names a specific verifier or processor".
+// The approve page used to bake in `window.multipazVerifyCredentials` + the
+// `/verify_credentials.js` filename, so a second adapter could not use this rail without
+// shipping a script that impersonated Multipaz's global — and the promise was simply false.
+// The adapter now declares its own contract via `clientScript` + `clientEntry`.
+describe("delegated rail — the gate names no verifier", () => {
+  it("the approve page carries no vendor symbol, and drives whatever the handoff declares", () => {
+    const html = renderDelegatedPage({
+      order: "ORD-V",
+      total: 10,
+      currency: "USD",
+      lines: [{ name: "Item", quantity: 1, lineTotal: 10, currency: "USD" }],
+    });
+    expect(html).not.toMatch(/multipaz/i); // no vendor global, no vendor script name
+    expect(html).not.toContain("verify_credentials.js");
+    expect(html).not.toContain("verifierBase");
+    // Driven entirely by what the adapter declared.
+    expect(html).toContain("data.clientScript");
+    expect(html).toContain("window[data.clientEntry]");
+  });
+
+  it("forwards the adapter's declared client contract through /request", async () => {
+    const verifier = verifierReturning();
+    verifier.buildRequest = vi.fn(async () => ({
+      reference: "ref-1",
+      handoff: { anything: "opaque" },
+      clientScript: "https://verifier.example/acme.js",
+      clientEntry: "acmeVerifyCredentials",
+    }));
+    const order = catalog.createOrder([{ productId: "oak-whiskey", quantity: 1 }], "ORD-V1");
+    const ctx = { verifier, signingKey: SECRET, credentialRegistry: new Map([["payment", payment.in("usd")]]) };
+    const out = await buildDelegatedRequest(ctx as never, order, { rpID: "shop.example", origin: "https://shop.example" });
+    expect(out.clientScript).toBe("https://verifier.example/acme.js");
+    expect(out.clientEntry).toBe("acmeVerifyCredentials");
   });
 });

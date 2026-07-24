@@ -220,6 +220,18 @@ export interface DelegatedHandoff {
   /** Verifier-specific payload for the browser (e.g. `{ dcql, transaction_data, nonce,
    *  verifierUrl }`). Opaque to the gate — it is forwarded, never interpreted. */
   handoff: unknown;
+  /**
+   * OPTIONAL browser step. URL of a script THIS verifier serves which defines the function
+   * that opens the wallet. The approve page loads it and calls {@link clientEntry}, passing
+   * the opaque `handoff` — so the ADAPTER names its verifier and the gate names none.
+   *
+   * Omit both fields when the presentment is captured server-side (a local stand-in, or a
+   * verifier with no browser step): the page then skips straight to the verify POST.
+   */
+  clientScript?: string;
+  /** Global function name `clientScript` defines (e.g. `"acmeVerifyCredentials"`). Required
+   *  whenever `clientScript` is set; the page calls `window[clientEntry](handoff)`. */
+  clientEntry?: string;
 }
 
 /**

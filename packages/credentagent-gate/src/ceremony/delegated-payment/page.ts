@@ -103,24 +103,28 @@ ${pageHead(`Authorize payment · ${order}`)}
       var handoff = data.handoff || {};
 
       // ── Drive the EXTERNAL verifier's wallet ceremony in the browser ──
-      // The verifier serves a client script at handoff.verifierBase (e.g. Multipaz's
-      // verify_credentials.js). Load it, then hand it the request — THIS is what opens the
-      // wallet (navigator.credentials.get / the wallet URL scheme). A local stand-in omits
-      // verifierBase, so there is nothing to drive on-page and this block is skipped.
-      if (handoff.verifierBase) {
-        if (typeof window.multipazVerifyCredentials !== "function") {
+      // The ADAPTER names its verifier, not the gate: data.clientScript is a URL that
+      // verifier serves, and data.clientEntry the global function it defines. Load it, then
+      // hand it the opaque handoff — THIS is what opens the wallet (navigator.credentials.get
+      // / a wallet URL scheme). The gate interprets these only as "a script" and "a function
+      // name", so ANY adapter works without the package naming it. A verifier that captures
+      // the presentment server-side omits both, and this block is skipped.
+      if (data.clientScript && data.clientEntry) {
+        if (typeof window[data.clientEntry] !== "function") {
           await new Promise(function (resolve, reject) {
             var s = document.createElement("script");
-            s.src = String(handoff.verifierBase).replace(/\\/$/, "") + "/verify_credentials.js";
+            s.src = data.clientScript;
             s.onload = resolve;
             s.onerror = function () { reject(new Error("could not load the verifier's wallet script")); };
             document.head.appendChild(s);
           });
         }
+        var entry = window[data.clientEntry];
+        if (typeof entry !== "function") throw new Error("the verifier's script did not define " + data.clientEntry);
         out.textContent = "Opening your wallet\\u2026";
         // The verified presentment is captured server-side (keyed by the reference); we ignore
         // the return value and carry only the sealed reference back to /verify below.
-        await window.multipazVerifyCredentials(handoff);
+        await entry(handoff);
       }
       out.textContent = "Verifying\\u2026";
 
