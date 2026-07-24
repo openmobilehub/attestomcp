@@ -10,6 +10,9 @@ import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/
 import { Orders, MemoryOrderStore, type CreatedOrder, type CompletedOrder } from "./orders.js";
 import { serveOrders } from "./orders-serve.js";
 import { Webhooks } from "./webhooks.js";
+import { Grants, type GrantRecord } from "./grants.js";
+import { buildCatalog } from "./delegated.js";
+import { MemoryRevocationStore } from "./ceremony/revocation.js";
 
 x509.cryptoProvider.set(globalThis.crypto);
 
@@ -33,6 +36,8 @@ export class CredentAgent {
   readonly store: VerificationStore;
   /** The human-present checkout resource — `orders.create()` / `orders.retrieve()` (spec 009). */
   readonly orders: Orders;
+  /** Durable spend authority — `grants.create()` / `retrieve()` / `grant.spend()` (spec 009, #104). */
+  readonly grants: Grants;
   /** Outbound HTTP webhooks — `webhooks.register()` / `webhooks.constructEvent()` (spec 010). */
   readonly webhooks: Webhooks;
   /** Stable reader identity presented by the rails (undefined ⇒ per-request self-signed). */
@@ -119,6 +124,20 @@ export class CredentAgent {
         this.ordersServed = true;
         this.mountedRoutes = true; // approve links now resolve to the mounted rails
       },
+    });
+    // The grants resource (spec 009, #104) — durable spend authority over the SAME client
+    // config. Spend completions route through `orders._complete`, so the settled event and
+    // webhook fan-out apply to delegated spends exactly as to human-present orders.
+    const grantStore = opts.grantStore ?? new MemoryOrderStore<GrantRecord>();
+    const grantRevocation = opts.revocationStore ?? new MemoryRevocationStore();
+    this.grants = new Grants({
+      walletOrigin: this.walletOrigin,
+      store: grantStore,
+      revocation: grantRevocation,
+      ...(opts.catalog ? { catalog: buildCatalog(opts.catalog) } : {}),
+      requirements: (order, policy) => this.requirements(order, policy),
+      completeSpend: (record) => this.orders._complete(record),
+      readSpend: (orderId) => completedStore.read(orderId),
     });
   }
 

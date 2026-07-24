@@ -242,6 +242,16 @@ export interface CredentAgentOptions {
    */
   gateSecret?: string;
   /**
+   * Your priced catalog: item id → price in dollars, or → `{ price, minAge }` (spec 009
+   * FR-001). Required for `grants` spends — the gate re-prices every spend from it
+   * (invariant 2); a caller never passes an amount.
+   */
+  catalog?: Record<string, number | { price: number; minAge?: number }>;
+  /** Persist grants (`grants.create`); default in-memory, inject a shared store for multi-instance. */
+  grantStore?: OrderStore<import("./grants.js").GrantRecord>;
+  /** Revocation + committed-draw ledger for grants; default in-memory, injectable (shared deploys). */
+  revocationStore?: import("./ceremony/revocation.js").RevocationStore;
+  /**
    * Outbound HTTP webhooks (spec 010). Register endpoint URL(s) + their `whsec_` secret and every
    * settled order is POSTed to them as a signed event — the durable, cross-service signal the
    * in-process `on("order.settled")` listener can't provide. Omit ⇒ no delivery (additive, zero-cost).

@@ -79,7 +79,8 @@ export interface SpendResult {
 const priceOf = (e: CatalogEntry) => (typeof e === "number" ? e : e.price);
 const minAgeOf = (e: CatalogEntry) => (typeof e === "number" ? undefined : e.minAge);
 
-function buildCatalog(items: Record<string, CatalogEntry>): CeremonyCatalog {
+/** Build the re-pricing catalog seam from a plain priced map. Shared with `credentagent.grants`. */
+export function buildCatalog(items: Record<string, CatalogEntry>): CeremonyCatalog {
   return {
     // Must honor the passed orderId — completeOrder re-prices under the SAME id, and its
     // idempotency is keyed by it, so a duplicate id would echo a prior completion instead
