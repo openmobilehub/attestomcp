@@ -3,6 +3,7 @@ import { CredentAgent } from "./client.js";
 import { usd } from "./money.js";
 import type { GrantRecord } from "./grants.js";
 import type { OrderStore } from "./orders.js";
+import { MemoryRevocationStore } from "./ceremony/revocation.js";
 
 const terms = () => ({ merchant: "utopia", budget: usd.dollars(100), perSpend: usd.dollars(30) });
 
@@ -13,9 +14,9 @@ describe("credentagent.grants — create / retrieve (the pending lifecycle)", ()
     expect(g.id).toMatch(/^gr_/);
     expect(g.status).toBe("pending");
     expect(g.approveUrl).toBe(`https://shop.example/credentagent/grants/${g.id}`);
-    expect(g.terms.budget.eq(usd.dollars(100))).toBe(true);
-    expect(g.terms.perSpend.eq(usd.dollars(30))).toBe(true);
-    expect(g.terms.merchant).toBe("utopia");
+    expect(g.terms!.budget.eq(usd.dollars(100))).toBe(true);
+    expect(g.terms!.perSpend.eq(usd.dollars(30))).toBe(true);
+    expect(g.terms!.merchant).toBe("utopia");
   });
 
   // Same control as orders.create: the approveUrl is only usable if the grant is READABLE
@@ -208,5 +209,199 @@ describe("grant.revoke() — the kill switch", () => {
     const g = await ca.grants.retrieve(id);
     expect(g.status).toBe("revoked");
     expect(g.intentMandate).toBeUndefined();
+  });
+});
+
+// ── Review-round hardening (PR #106 multi-agent review) ──────────────────────
+
+describe("grant.spend() — quantity validation (invariants 2/3)", () => {
+  // BYPASS: a fractional or negative quantity would price BELOW the catalog cost — a hidden
+  // discount that still binds. Delete the qty guard in spend() and these settle wrongly.
+  it("BYPASS: a fractional quantity is refused (never settles below catalog cost)", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca, { budget: usd.dollars(100), perSpend: usd.dollars(50) });
+    const s = await g.spend({ idempotencyKey: "p1", items: [{ sku: "espresso", qty: 0.1 }] }); // 25 * 0.1 = 2.5
+    expect(s.ok).toBe(false);
+    if (!s.ok) expect(s.code).toBe("invalid-quantity");
+  });
+
+  it("BYPASS: a negative-quantity line in a multi-item cart is refused (no net discount)", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca, { budget: usd.dollars(100), perSpend: usd.dollars(50) });
+    const s = await g.spend({ idempotencyKey: "p1", items: [{ sku: "espresso", qty: 1 }, { sku: "coffee", qty: -20 }] });
+    expect(s.ok).toBe(false);
+    if (!s.ok) expect(s.code).toBe("invalid-quantity");
+  });
+
+  it("a quantity > 1 multiplies the price and draws down by the full amount", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca, { budget: usd.dollars(100), perSpend: usd.dollars(40) });
+    const ok = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee", qty: 2 }] }); // 18 * 2 = 36
+    expect(ok.ok).toBe(true);
+    if (ok.ok) { expect(ok.amount.eq(usd.dollars(36))).toBe(true); expect(ok.remaining.eq(usd.dollars(64))).toBe(true); }
+    const over = await g.spend({ idempotencyKey: "p2", items: [{ sku: "coffee", qty: 3 }] }); // 54 > 40 perSpend
+    expect(over.ok).toBe(false);
+    if (!over.ok) expect(over.code).toBe("per-spend-exceeded");
+  });
+});
+
+describe("grant.spend() — exact-boundary money (integer cents, no float drift)", () => {
+  it("spends exactly to the per-spend and budget boundary without a false refusal", async () => {
+    // $4.90 × 3 = $14.70 — a classic binary-float trap (14.700000000000001 > 14.7).
+    const ca = new CredentAgent({ walletOrigin: "https://shop.example", catalog: { latte: 4.9 } });
+    const { id } = await ca.grants.create({ merchant: "utopia", budget: usd.dollars(14.7), perSpend: usd.dollars(4.9), policy: [] });
+    await ca.grants._authorize(id);
+    const g = await ca.grants.retrieve(id);
+    for (const k of ["a", "b", "c"]) {
+      const s = await g.spend({ idempotencyKey: k, items: [{ sku: "latte" }] });
+      expect(s.ok).toBe(true); // each $4.90 == perSpend, cumulative reaches == budget
+    }
+    expect((await g.spend({ idempotencyKey: "d", items: [{ sku: "latte" }] })).ok).toBe(false); // now over budget
+  });
+});
+
+describe("grant.spend() — idempotency correctness", () => {
+  it("throws on a missing/empty idempotencyKey and on empty items (programming errors)", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca);
+    await expect(g.spend({ idempotencyKey: "", items: [{ sku: "coffee" }] })).rejects.toThrow(/idempotencyKey/);
+    await expect(g.spend({ idempotencyKey: "p1", items: [] })).rejects.toThrow(/items/);
+  });
+
+  it("the SAME key with DIFFERENT items is a conflict, not a silent replay of the old spend", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca);
+    const first = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(first.ok).toBe(true);
+    const conflict = await g.spend({ idempotencyKey: "p1", items: [{ sku: "espresso" }] }); // different item, same key
+    expect(conflict.ok).toBe(false);
+    if (!conflict.ok) expect(conflict.code).toBe("idempotency-conflict");
+  });
+
+  it("replays a settled spend even AFTER revoke — revocation stops new draws, not history", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca);
+    const first = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(first.ok).toBe(true);
+    await g.revoke();
+    const retry = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] }); // worker retrying its queue
+    expect(retry.ok).toBe(true);
+    if (retry.ok) expect(retry.replayed).toBe(true); // the charge already happened — not "revoked"
+  });
+});
+
+describe("grant lifecycle — concurrency (TOCTOU) is fail-closed", () => {
+  it("revoke racing authorize never leaves a spendable grant", async () => {
+    const ca = client();
+    const { id } = await ca.grants.create({ merchant: "utopia", budget: usd.dollars(40), perSpend: usd.dollars(20), policy: [] });
+    const g = await ca.grants.retrieve(id);
+    await Promise.all([g.revoke(), ca.grants._authorize(id)]); // interleave the kill switch and the seal
+    expect((await ca.grants.retrieve(id)).status).toBe("revoked");
+    const s = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(s.ok).toBe(false); // never authorized-and-spendable
+  });
+
+  it("a concurrent double-approve seals exactly one intent (no rebind to an empty ledger)", async () => {
+    const ca = client();
+    const { id } = await ca.grants.create({ merchant: "utopia", budget: usd.dollars(40), perSpend: usd.dollars(20), policy: [] });
+    await Promise.all([ca.grants._authorize(id), ca.grants._authorize(id)]);
+    const g = await ca.grants.retrieve(id);
+    expect(g.status).toBe("authorized");
+    const intentId = g.intentMandate!.intentId;
+    // Spend to the budget edge; a rebind to a fresh (empty-ledger) intent would allow 2× the budget.
+    await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] }); // 18
+    const s2 = await g.spend({ idempotencyKey: "p2", items: [{ sku: "coffee" }] }); // 36 total ≤ 40 ok
+    const s3 = await g.spend({ idempotencyKey: "p3", items: [{ sku: "coffee" }] }); // 54 > 40 → must refuse
+    expect(s2.ok).toBe(true);
+    expect(s3.ok).toBe(false);
+    expect((await ca.grants.retrieve(id)).intentMandate!.intentId).toBe(intentId); // one stable seal
+  });
+
+  // MUTATION: concurrent spends with the SAME key must collapse to one charge with a clean
+  // replay for the loser — NOT one "consumed"/terminal refusal. Only the per-grant KeyedMutex
+  // guarantees this (it serializes the replay pre-read against the draw commit); neuter
+  // KeyedMutex.run to call fn() directly and this goes red (the loser gets "consumed").
+  it("concurrent spends with the SAME key collapse to one charge, both ok (one replayed)", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca);
+    const [a, b] = await Promise.all([
+      g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] }),
+      g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] }),
+    ]);
+    expect(a.ok && b.ok).toBe(true);                              // neither is a spurious refusal
+    expect([a, b].filter((r) => r.ok && r.replayed).length).toBe(1); // exactly one is the replay
+    const after = await ca.grants.retrieve(g.id);
+    const s = await after.spend({ idempotencyKey: "p2", items: [{ sku: "coffee" }] });
+    if (s.ok) expect(s.remaining.eq(usd.dollars(4))).toBe(true);  // 40 − 18 (ONE charge) − 18
+  });
+
+  it("concurrent spends with distinct keys never exceed the budget (atomic draw commit)", async () => {
+    const ca = client();
+    const g = await authorizedGrant(ca, { budget: usd.dollars(20), perSpend: usd.dollars(20) }); // room for ONE $18
+    const [a, b] = await Promise.all([
+      g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] }),
+      g.spend({ idempotencyKey: "p2", items: [{ sku: "coffee" }] }),
+    ]);
+    expect([a.ok, b.ok].filter(Boolean).length).toBe(1); // exactly one settles; the other is budget-exceeded
+  });
+});
+
+describe("grant.revoke() — the ledger write is independently pinned", () => {
+  // MUTATION: the revocation-ledger write is the kill switch's SECOND authority — the one that
+  // stops a stale-snapshot worker (a different process still holding an authorized record). It
+  // must be pinned independently of the status write: a store that serves the pre-revoke
+  // snapshot forces the spend through the engine's ledger check. Delete the ledger revoke in
+  // grant.revoke() and this goes red (the stale spend completes).
+  it("a stale-snapshot spend after revoke is still refused via the ledger", async () => {
+    const backing = new Map<string, GrantRecord>();
+    let frozen: GrantRecord | undefined;
+    const store: OrderStore<GrantRecord> = {
+      read: async (id) => frozen ?? backing.get(id),
+      write: async (id, v) => { backing.set(id, v); },
+      clear: async (id) => { backing.delete(id); },
+    };
+    const revocationStore = new MemoryRevocationStore();
+    const ca = new CredentAgent({ walletOrigin: "https://shop.example", catalog: { coffee: 18 }, grantStore: store, revocationStore });
+    const { id } = await ca.grants.create({ merchant: "utopia", budget: usd.dollars(40), perSpend: usd.dollars(20), policy: [] });
+    await ca.grants._authorize(id);
+    frozen = await store.read(id); // pin the AUTHORIZED snapshot — reads now ignore later writes
+    expect(frozen?.status).toBe("authorized");
+
+    await (await ca.grants.retrieve(id)).revoke(); // writes the ledger (and a status the store ignores)
+    const s = await (await ca.grants.retrieve(id)).spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(s.ok).toBe(false); // the engine's ledger check refuses even though the snapshot says authorized
+    if (!s.ok) expect(s.code).toBe("revoked");
+  });
+});
+
+describe("grant.spend() — denied is terminal", () => {
+  it("spending against a declined grant refuses as denied (not needs-human)", async () => {
+    const ca = client();
+    const { id } = await ca.grants.create({ merchant: "utopia", budget: usd.dollars(40), perSpend: usd.dollars(20), policy: [] });
+    await ca.grants._decline(id);
+    const s = await (await ca.grants.retrieve(id)).spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(s.ok).toBe(false);
+    if (!s.ok) { expect(s.code).toBe("denied"); expect(s.retryable).toBe("terminal"); }
+  });
+});
+
+describe("grants.create() — configure-time validation", () => {
+  it("rejects a non-positive budget/perSpend (a programming error, thrown not refused)", async () => {
+    const ca = client();
+    await expect(ca.grants.create({ merchant: "m", budget: usd.dollars(0), perSpend: usd.dollars(10), policy: [] })).rejects.toThrow(/positive/);
+    await expect(ca.grants.create({ merchant: "m", budget: usd.dollars(100), perSpend: usd.cents(-5), policy: [] })).rejects.toThrow(/positive/);
+  });
+});
+
+describe("Grant — the not-found handle never throws", () => {
+  it("terms and approveUrl are undefined (not a throw / dead link) for an unknown id", async () => {
+    const ca = client();
+    const g = await ca.grants.retrieve("gr_nope");
+    expect(g.status).toBe("not-found");
+    expect(g.terms).toBeUndefined();
+    expect(g.approveUrl).toBeUndefined();
+    const s = await g.spend({ idempotencyKey: "p1", items: [{ sku: "coffee" }] });
+    expect(s.ok).toBe(false);
+    if (!s.ok) expect(s.code).toBe("not-found");
   });
 });

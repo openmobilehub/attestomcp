@@ -50,19 +50,20 @@ const html = (body: string) =>
 /** The grant presented as a one-line GateOrder so `requirements()` resolves the policy
  *  against it (amount = budget — what the human is authorizing up to). */
 function pseudoOrder(record: GrantRecord): GateOrder {
+  const budgetDollars = record.budgetCents / 100;
   return {
     id: record.id,
-    total: record.budgetDollars,
+    total: budgetDollars,
     currency: record.currency,
-    lines: [{ id: "grant", name: `Pre-approval at ${record.merchant}`, quantity: 1, unitPrice: record.budgetDollars }],
+    lines: [{ id: "grant", name: `Pre-approval at ${record.merchant}`, quantity: 1, unitPrice: budgetDollars }],
   };
 }
 
 function termsCard(record: GrantRecord, manifest: VerificationManifestEntry[]): string {
   const rows = [
     `<tr><td>Merchant</td><td><strong>${esc(record.merchant)}</strong></td></tr>`,
-    `<tr><td>Total budget</td><td><strong>${fmt(record.budgetDollars)}</strong></td></tr>`,
-    `<tr><td>Per-purchase cap</td><td><strong>${fmt(record.perSpendDollars)}</strong></td></tr>`,
+    `<tr><td>Total budget</td><td><strong>${fmt(record.budgetCents / 100)}</strong></td></tr>`,
+    `<tr><td>Per-purchase cap</td><td><strong>${fmt(record.perSpendCents / 100)}</strong></td></tr>`,
     ...(record.description ? [`<tr><td>Purpose</td><td>${esc(record.description)}</td></tr>`] : []),
   ].join("");
   const requires = manifest.length
@@ -116,7 +117,14 @@ export function serveGrants(app: GrantsApp, deps: ServeGrantsDeps): void {
       return;
     }
     await deps.authorize(id);
-    res.type("html").send(html("<h1>✓ Limit approved</h1><p>Your agent can now spend within these bounds. You can close this tab.</p>"));
+    // Re-read: a decline/revoke landing in the authorize window means it did NOT seal — don't
+    // show a success page for a grant that isn't actually authorized.
+    const after = await deps.store.read(id);
+    if (after?.status === "authorized") {
+      res.type("html").send(html("<h1>✓ Limit approved</h1><p>Your agent can now spend within these bounds. You can close this tab.</p>"));
+    } else {
+      res.status(409).type("html").send(html(`<h1>Not approved</h1><p>This grant is ${after?.status ?? "gone"} — it was not approved.</p>`));
+    }
   };
 
   const decline: GrantsHandler = async (req, res) => {

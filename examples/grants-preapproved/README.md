@@ -40,12 +40,19 @@ if (g.status === "authorized") {
 }
 ```
 
-## Run it
+## Prove it (no browser needed)
 
 ```bash
 npm run build                                   # build the @openmobilehub/credentagent-* packages
+node examples/grants-preapproved/smoke.mjs      # boots its own server on an ephemeral port + asserts the whole flow
+```
+
+`smoke.mjs` is self-contained — it starts its own app, so you don't run `server.mjs` alongside it.
+
+## Run it yourself
+
+```bash
 node examples/grants-preapproved/server.mjs     # → http://localhost:4000
-node examples/grants-preapproved/smoke.mjs      # the whole flow + asserts, no browser
 ```
 
 Then:

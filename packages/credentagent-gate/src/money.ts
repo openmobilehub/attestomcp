@@ -1,11 +1,9 @@
 // Money — an opaque, currency-checked value. Amounts are integer minor units (cents),
 // so no float drift; the raw scalar is not public, so a caller can't accidentally compare
 // or add a bare number across currencies (spec 009 FR-005). Build with `usd.dollars(20)` /
-// `usd.cents(2000)`; compare with `.lt/.gte/.eq`; combine with `.plus/.minus`; emit the wire
-// shape with `.serialize()`.
-//
-// The ONE conversion to the repo's dollar-number amounts (GateOrder, IntentBounds) lives in
-// grants.ts — nowhere else. Callers of the grants surface never see a raw scalar.
+// `usd.cents(2000)` — the unit is ALWAYS explicit (there is no bare `usd(n)`, which would be
+// ambiguous between dollars and cents); compare with `.lt/.gte/.eq`; combine with
+// `.plus/.minus`; emit the wire shape with `.serialize()`.
 
 export interface Money {
   readonly currency: string;
@@ -37,8 +35,17 @@ function money(minor: number, currency: string): Money {
   });
 }
 
-/** US dollars. `usd.dollars(20)` → $20.00 (2000 cents); `usd.cents(2000)` → the same. */
-export const usd = Object.assign((minorCents: number) => money(minorCents, "usd"), {
-  dollars: (d: number) => money(Math.round(d * 100), "usd"),
-  cents: (c: number) => money(c, "usd"),
-});
+/** Build US-dollar Money. The unit is always explicit: `usd.dollars(20)` → $20.00 (2000
+ *  cents), `usd.cents(2000)` → the same. `.dollars` rounds a representable fractional dollar
+ *  (19.99 → 1999) but REJECTS a genuine sub-cent input (1.005, 0.001) rather than silently
+ *  truncating value — a sibling of `.cents`'s integer check. */
+export const usd = {
+  dollars: (d: number): Money => {
+    const cents = d * 100;
+    if (Math.abs(cents - Math.round(cents)) > 1e-6) {
+      throw new Error(`usd.dollars(${d}) is a sub-cent amount; the smallest unit is one cent (use usd.cents for exact minor units)`);
+    }
+    return money(Math.round(cents), "usd");
+  },
+  cents: (c: number): Money => money(c, "usd"),
+};

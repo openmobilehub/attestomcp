@@ -12,7 +12,6 @@ import { serveOrders } from "./orders-serve.js";
 import { Webhooks } from "./webhooks.js";
 import { Grants, type GrantRecord } from "./grants.js";
 import { serveGrants } from "./grants-serve.js";
-import { buildCatalog } from "./delegated.js";
 import { MemoryRevocationStore } from "./ceremony/revocation.js";
 
 x509.cryptoProvider.set(globalThis.crypto);
@@ -137,7 +136,7 @@ export class CredentAgent {
       walletOrigin: this.walletOrigin,
       store: grantStore,
       revocation: grantRevocation,
-      ...(opts.catalog ? { catalog: buildCatalog(opts.catalog) } : {}),
+      ...(opts.catalog ? { catalog: opts.catalog } : {}),
       requirements: (order, policy) => this.requirements(order, policy),
       completeSpend: (record) => this.orders._complete(record),
       readSpend: (orderId) => completedStore.read(orderId),

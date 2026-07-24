@@ -110,7 +110,15 @@ agent then spends against it unattended — every spend re-priced from your cata
 replay-safe, and revocable. Amounts are `Money` (`usd.dollars(50)`) — never a raw number.
 
 ```ts
-const credentagent = new CredentAgent({ walletOrigin, catalog: { coffee: 4.5, beans: 14 } });
+import express from "express";
+import { CredentAgent, usd } from "@openmobilehub/credentagent-gate";
+
+const app = express();
+app.use(express.json());
+const credentagent = new CredentAgent({
+  walletOrigin: "http://localhost:4000",
+  catalog: { coffee: 4.5, beans: 14 },                   // the price authority — a spend names a sku, never an amount
+});
 
 // ── once, at startup ──────────────────────────────────────────────
 credentagent.grants.serve(app);                          // the approve page at each grant's approveUrl
@@ -122,21 +130,22 @@ const grant = await credentagent.grants.create({
 sendToUser(grant.approveUrl);                            // ONE approval; grant.status: "pending" → "authorized"
 
 // ── later, in a worker — human away ───────────────────────────────
-const g = await credentagent.grants.retrieve(grantId);   // rehydrates across processes
+const g = await credentagent.grants.retrieve(grant.id);  // rehydrates across processes
 if (g.status === "authorized") {
   const s = await g.spend({ idempotencyKey: purchaseId, items: [{ sku: "coffee" }] });
   if (s.ok) console.log(`spent ${s.amount}, ${s.remaining} left`);      // Money, not floats
   else if (s.code === "budget-exceeded") { /* spent out — stop */ }
+  else if (s.retryable === "needs-human") sendToUser(g.approveUrl!);    // e.g. a step-up
 }
 await g.revoke();                                        // kill switch — the very next spend refuses
 ```
 
-`spend()` is one result **door**: `{ ok: true, amount, remaining, mandateBundle }` (with
-`replayed: true` when a retried `idempotencyKey` was answered once-charged) or `{ ok: false,
-code }` — `"budget-exceeded"`, `"per-spend-exceeded"`, `"revoked"`, `"not-authorized"`, or
-`"step-up"` (age-restricted and custom-gated items **never** complete on autopilot; a live
-ceremony is the only way). Completed spends fire `order.settled` and the webhook fan-out,
-exactly like human-present orders.
+`spend()` is one result **door**:
+
+- `{ ok: true, amount, remaining, replayed?, mandateBundle }` — `amount`/`remaining` are `Money`; `replayed: true` when a retried `idempotencyKey` was answered once-charged.
+- `{ ok: false, code, remaining, retryable }` — `code` is a closed `SpendCode`: `"budget-exceeded"`, `"per-spend-exceeded"`, `"not-authorized"` (still pending), `"denied"`, `"revoked"`, `"step-up"` (age / custom-gated — a live human is the only way), `"invalid-quantity"`, `"idempotency-conflict"` (same key, different items), or `"not-found"`. `retryable` (`"retry"` | `"needs-human"` | `"terminal"`) is the bit an unattended loop branches on.
+
+A missing catalog, an empty/blank `idempotencyKey`, or empty `items` is a **programming error** and throws — a refusal you can act on is always data, a mistake you must fix is an exception. `retrieve()` of an unknown id returns a handle with `status: "not-found"` (its `terms`/`approveUrl` are `undefined`) — never a throw. Completed spends fire `order.settled` and the webhook fan-out, exactly like human-present orders.
 
 > **Honesty:** a grant's trust level is **`server-issued-demo`** — the approval key is minted
 > by your server at the approve click, not by the user's wallet, and no real value moves. The
@@ -146,9 +155,9 @@ exactly like human-present orders.
 > be approved from the demo button (403, fail-closed) until rails-backed approval lands.
 > Runnable: [`examples/grants-preapproved/`](https://github.com/openmobilehub/credentagent/tree/main/examples/grants-preapproved).
 
-### Webhooks — tell a *different* service when an order settles
+## Webhooks — tell a *different* service when an order settles
 
-`on("order.settled", …)` only fires in the process that settled the order. When fulfillment runs
+Fires for both human-present orders and delegated spends. `on("order.settled", …)` only fires in the process that settled the order. When fulfillment runs
 elsewhere, register a **webhook**: the gate sends a **signed** HTTP `POST` and the other service
 verifies it — the Stripe idiom (`constructEvent`). Real HMAC signature, replay-protected.
 
@@ -290,10 +299,11 @@ The cert's SubjectAltName must cover the `walletOrigin` host or the wallet rejec
 > **`verification_required`** envelope the agent *drives* (which credential, a per-order approve link,
 > the tool to poll) instead of completing — the retained blocking **Mode B** primitive.
 
-## Delegated draws — human-not-present seams (005, preview)
+## Delegated draws — the low-level seams under `grants` (005, preview)
 
-Approve a spending limit once; your agent draws against it while you're away, every draw re-checked
-server-side. The Stripe-grade entry point is **`DelegatedGate`**:
+> **Which one do I use?** Reach for **[`grants`](#grants--approve-a-spending-limit-once-spend-while-the-human-is-away)** (above) — it's the durable, cross-process resource: `grants.create()` mints an id and an `approveUrl`, `grants.retrieve(id)` rehydrates the grant in a worker, amounts are `Money`, and it wires an approve page. **`DelegatedGate`** is the in-process standalone facade over the *same* engine — no HTTP surface, no rehydrate-by-id, raw-number amounts — handy for a single-process script or a test. Same seams underneath; `grants` is the one to build on.
+
+The `DelegatedGate` facade — approve once, draw while away, every draw re-checked server-side:
 
 ```ts
 import { DelegatedGate } from "@openmobilehub/credentagent-gate";
@@ -325,10 +335,25 @@ provide those are later increments.
 ```ts
 // Client (configure once, then declarative calls)
 class CredentAgent {
-  constructor(opts?: { walletOrigin?: string; store?: VerificationStore; credentials?: Credential[] });
+  constructor(opts?: {
+    walletOrigin?: string; store?: VerificationStore; credentials?: Credential[];
+    catalog?: Record<string, number | { price: number; minAge?: number }>;       // grants pricing authority
+    orderStore?; completedOrderStore?; grantStore?; revocationStore?;             // inject shared stores (multi-instance)
+    gateSecret?: string; webhooks?: WebhookOptions;
+  });
   requirements(order: GateOrder, policy: Step[]): VerificationManifestEntry[];   // Context 1
   mount(app: ExpressApp, ceremony?: MountCeremony): void;                        // Context 2
+  orders   // await orders.create({ order, policy }) → { id, approveUrl, manifest } · orders.retrieve(id) → door · orders.serve(app)
+  grants   // await grants.create({ merchant, budget, perSpend, policy }) → grant · grants.retrieve(id) → grant · grants.serve(app)
+  webhooks; on("order.settled", h)
 }
+
+// Money — the grants amount type (opaque, currency-checked; unit always explicit)
+usd.dollars(n)  ·  usd.cents(n)  ·  m.lt/gte/eq/plus/minus/serialize  ·  type Money
+
+// Grants (spec 009, #104) — approve once, spend while away
+grant.spend({ idempotencyKey, items }) → SpendDoor  ·  grant.revoke()  ·  grant.status / terms / approveUrl / intentMandate
+// SpendDoor = { ok:true, amount, remaining, replayed?, mandateBundle } | { ok:false, code: SpendCode, remaining, retryable }
 
 // Policy builders + extensibility
 age.over(n)  ·  membership.discount(n)  ·  payment.in(currency)
@@ -339,7 +364,7 @@ dcql({ docType, claims })  ·  gate()  ·  discount({ percent?, amount? })  ·  
 // Stores + host-side composition seam
 MemoryVerificationStore  ·  completeOrder(input, ctx)
 
-// Delegated draws (HNP, 005 preview) — the Stripe-grade facade + the underlying seams
+// Delegated draws (HNP, 005 preview) — the low-level facade under `grants` + the underlying seams
 DelegatedGate  ·  gate.preApprove(bounds) → DelegatedGrant  ·  grant.spend(purchase) → SpendResult  ·  grant.revoke()
 sealIntent  ·  checkDraw  ·  signDraw  ·  MemoryRevocationStore  ·  Draw / IntentBounds / CommittedDraw / Refusal
 
@@ -354,7 +379,9 @@ ageDcql()  ·  ENVELOPE_VERSION  ·  ENVELOPE_SENTINEL
 // Types: CredentAgentOptions, GateOrder, OrderLine, Credential, Step, Effect,
 //        VerificationManifestEntry, VerificationStore, VerificationRecord,
 //        TrustLevel, DcqlQuery, DcqlClaim, DcqlCredentialOption, ExpressApp,
-//        CompletionSeam / SettlementSeam / CeremonyOrder (host composition)
+//        CompletionSeam / SettlementSeam / CeremonyOrder (host composition),
+//        Money, CreateGrantOptions, GrantRecord, GrantStatus, SpendDoor, SpendCode,
+//        GrantTrustLevel, SpendItem  (grants) · WebhookEvent / WebhookOptions (webhooks)
 ```
 
 Full, compiler-checked contract: [`specs/001-attesto-sdk/`](https://github.com/openmobilehub/mcp-apps-shopping-demo/tree/main/specs/001-attesto-sdk/) (the
