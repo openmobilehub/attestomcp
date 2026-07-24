@@ -10,6 +10,9 @@ import { mountCeremony, type CeremonyApp, type CeremonySeams } from "./ceremony/
 import { Orders, MemoryOrderStore, type CreatedOrder, type CompletedOrder } from "./orders.js";
 import { serveOrders } from "./orders-serve.js";
 import { Webhooks } from "./webhooks.js";
+import { Grants, type GrantRecord } from "./grants.js";
+import { serveGrants } from "./grants-serve.js";
+import { MemoryRevocationStore } from "./ceremony/revocation.js";
 
 x509.cryptoProvider.set(globalThis.crypto);
 
@@ -33,6 +36,8 @@ export class CredentAgent {
   readonly store: VerificationStore;
   /** The human-present checkout resource — `orders.create()` / `orders.retrieve()` (spec 009). */
   readonly orders: Orders;
+  /** Durable spend authority — `grants.create()` / `retrieve()` / `grant.spend()` (spec 009, #104). */
+  readonly grants: Grants;
   /** Outbound HTTP webhooks — `webhooks.register()` / `webhooks.constructEvent()` (spec 010). */
   readonly webhooks: Webhooks;
   /** Stable reader identity presented by the rails (undefined ⇒ per-request self-signed). */
@@ -44,6 +49,8 @@ export class CredentAgent {
   private mountedRoutes = false;
   // True once `orders.serve(app)` has wired the checkout (idempotent — one serve per client).
   private ordersServed = false;
+  // True once `grants.serve(app)` has wired the approve page (idempotent — one serve per client).
+  private grantsServed = false;
   // In-process credential registry (id → Credential), populated as `requirements()`
   // resolves policies — register-on-resolve, so a developer registers nothing (Principle
   // V). Injected into the ceremony context at `mount()` so the rails can serve a custom
@@ -118,6 +125,32 @@ export class CredentAgent {
         });
         this.ordersServed = true;
         this.mountedRoutes = true; // approve links now resolve to the mounted rails
+      },
+    });
+    // The grants resource (spec 009, #104) — durable spend authority over the SAME client
+    // config. Spend completions route through `orders._complete`, so the settled event and
+    // webhook fan-out apply to delegated spends exactly as to human-present orders.
+    const grantStore = opts.grantStore ?? new MemoryOrderStore<GrantRecord>();
+    const grantRevocation = opts.revocationStore ?? new MemoryRevocationStore();
+    this.grants = new Grants({
+      walletOrigin: this.walletOrigin,
+      store: grantStore,
+      revocation: grantRevocation,
+      ...(opts.catalog ? { catalog: opts.catalog } : {}),
+      requirements: (order, policy) => this.requirements(order, policy),
+      completeSpend: (record) => this.orders._complete(record),
+      readSpend: (orderId) => completedStore.read(orderId),
+      credentialRegistry: this.registry,
+      serve: (app) => {
+        if (this.grantsServed) return; // idempotent
+        serveGrants(app as Parameters<typeof serveGrants>[0], {
+          walletOrigin: this.walletOrigin,
+          store: grantStore,
+          authorize: (id) => this.grants._authorize(id),
+          decline: (id) => this.grants._decline(id),
+          requirements: (order, policy) => this.requirements(order, policy),
+        });
+        this.grantsServed = true;
       },
     });
   }

@@ -19,6 +19,9 @@ Each is runnable against the two `@openmobilehub/credentagent-*` packages (build
 **Order webhooks — the real HTTP completion signal** (010)
 - [`order-webhooks/`](order-webhooks/) — a sender + a separate receiver: a settled order POSTs a **signed** `order.settled` event; the receiver verifies it with `constructEvent` (the Stripe idiom). Forged/tampered/replayed events are rejected
 
+**Grants — approve once, spend while away** (009 / #104)
+- [`grants-preapproved/`](grants-preapproved/) — the real `credentagent.grants` API: the human approves ONE limit at `grant.approveUrl`; the agent then spends against it unattended — catalog-priced, capped per-purchase and in total, replay-safe by `idempotencyKey`, revocable, and age-restricted items always step up to a human
+
 **Cart Mandate / stateless** (004)
 - [`stateless-orders/`](stateless-orders/) — the created order rides in a signed Cart Mandate on the link
 

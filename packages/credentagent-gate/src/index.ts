@@ -22,11 +22,27 @@ export { age, membership, payment, required, optional, defineCredential, dcql, g
 // ── Store ────────────────────────────────────────────────────────────────
 export { MemoryVerificationStore } from "./store.js";
 
+// ── Money (spec 009 FR-005) — the grants surface's amount type ──────────────
+// Opaque + currency-checked: build with `usd.dollars(20)`, compare with .lt/.gte —
+// never a raw scalar. Wired consumer: `credentagent.grants` (budget / perSpend / remaining).
+export { usd } from "./money.js";
+export type { Money } from "./money.js";
+
 // ── The orders resource (spec 009) ──────────────────────────────────────────
 // `await credentagent.orders.create({ order, policy })` → { id, approveUrl, manifest };
 // `credentagent.orders.retrieve(id)` → the door (ok | pending+approveUrl | reason).
 export { Orders, MemoryOrderStore } from "./orders.js";
 export type { OrderStore, CreatedOrder, CompletedOrder, OrderDoor } from "./orders.js";
+
+// ── The grants resource (spec 009, #104) — approve once, spend while away ───
+// `await credentagent.grants.create({ merchant, budget: usd.dollars(100), perSpend, policy })`
+// → a pending grant + `approveUrl` (the ONE human step); `grants.retrieve(id)` rehydrates in a
+// worker; `grant.spend({ idempotencyKey, items })` → the door (ok+remaining | budget-exceeded |
+// per-spend-exceeded | revoked | step-up …); `grant.revoke()` is the kill switch. The grant is
+// the durable authority; the AP2 Intent Mandate is the sealed artifact it carries
+// (`grant.intentMandate`). Honesty: trust_level "server-issued-demo" — no real value moves.
+export { Grants, Grant } from "./grants.js";
+export type { CreateGrantOptions, GrantRecord, GrantStatus, SpendDoor, SpendItem, DelegatePrivateJwk } from "./grants.js";
 
 // ── Webhooks (spec 010) — the REAL HTTP completion signal ───────────────────
 // SEND: `new CredentAgent({ webhooks: { endpoints: [{ url, secret }] } })` → every settled order
