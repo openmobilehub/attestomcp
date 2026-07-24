@@ -149,7 +149,14 @@ export const registerDelegatedPaymentGate: RailRegistrar = (app: CeremonyApp, ct
       //    age/custom policy over the disclosed claims and writes the verification state the
       //    shared sweep enforces (never trusting the verifier's own, possibly-laxer, check).
       const gates = runDelegatedGates(order, origin, verdict);
-      await applyDelegatedPolicy(ctx, order, verdict);
+      // ONLY a presentment the verifier VOUCHED for may write that state. An adapter parses the
+      // disclosure BEFORE its trust check, so a refused verdict can still carry
+      // `age_over_21: true`. The store is read by EVERY completion path, so writing it on a
+      // refusal would leave the order age-verified and let this refused attempt unlock the
+      // passkey / place-order path for the SAME order (invariant 5 — cross-path bleed).
+      // Binding failures deliberately do NOT gate this: the claim still came from a trusted
+      // presentment, so the identity proof is earned even when the amount is wrong.
+      if (verdict.approved === true) await applyDelegatedPolicy(ctx, order, verdict);
 
       // 5. Settlement is gate-authorized: the thunk runs INSIDE completeOrder, after its gates
       //    + re-price + age/custom enforcement pass — so a refused order never settles. Only a

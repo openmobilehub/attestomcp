@@ -414,6 +414,24 @@ describe("delegated rail — POST /verify bypass tests (each refusal must also N
     expect(verifier.settle).not.toHaveBeenCalled();
   });
 
+  // BYPASS (invariant 5 — load-bearing): a REFUSED verdict must write NO verification state.
+  // A realistic adapter parses the disclosed claims BEFORE its trust check (Multipaz parses,
+  // then TrustManager.verify fails), so `approved: false` can still carry `age_over_21: true`
+  // — exactly what this fixture's default claims do. That state is read by EVERY completion
+  // path (completeOrder's age sweep), so writing it here would leave the order marked
+  // age-verified: the delegated verify is correctly refused, but the buyer could then complete
+  // the SAME order through the passkey / place-order path on the strength of a claim the
+  // verifier explicitly refused to vouch for. Delete the `verdict.approved === true` guard in
+  // routes.ts and this goes red.
+  it("writes NO age proof when the verifier did not approve (no cross-path bleed)", async () => {
+    const verifier = verifierReturning({ approved: false, reason: "card not from a trusted issuer" });
+    const h = harness([payment.in("usd"), age.over(21)], verifier);
+    const out = await h.verify({ order: "ORD-1", referenceToken: tokenFor("ORD-1") });
+    expect((out.body as { completed: boolean }).completed).toBe(false);
+    // The refused presentment's claims must never become this order's age proof.
+    expect((await h.verification.read("ORD-1"))?.ageVerified).not.toBe(true);
+  });
+
   it("REFUSES (400) a reference token minted for ANOTHER order — never even fetches a verdict (invariant 4)", async () => {
     const verifier = verifierReturning();
     const h = harness([payment.in("usd"), age.over(21)], verifier);
