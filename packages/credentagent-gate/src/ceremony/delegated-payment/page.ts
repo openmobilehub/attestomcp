@@ -71,6 +71,10 @@ ${pageHead(`Authorize payment · ${order}`)}
   var out = document.getElementById("out");
   var done = document.getElementById("done");
   var ORDER = ${JSON.stringify(order)};
+  // statelessOrders (FR-007): the signed cart mandate on the URL is the ONLY order transport —
+  // there is no order store to fall back on — so it must ride every hop, including the verify
+  // POST below. Read from the live URL, exactly as the dc-payment rail does.
+  var CART = new URLSearchParams(location.search).get("cart");
   var RETURN_URL = ${JSON.stringify(returnUrl)};
   var DONE_BANNER = ${JSON.stringify(completionHandoffBanner(returnUrl))};
   go.addEventListener("click", async function () {
@@ -110,7 +114,7 @@ ${pageHead(`Authorize payment · ${order}`)}
       var res2 = await fetch("/credentagent/delegated/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ order: ORDER, referenceToken: data.referenceToken }),
+        body: JSON.stringify({ order: ORDER, cart: CART, referenceToken: data.referenceToken }),
       });
       var result = await res2.json();
       if (result.completed) {

@@ -19,6 +19,8 @@ import type { CeremonyCatalog, CeremonyOrderStore, CompletionInput, CompletionRe
 import { completeOrder, type CompletedRecord } from "../completion.js";
 import { sealReference, openReference } from "./referenceToken.js";
 import { mergeDelegatedDcql, delegatedPolicyEntries } from "./dcql.js";
+import { issueCartMandate } from "../cartMandate.js";
+import { renderDelegatedPage } from "./page.js";
 
 const SECRET = "stable-test-secret";
 
@@ -321,12 +323,21 @@ interface CompletingHarness {
   verifier: DelegatedVerifier;
 }
 
-/** Wire POST /verify to the REAL completeOrder over in-memory stores + the given policy. */
-function harness(policy: Credential[], verifier: DelegatedVerifier, items: { productId: string; quantity: number }[] = [{ productId: "oak-whiskey", quantity: 1 }]): CompletingHarness {
+/** Wire POST /verify to the REAL completeOrder over in-memory stores + the given policy.
+ *  `stateless: true` mounts FR-007 mode with an order store that THROWS on read, so any
+ *  test that passes also proves the order came from the signed cart mandate alone. */
+function harness(
+  policy: Credential[],
+  verifier: DelegatedVerifier,
+  items: { productId: string; quantity: number }[] = [{ productId: "oak-whiskey", quantity: 1 }],
+  opts: { stateless?: boolean } = {},
+): CompletingHarness {
   const verification = new MemoryVerificationStore();
   const records = new Map<string, CompletedRecord>();
   const registry = new Map(policy.map((c) => [c.id, c] as const));
-  const orderStore: CeremonyOrderStore = { read: async (id) => catalog.createOrder(items, id) };
+  const orderStore: CeremonyOrderStore = opts.stateless
+    ? { read: async () => { throw new Error("orderStore must NOT be read under statelessOrders"); } }
+    : { read: async (id) => catalog.createOrder(items, id) };
   const completion = (input: CompletionInput): Promise<CompletionResult> =>
     completeOrder(input, {
       catalog,
@@ -336,7 +347,7 @@ function harness(policy: Credential[], verifier: DelegatedVerifier, items: { pro
       signingKey: SECRET,
     });
   const app = routeApp();
-  mountCeremony(app, { verificationStore: verification, orderStore, catalog, completion, signingKey: SECRET, credentialRegistry: registry, verifier });
+  mountCeremony(app, { verificationStore: verification, orderStore, catalog, completion, signingKey: SECRET, credentialRegistry: registry, verifier, ...(opts.stateless ? { statelessOrders: true } : {}) });
   const handler = app.handlers.get("POST /credentagent/delegated/verify")!;
   return {
     records,
@@ -499,5 +510,46 @@ describe("delegated rail — settlement gating + trust honesty", () => {
     const out = await h.verify({ order: "ORD-1", referenceToken: tokenFor("ORD-1") });
     expect((out.body as { completed: boolean }).completed).toBe(true);
     expect(verifier.settle).not.toHaveBeenCalled(); // no authorize() credential ⇒ no settlement
+  });
+});
+
+// ── statelessOrders (FR-007) — the ?cart passthrough must survive the verify POST ────────
+// With no order store to fall back on, the signed cart mandate IS the order transport, and
+// routes.ts promises it "survives every hop". The verify POST used to send only
+// { order, referenceToken }, so `resolveOrder` found nothing and EVERY stateless delegated
+// checkout 400'd with "missing or invalid order". The other e2e tests all use the stateful
+// store, which is why nothing caught it.
+
+const cartParam = (mandate: unknown): string => Buffer.from(JSON.stringify(mandate)).toString("base64url");
+
+describe("delegated rail — statelessOrders passthrough", () => {
+  it("the approve page forwards `cart` on the verify POST (the hop that dropped it)", () => {
+    const html = renderDelegatedPage({
+      order: "ORD-S1",
+      total: 199,
+      currency: "USD",
+      lines: [{ name: "Aurora", quantity: 1, lineTotal: 199, currency: "USD" }],
+      cart: "CART-MANDATE",
+    });
+    // Read off the live URL (same as the dc-payment rail) and included in the verify body.
+    expect(html).toContain('new URLSearchParams(location.search).get("cart")');
+    expect(html).toContain("cart: CART");
+  });
+
+  it("completes from the signed cart mandate alone — the order store is never read", async () => {
+    const verifier = verifierReturning({
+      claims: { payment: { issuer_name: "Bank" } },
+      binding: { amount: 199, currency: "USD", payee: { id: "shop.example" } },
+    });
+    const h = harness([payment.in("usd")], verifier, [{ productId: "aurora-headphones", quantity: 1 }], { stateless: true });
+    const mandate = issueCartMandate(
+      { orderId: "ORD-S1", lines: [{ id: "aurora-headphones", quantity: 1, unitPrice: 199, lineTotal: 199 }], currency: "USD", total: 199 },
+      SECRET,
+    );
+    // Exactly what the page posts: `cart` = base64url(JSON(mandate)). The harness's order
+    // store THROWS, so completing at all proves the mandate carried the order.
+    const out = await h.verify({ order: "ORD-S1", cart: cartParam(mandate), referenceToken: tokenFor("ORD-S1") });
+    expect((out.body as { completed: boolean }).completed).toBe(true);
+    expect(h.records.get("ORD-S1")?.amount).toBe(199); // reconstructed + re-priced from the mandate
   });
 });
