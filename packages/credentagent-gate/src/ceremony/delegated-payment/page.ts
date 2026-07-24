@@ -38,7 +38,11 @@ export interface DelegatedPageOptions {
 export function renderDelegatedPage(opts: DelegatedPageOptions): string {
   const { order, total, currency, lines, cart, rail } = opts;
   const qs = `order=${encodeURIComponent(order)}${cart ? `&cart=${encodeURIComponent(cart)}` : ""}`;
-  const returnUrl = opts.returnUrl ?? `/checkout?order=${encodeURIComponent(order)}${cart ? `&cart=${cart}` : ""}`;
+  // `cart` is caller-supplied and lands in a URL the page later renders, so it is
+  // percent-encoded here exactly as `qs` above does. Unencoded, a crafted
+  // `?cart="><img src=x onerror=…>` would survive into the page as raw markup.
+  // (A legitimate mandate is base64url, which encodeURIComponent leaves byte-identical.)
+  const returnUrl = opts.returnUrl ?? `/checkout?order=${encodeURIComponent(order)}${cart ? `&cart=${encodeURIComponent(cart)}` : ""}`;
   // The shared order summary card (line items + bold Total) — same chrome as the hub.
   const summary = orderSummaryCard({
     lines: lines.map((l) => ({ name: l.name, quantity: l.quantity, lineTotal: l.lineTotal, currency: l.currency })),
@@ -77,6 +81,18 @@ ${pageHead(`Authorize payment · ${order}`)}
   var CART = new URLSearchParams(location.search).get("cart");
   var RETURN_URL = ${JSON.stringify(returnUrl)};
   var DONE_BANNER = ${JSON.stringify(completionHandoffBanner(returnUrl))};
+  // Show the "Return to checkout" link built with DOM APIs — never by concatenating
+  // RETURN_URL into innerHTML. The URL carries a caller-supplied cart param, and innerHTML
+  // would PARSE any markup that survived in it; setAttribute + textContent cannot.
+  // (The success path uses DONE_BANNER, which the server already HTML-escapes.)
+  function showReturnLink() {
+    var a = document.createElement("a");
+    a.className = "ret";
+    a.setAttribute("href", RETURN_URL);
+    a.textContent = "Return to checkout \\u203a";
+    done.textContent = "";
+    done.appendChild(a);
+  }
   go.addEventListener("click", async function () {
     go.disabled = true;
     out.textContent = "Preparing request\\u2026";
@@ -127,12 +143,12 @@ ${pageHead(`Authorize payment · ${order}`)}
         setTimeout(function () { location.href = RETURN_URL; }, 1600);
       } else {
         out.textContent = "Refused: " + (result.reason || result.error || "not completed");
-        done.innerHTML = '<a class="ret" href="' + RETURN_URL + '">Return to checkout \\u203a</a>';
+        showReturnLink();
         go.disabled = false;
       }
     } catch (err) {
       out.textContent = "Could not complete: " + err.message;
-      done.innerHTML = '<a class="ret" href="' + RETURN_URL + '">Return to checkout \\u203a</a>';
+      showReturnLink();
       go.disabled = false;
     }
   });

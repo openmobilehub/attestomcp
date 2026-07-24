@@ -553,3 +553,33 @@ describe("delegated rail — statelessOrders passthrough", () => {
     expect(h.records.get("ORD-S1")?.amount).toBe(199); // reconstructed + re-priced from the mandate
   });
 });
+
+// ── Reflected XSS on the refusal path (the `cart` param is caller-supplied) ──────────────
+// The approve page is served on the MERCHANT'S PAYMENT ORIGIN, so markup injected here runs
+// with that origin's privileges. `cart` rides the ceremony URL untrusted; it used to land
+// UNENCODED in the default returnUrl, and the refusal/error branches then concatenated that
+// URL into `innerHTML` — so `?cart="><img src=x onerror=…>` executed on any refusal.
+describe("delegated rail — approve page escapes the untrusted cart param", () => {
+  const XSS = '"><img src=x onerror=alert(1)>';
+  const page = () =>
+    renderDelegatedPage({
+      order: "ORD-X",
+      total: 10,
+      currency: "USD",
+      lines: [{ name: "Item", quantity: 1, lineTotal: 10, currency: "USD" }],
+      cart: XSS,
+    });
+
+  it("percent-encodes a crafted cart so no raw markup survives into the page", () => {
+    const html = page();
+    expect(html).not.toContain("onerror=alert(1)"); // encoded → onerror%3Dalert(1)
+    expect(html).not.toContain("<img src=x");
+  });
+
+  it("builds the refusal return link via DOM, never by concatenating the URL into innerHTML", () => {
+    const html = page();
+    // The old sink. innerHTML PARSES markup; setAttribute/textContent cannot.
+    expect(html).not.toContain(`'<a class="ret" href="' + RETURN_URL`);
+    expect(html).toContain("createElement(\"a\")");
+  });
+});
