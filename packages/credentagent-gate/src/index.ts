@@ -22,6 +22,12 @@ export { age, membership, payment, required, optional, defineCredential, dcql, g
 // ── Store ────────────────────────────────────────────────────────────────
 export { MemoryVerificationStore } from "./store.js";
 
+// ── Money (spec 009 FR-005) — the grants surface's amount type ──────────────
+// Opaque + currency-checked: build with `usd.dollars(20)`, compare with .lt/.gte —
+// never a raw scalar. Wired consumer: `credentagent.grants` (budget / perSpend / remaining).
+export { usd } from "./money.js";
+export type { Money } from "./money.js";
+
 // ── The orders resource (spec 009) ──────────────────────────────────────────
 // `await credentagent.orders.create({ order, policy })` → { id, approveUrl, manifest };
 // `credentagent.orders.retrieve(id)` → the door (ok | pending+approveUrl | reason).
