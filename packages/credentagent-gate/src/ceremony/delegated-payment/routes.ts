@@ -22,6 +22,7 @@
 // so a store-less (statelessOrders) checkout survives every hop.
 import { resolveOrder, type CeremonyApp, type CeremonyContext, type RailRegistrar } from "../mount.js";
 import { decodeCartMandateParam } from "../cartMandate.js";
+import { checkoutRail } from "../theme.js";
 import { buildBindingFields } from "../mandate.js";
 import type { RequestLike } from "../origin.js";
 import type { CompletionInput } from "../types.js";
@@ -86,6 +87,10 @@ export const registerDelegatedPaymentGate: RailRegistrar = (app: CeremonyApp, ct
   get("/credentagent/delegated", async (req, res) => {
     const order = await resolveOrder(ctx, queryString(req.query.order), { cartMandate: decodeCartMandateParam(req.query.cart) });
     if (!order) { res.status(404).type("html").send("<!doctype html><h1>Order not found</h1>"); return; }
+    // Order-derived stepper with Pay current: reflects only the gates THIS order has, and
+    // shows Age ✓ only when it was ACTUALLY verified (read from the store) — never hardcoded.
+    const verified = (await ctx.verificationStore.read(order.id)) ?? {};
+    const rail = checkoutRail(order, "pay", { ageVerified: verified.ageVerified === true });
     res.status(200).type("html").send(
       renderDelegatedPage({
         order: order.id,
@@ -93,6 +98,7 @@ export const registerDelegatedPaymentGate: RailRegistrar = (app: CeremonyApp, ct
         currency: order.currency,
         lines: order.lines.map((l) => ({ name: l.name ?? l.id, quantity: l.quantity, lineTotal: l.lineTotal, currency: l.currency ?? order.currency })),
         cart: queryString(req.query.cart),
+        rail,
       }),
     );
   });
