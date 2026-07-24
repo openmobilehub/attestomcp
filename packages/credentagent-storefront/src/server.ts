@@ -739,6 +739,15 @@ export function createStorefront(opts: StorefrontOptions = {}): Storefront {
           placeOrderPath: "/checkout/place-order",
           orderToken: order.id,
         }
+      : opts.verifier
+      ? // A GATED order with a delegated verifier configured (008): route the checkout page's Pay
+        // CTA to the mounted delegated ceremony, so the real external-verifier rail — not the
+        // built-in presence-only passkey/dc-payment rails — completes the payment.
+        {
+          methods: [
+            { value: "delegated", name: "Pay with your wallet", desc: "Authorize with a credential from your phone wallet — verification and settlement run through the configured external verifier.", href: withCart(`/credentagent/delegated?order=${orderQ}`, statelessOrders ? cartRaw : null), checked: true },
+          ],
+        }
       : // A GATED order: offer the same payment methods the demo does — the headline
         // passkey rail (authorize on-device; settles on-chain via x402 on Hedera) and
         // the cross-device wallet rail — both mounted by credentagent.mount(), both completing

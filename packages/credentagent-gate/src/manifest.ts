@@ -56,10 +56,13 @@ function approveUrlFor(walletOrigin: string, credentialId: string, orderId: stri
 function mountedApproveUrlFor(walletOrigin: string, credentialId: string, effect: Effect["kind"], orderId: string, delegated: boolean): string {
   const origin = walletOrigin.replace(/\/$/, "");
   const order = encodeURIComponent(orderId);
-  // Delegated (008): the blocking credentials (gate + authorize) are proven together in ONE
-  // external-verifier ceremony, so they share the single delegated page. A discount is NOT
-  // in that presentation — it stays on the credential rail so the buyer can opt into it.
-  if (delegated && (effect === "gate" || effect === "authorize")) {
+  // Delegated (008): only the PAYMENT (authorize) credential is proven through the external
+  // verifier's delegated ceremony (DPC + settlement). Identity gates (age) stay on the built-in
+  // credential rail — a REAL OpenID4VP mdoc presentation the wallet answers first — so the flow
+  // is TWO-STEP (verify age, THEN pay), matching the reference marketplace: the wallet opens for
+  // the mDL on the age step, then for the DPC on the payment step. A discount stays on the
+  // credential rail too (opt-in).
+  if (delegated && effect === "authorize") {
     return `${origin}/credentagent/delegated?order=${order}`;
   }
   if (effect === "authorize" || credentialId === "payment") {
